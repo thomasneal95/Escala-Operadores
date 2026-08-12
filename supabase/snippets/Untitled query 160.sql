@@ -1,0 +1,1 @@
+SELECT id, data_inicio, data_fim, status FROM periodos_operacao;
