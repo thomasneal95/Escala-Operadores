@@ -39,6 +39,7 @@ export function VisaoAdminPage() {
     encerrarRecebimento,
     confirmarEscala,
     criarNovoPeriodo,
+    resetarPeriodo,
     atualizandoStatus,
   } = useVisaoAdmin();
   const {
@@ -53,7 +54,6 @@ export function VisaoAdminPage() {
 
   const [edicaoHabilitada, setEdicaoHabilitada] = useState(false);
 
-  // Reseta a trava sempre que o período em foco mudar.
   useEffect(() => {
     setEdicaoHabilitada(false);
   }, [periodo?.id]);
@@ -92,6 +92,27 @@ export function VisaoAdminPage() {
     );
     if (confirmou) {
       setEdicaoHabilitada(true);
+    }
+  }
+
+  async function handleResetarComDisponibilidades() {
+    const confirmou = window.confirm(
+      'Isso vai EXCLUIR a escala e TODAS as disponibilidades enviadas para este período, ' +
+        'e reabrir o recebimento de disponibilidade do zero (status volta para "Aberto"). ' +
+        'Os colaboradores precisarão enviar a disponibilidade novamente. Esta ação não pode ser desfeita. Deseja continuar?'
+    );
+    if (confirmou) {
+      await resetarPeriodo(true);
+    }
+  }
+
+  async function handleResetarSoEscala() {
+    const confirmou = window.confirm(
+      'Isso vai EXCLUIR apenas a escala montada, mantendo as disponibilidades já enviadas. ' +
+        'O status volta para "Em organização", para você remontar a escala. Esta ação não pode ser desfeita. Deseja continuar?'
+    );
+    if (confirmou) {
+      await resetarPeriodo(false);
     }
   }
 
@@ -312,6 +333,34 @@ export function VisaoAdminPage() {
               ))}
             </div>
           )}
+
+          {/* Zona de risco */}
+          <div className="mt-10 rounded-lg border border-red-200 bg-red-50 p-5">
+            <p className="font-mono text-xs font-medium uppercase tracking-widest text-red-600">
+              Zona de risco
+            </p>
+            <p className="mt-1 text-sm text-red-700">
+              Estas ações apagam dados permanentemente e não podem ser desfeitas.
+              Use apenas se precisar corrigir um erro de teste ou reiniciar o
+              processo deste período.
+            </p>
+            <div className="mt-4 flex flex-wrap gap-3">
+              <button
+                onClick={handleResetarComDisponibilidades}
+                disabled={atualizandoStatus}
+                className="rounded-md border border-red-300 bg-white px-3 py-1.5 text-sm font-medium text-red-700 hover:bg-red-100 disabled:opacity-60"
+              >
+                Excluir escala e disponibilidades
+              </button>
+              <button
+                onClick={handleResetarSoEscala}
+                disabled={atualizandoStatus}
+                className="rounded-md border border-red-300 bg-white px-3 py-1.5 text-sm font-medium text-red-700 hover:bg-red-100 disabled:opacity-60"
+              >
+                Excluir apenas a escala
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

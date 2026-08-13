@@ -180,6 +180,56 @@ export function useVisaoAdmin() {
     return { erro: null };
   }
 
+  // Reseta o período para um estado anterior: apaga a escala (e, opcionalmente,
+  // as disponibilidades) e volta o status para 'em_organizacao' ou 'aberto'.
+  async function resetarPeriodo(apagarDisponibilidades: boolean) {
+    if (!periodo) return { erro: 'Nenhum período carregado.' };
+
+    setAtualizandoStatus(true);
+
+    const { error: erroEscalas } = await supabase
+      .from('escalas')
+      .delete()
+      .eq('periodo_id', periodo.id);
+
+    if (erroEscalas) {
+      setAtualizandoStatus(false);
+      return { erro: 'Não foi possível excluir a escala.' };
+    }
+
+    if (apagarDisponibilidades) {
+      const { error: erroDisponibilidades } = await supabase
+        .from('disponibilidades')
+        .delete()
+        .eq('periodo_id', periodo.id);
+
+      if (erroDisponibilidades) {
+        setAtualizandoStatus(false);
+        return { erro: 'Não foi possível excluir as disponibilidades.' };
+      }
+    }
+
+    const novoStatus = apagarDisponibilidades ? 'aberto' : 'em_organizacao';
+
+    const { error: erroStatus } = await supabase
+      .from('periodos_operacao')
+      .update({ status: novoStatus, confirmed_at: null, confirmed_by: null })
+      .eq('id', periodo.id);
+
+    setAtualizandoStatus(false);
+
+    if (erroStatus) {
+      return { erro: 'Não foi possível atualizar o status do período.' };
+    }
+
+    setPeriodo({ ...periodo, status: novoStatus });
+    if (apagarDisponibilidades) {
+      setRespostas([]);
+    }
+
+    return { erro: null };
+  }
+
   return {
     periodo,
     turnos,
@@ -191,6 +241,7 @@ export function useVisaoAdmin() {
     encerrarRecebimento,
     confirmarEscala,
     criarNovoPeriodo,
+    resetarPeriodo,
     atualizandoStatus,
   };
 }
