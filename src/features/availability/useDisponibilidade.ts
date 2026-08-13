@@ -145,20 +145,24 @@ export function useDisponibilidade() {
       return { erro: 'Não foi possível identificar seus dados.' };
     }
 
-    const linhas = Object.entries(rascunho).map(([key, disponivel]) => {
-      const [data, turnoId] = key.split('|');
-      return {
+    if (turnos.length === 0) {
+      return { erro: 'Nenhum turno disponível para enviar.' };
+    }
+
+    // Envia TODOS os turnos de ambos os dias, explicitamente — inclusive os
+    // que ficaram no padrão "Indisponível" e nunca foram clicados. Isso
+    // garante que o administrador veja "Indisponível" em vez de "—" (sem
+    // resposta) para qualquer turno que o colaborador já revisou e enviou.
+    const dias = [periodo.data_inicio, periodo.data_fim];
+    const linhas = dias.flatMap((data) =>
+      turnos.map((turno) => ({
         colaborador_id: colaboradorId,
         periodo_id: periodo.id,
         data,
-        turno_id: turnoId,
-        disponivel,
-      };
-    });
-
-    if (linhas.length === 0) {
-      return { erro: 'Marque ao menos um turno antes de enviar.' };
-    }
+        turno_id: turno.id,
+        disponivel: rascunho[chave(data, turno.id)] ?? false,
+      }))
+    );
 
     setEnviando(true);
     setErro(null);
@@ -175,7 +179,12 @@ export function useDisponibilidade() {
       return { erro: mensagem };
     }
 
-    setRespostasSalvas(rascunho);
+    const mapaCompleto: Record<string, boolean> = {};
+    for (const linha of linhas) {
+      mapaCompleto[chave(linha.data, linha.turno_id)] = linha.disponivel;
+    }
+    setRespostasSalvas(mapaCompleto);
+    setRascunho(mapaCompleto);
     setEnviadoComSucesso(true);
     return { erro: null };
   }
