@@ -62,6 +62,12 @@ export function VisaoAdminPage() {
     setEdicaoHabilitada(false);
   }, [periodo?.id]);
 
+  function turnosDoDia(data: string) {
+    if (!periodo) return [];
+    const ehSabado = data === periodo.data_inicio;
+    return turnos.filter((t) => (ehSabado ? t.ativo_sabado : t.ativo_domingo));
+  }
+
   function nomePorId(colaboradorId: string) {
     return colaboradores.find((c) => c.id === colaboradorId)?.nome_completo ?? '(desconhecido)';
   }
@@ -147,7 +153,7 @@ export function VisaoAdminPage() {
     (periodo.status === 'confirmado' || periodo.status === 'encerrado') &&
     !edicaoHabilitada;
 
-  return (
+    return (
     <div>
       {erro && (
         <p className="mb-4 rounded-md bg-red-50 px-4 py-3 text-sm text-red-700">{erro}</p>
@@ -218,7 +224,7 @@ export function VisaoAdminPage() {
                 <tr>
                   <th className="px-4 py-3 font-medium">Colaborador</th>
                   {[periodo.data_inicio, periodo.data_fim].map((data) =>
-                    turnos.map((turno) => (
+                    turnosDoDia(data).map((turno) => (
                       <th key={`${data}-${turno.id}`} className="px-4 py-3 font-medium">
                         {nomeDoDia(data, periodo.data_inicio)}
                         <br />
@@ -239,7 +245,7 @@ export function VisaoAdminPage() {
                       )}
                     </td>
                     {[periodo.data_inicio, periodo.data_fim].map((data) =>
-                      turnos.map((turno) => {
+                      turnosDoDia(data).map((turno) => {
                         const resposta = respostaDe(colaborador.id, data, turno.id);
                         const cor = corTurno(turno.nome);
                         return (
@@ -310,74 +316,82 @@ export function VisaoAdminPage() {
             <p className="mt-3 text-sm text-slate-400">Carregando escala...</p>
           ) : (
             <div className="mt-3 space-y-6">
-              {[periodo.data_inicio, periodo.data_fim].map((data) => (
-                <div key={data} className="rounded-lg border border-slate-200 bg-white p-5">
-                  <h2 className="font-display font-semibold text-tinta">
-                    {nomeDoDia(data, periodo.data_inicio)}
-                    <span className="ml-2 font-mono text-sm font-normal text-slate-400">
-                      {formatarData(data)}
-                    </span>
-                  </h2>
+              {[periodo.data_inicio, periodo.data_fim].map((data) => {
+                const turnosDisponiveisNesseDia = turnosDoDia(data);
 
-                  <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
-                    {turnos.map((turno) => {
-                      const escalados = escaladosEm(data, turno.id);
-                      const cor = corTurno(turno.nome);
+                return (
+                  <div key={data} className="rounded-lg border border-slate-200 bg-white p-5">
+                    <h2 className="font-display font-semibold text-tinta">
+                      {nomeDoDia(data, periodo.data_inicio)}
+                      <span className="ml-2 font-mono text-sm font-normal text-slate-400">
+                        {formatarData(data)}
+                      </span>
+                    </h2>
 
-                      const disponiveis = colaboradores.filter(
-                        (c) =>
-                          respostaDe(c.id, data, turno.id)?.disponivel &&
-                          !colaboradorJaEscalado(c.id, data, turno.id)
-                      );
+                    {turnosDisponiveisNesseDia.length === 0 ? (
+                      <p className="mt-3 text-sm text-slate-400">Não há operação neste dia.</p>
+                    ) : (
+                      <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
+                        {turnosDisponiveisNesseDia.map((turno) => {
+                          const escalados = escaladosEm(data, turno.id);
+                          const cor = corTurno(turno.nome);
 
-                      return (
-                        <div key={turno.id} className="rounded-md border border-slate-200 p-3">
-                          <div className="flex items-center gap-1.5">
-                            <span className={`h-2 w-2 rounded-full ${cor.dot}`} />
-                            <p className="font-medium text-tinta">{turno.nome}</p>
-                          </div>
-                          <p className="font-mono text-xs text-slate-400">
-                            {turno.hora_inicio.slice(0, 5)} – {turno.hora_fim.slice(0, 5)}
-                          </p>
+                          const disponiveis = colaboradores.filter(
+                            (c) =>
+                              respostaDe(c.id, data, turno.id)?.disponivel &&
+                              !colaboradorJaEscalado(c.id, data, turno.id)
+                          );
 
-                          <div className="mt-3 space-y-1.5">
-                            {escalados.map((e) => (
-                              <div
-                                key={e.id}
-                                className={`flex items-center justify-between rounded-md ${cor.bgLight} px-2 py-1 text-sm ${cor.text}`}
-                              >
-                                <span>{nomePorId(e.colaborador_id)}</span>
-                                {!escalaEstaTrancada && (
-                                  <button
-                                    onClick={() => remover(e.id)}
-                                    disabled={processando === e.id}
-                                    className="opacity-70 hover:opacity-100 disabled:opacity-40"
-                                    title="Remover da escala"
-                                  >
-                                    ×
-                                  </button>
-                                )}
+                          return (
+                            <div key={turno.id} className="rounded-md border border-slate-200 p-3">
+                              <div className="flex items-center gap-1.5">
+                                <span className={`h-2 w-2 rounded-full ${cor.dot}`} />
+                                <p className="font-medium text-tinta">{turno.nome}</p>
                               </div>
-                            ))}
-                          </div>
+                              <p className="font-mono text-xs text-slate-400">
+                                {turno.hora_inicio.slice(0, 5)} – {turno.hora_fim.slice(0, 5)}
+                              </p>
 
-                          {!escalaEstaTrancada && (
-                            <div className="mt-2">
-                              <SeletorColaborador
-                                disponiveis={disponiveis}
-                                onSelecionar={(colaboradorId) =>
-                                  handleAdicionar(colaboradorId, data, turno.id)
-                                }
-                                desabilitado={processando !== null}
-                              />
+                              <div className="mt-3 space-y-1.5">
+                                {escalados.map((e) => (
+                                  <div
+                                    key={e.id}
+                                    className={`flex items-center justify-between rounded-md ${cor.bgLight} px-2 py-1 text-sm ${cor.text}`}
+                                  >
+                                    <span>{nomePorId(e.colaborador_id)}</span>
+                                    {!escalaEstaTrancada && (
+                                      <button
+                                        onClick={() => remover(e.id)}
+                                        disabled={processando === e.id}
+                                        className="opacity-70 hover:opacity-100 disabled:opacity-40"
+                                        title="Remover da escala"
+                                      >
+                                        ×
+                                      </button>
+                                    )}
+                                  </div>
+                                ))}
+                              </div>
+
+                              {!escalaEstaTrancada && (
+                                <div className="mt-2">
+                                  <SeletorColaborador
+                                    disponiveis={disponiveis}
+                                    onSelecionar={(colaboradorId) =>
+                                      handleAdicionar(colaboradorId, data, turno.id)
+                                    }
+                                    desabilitado={processando !== null}
+                                  />
+                                </div>
+                              )}
                             </div>
-                          )}
-                        </div>
-                      );
-                    })}
+                          );
+                        })}
+                      </div>
+                    )}
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
 

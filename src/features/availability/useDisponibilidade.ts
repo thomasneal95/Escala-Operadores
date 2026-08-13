@@ -60,7 +60,7 @@ export function useDisponibilidade() {
     // 3. Turnos disponíveis (cadastro global).
     const { data: turnosData, error: erroTurnos } = await supabase
       .from('turnos')
-      .select('id, nome, hora_inicio, hora_fim, ordem_exibicao')
+      .select('id, nome, hora_inicio, hora_fim, ordem_exibicao, ativo_sabado, ativo_domingo')
       .eq('ativo', true)
       .order('ordem_exibicao');
 
@@ -154,15 +154,18 @@ export function useDisponibilidade() {
     // garante que o administrador veja "Indisponível" em vez de "—" (sem
     // resposta) para qualquer turno que o colaborador já revisou e enviou.
     const dias = [periodo.data_inicio, periodo.data_fim];
-    const linhas = dias.flatMap((data) =>
-      turnos.map((turno) => ({
-        colaborador_id: colaboradorId,
-        periodo_id: periodo.id,
-        data,
-        turno_id: turno.id,
-        disponivel: rascunho[chave(data, turno.id)] ?? false,
-      }))
-    );
+    const linhas = dias.flatMap((data) => {
+      const ehSabado = data === periodo.data_inicio;
+      return turnos
+        .filter((turno) => (ehSabado ? turno.ativo_sabado : turno.ativo_domingo))
+        .map((turno) => ({
+          colaborador_id: colaboradorId,
+          periodo_id: periodo.id,
+          data,
+          turno_id: turno.id,
+          disponivel: rascunho[chave(data, turno.id)] ?? false,
+        }));
+    });
 
     setEnviando(true);
     setErro(null);

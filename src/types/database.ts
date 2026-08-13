@@ -4,6 +4,8 @@ export interface Turno {
   hora_inicio: string;
   hora_fim: string;
   ordem_exibicao: number | null;
+  ativo_sabado: boolean;
+  ativo_domingo: boolean;
 }
 
 export interface PeriodoOperacao {

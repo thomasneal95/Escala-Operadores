@@ -41,6 +41,11 @@ export function DisponibilidadePage() {
     );
   }
 
+  function turnosDoDia(data: string) {
+    const ehSabado = data === periodo!.data_inicio;
+    return turnos.filter((t) => (ehSabado ? t.ativo_sabado : t.ativo_domingo));
+  }
+
   async function handleEnviar() {
     await enviarDisponibilidade();
   }
@@ -64,48 +69,56 @@ export function DisponibilidadePage() {
       </p>
 
       <div className="mt-8 space-y-6">
-        {[periodo.data_inicio, periodo.data_fim].map((data) => (
-          <div key={data} className="rounded-lg border border-slate-200 bg-white p-5">
-            <h2 className="font-display font-semibold text-tinta">
-              {nomeDoDia(data, periodo.data_inicio)}
-              <span className="ml-2 font-mono text-sm font-normal text-slate-400">
-                {formatarData(data)}
-              </span>
-            </h2>
+        {[periodo.data_inicio, periodo.data_fim].map((data) => {
+          const turnosDisponiveisNesseDia = turnosDoDia(data);
 
-            <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
-              {turnos.map((turno) => {
-                const ativo = estaDisponivel(data, turno.id);
-                const cor = corTurno(turno.nome);
+          return (
+            <div key={data} className="rounded-lg border border-slate-200 bg-white p-5">
+              <h2 className="font-display font-semibold text-tinta">
+                {nomeDoDia(data, periodo.data_inicio)}
+                <span className="ml-2 font-mono text-sm font-normal text-slate-400">
+                  {formatarData(data)}
+                </span>
+              </h2>
 
-                return (
-                  <button
-                    key={turno.id}
-                    onClick={() => alternar(data, turno.id)}
-                    disabled={enviando}
-                    className={`rounded-md border px-4 py-3 text-left transition disabled:cursor-wait disabled:opacity-70 ${
-                      ativo
-                        ? `${cor.border} ${cor.bgLight}`
-                        : 'border-slate-200 bg-white hover:border-slate-300'
-                    }`}
-                  >
-                    <p className="font-medium text-tinta">{turno.nome}</p>
-                    <p className="font-mono text-sm text-slate-500">
-                      {turno.hora_inicio.slice(0, 5)} – {turno.hora_fim.slice(0, 5)}
-                    </p>
-                    <p
-                      className={`mt-2 text-xs font-medium ${
-                        ativo ? cor.text : 'text-slate-400'
-                      }`}
-                    >
-                      {ativo ? 'Disponível' : 'Indisponível'}
-                    </p>
-                  </button>
-                );
-              })}
+              {turnosDisponiveisNesseDia.length === 0 ? (
+                <p className="mt-3 text-sm text-slate-400">Não há operação neste dia.</p>
+              ) : (
+                <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
+                  {turnosDisponiveisNesseDia.map((turno) => {
+                    const ativo = estaDisponivel(data, turno.id);
+                    const cor = corTurno(turno.nome);
+
+                    return (
+                      <button
+                        key={turno.id}
+                        onClick={() => alternar(data, turno.id)}
+                        disabled={enviando}
+                        className={`rounded-md border px-4 py-3 text-left transition disabled:cursor-wait disabled:opacity-70 ${
+                          ativo
+                            ? `${cor.border} ${cor.bgLight}`
+                            : 'border-slate-200 bg-white hover:border-slate-300'
+                        }`}
+                      >
+                        <p className="font-medium text-tinta">{turno.nome}</p>
+                        <p className="font-mono text-sm text-slate-500">
+                          {turno.hora_inicio.slice(0, 5)} – {turno.hora_fim.slice(0, 5)}
+                        </p>
+                        <p
+                          className={`mt-2 text-xs font-medium ${
+                            ativo ? cor.text : 'text-slate-400'
+                          }`}
+                        >
+                          {ativo ? 'Disponível' : 'Indisponível'}
+                        </p>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
             </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
 
       <div className="mt-8 flex flex-col items-start gap-3 border-t border-slate-200 pt-6">

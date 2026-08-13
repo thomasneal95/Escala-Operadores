@@ -7,6 +7,8 @@ interface FormularioTurno {
   hora_inicio: string;
   hora_fim: string;
   ordem_exibicao: string;
+  ativo_sabado: boolean;
+  ativo_domingo: boolean;
 }
 
 const formularioVazio: FormularioTurno = {
@@ -14,6 +16,8 @@ const formularioVazio: FormularioTurno = {
   hora_inicio: '',
   hora_fim: '',
   ordem_exibicao: '',
+  ativo_sabado: true,
+  ativo_domingo: true,
 };
 
 export function TurnosPage() {
@@ -33,6 +37,8 @@ export function TurnosPage() {
       hora_inicio: novoTurno.hora_inicio,
       hora_fim: novoTurno.hora_fim,
       ordem_exibicao: novoTurno.ordem_exibicao ? Number(novoTurno.ordem_exibicao) : null,
+      ativo_sabado: novoTurno.ativo_sabado,
+      ativo_domingo: novoTurno.ativo_domingo,
     });
 
     if (resultado.erro) {
@@ -49,6 +55,8 @@ export function TurnosPage() {
     hora_inicio: string;
     hora_fim: string;
     ordem_exibicao: number | null;
+    ativo_sabado: boolean;
+    ativo_domingo: boolean;
   }) {
     setEditandoId(turno.id);
     setDadosEdicao({
@@ -56,6 +64,8 @@ export function TurnosPage() {
       hora_inicio: turno.hora_inicio.slice(0, 5),
       hora_fim: turno.hora_fim.slice(0, 5),
       ordem_exibicao: turno.ordem_exibicao?.toString() ?? '',
+      ativo_sabado: turno.ativo_sabado,
+      ativo_domingo: turno.ativo_domingo,
     });
   }
 
@@ -66,6 +76,8 @@ export function TurnosPage() {
       hora_inicio: dadosEdicao.hora_inicio,
       hora_fim: dadosEdicao.hora_fim,
       ordem_exibicao: dadosEdicao.ordem_exibicao ? Number(dadosEdicao.ordem_exibicao) : null,
+      ativo_sabado: dadosEdicao.ativo_sabado,
+      ativo_domingo: dadosEdicao.ativo_domingo,
     });
 
     if (resultado.erro) {
@@ -128,6 +140,26 @@ export function TurnosPage() {
               placeholder="4"
             />
           </div>
+          <div className="flex gap-4">
+            <label className="flex items-center gap-2 text-sm text-slate-700">
+              <input
+                type="checkbox"
+                checked={novoTurno.ativo_sabado}
+                onChange={(e) => setNovoTurno({ ...novoTurno, ativo_sabado: e.target.checked })}
+                className="h-4 w-4 rounded border-slate-300 text-esmeralda focus:ring-esmeralda"
+              />
+              Sábado
+            </label>
+            <label className="flex items-center gap-2 text-sm text-slate-700">
+              <input
+                type="checkbox"
+                checked={novoTurno.ativo_domingo}
+                onChange={(e) => setNovoTurno({ ...novoTurno, ativo_domingo: e.target.checked })}
+                className="h-4 w-4 rounded border-slate-300 text-esmeralda focus:ring-esmeralda"
+              />
+              Domingo
+            </label>
+          </div>
           <button
             type="submit"
             disabled={processando}
@@ -149,6 +181,7 @@ export function TurnosPage() {
               <th className="px-4 py-3 font-medium">Início</th>
               <th className="px-4 py-3 font-medium">Fim</th>
               <th className="px-4 py-3 font-medium">Ordem</th>
+              <th className="px-4 py-3 font-medium">Dias ativos</th>
               <th className="px-4 py-3 font-medium">Status</th>
               <th className="px-4 py-3 font-medium">Ações</th>
             </tr>
@@ -203,6 +236,55 @@ export function TurnosPage() {
                       />
                     ) : (
                       turno.ordem_exibicao ?? '—'
+                    )}
+                  </td>
+                  <td className="px-4 py-3">
+                    {emEdicao ? (
+                      <div className="flex gap-3">
+                        <label className="flex items-center gap-1.5 text-xs text-slate-700">
+                          <input
+                            type="checkbox"
+                            checked={dadosEdicao.ativo_sabado}
+                            onChange={(e) =>
+                              setDadosEdicao({ ...dadosEdicao, ativo_sabado: e.target.checked })
+                            }
+                            className="h-3.5 w-3.5 rounded border-slate-300 text-esmeralda focus:ring-esmeralda"
+                          />
+                          Sáb
+                        </label>
+                        <label className="flex items-center gap-1.5 text-xs text-slate-700">
+                          <input
+                            type="checkbox"
+                            checked={dadosEdicao.ativo_domingo}
+                            onChange={(e) =>
+                              setDadosEdicao({ ...dadosEdicao, ativo_domingo: e.target.checked })
+                            }
+                            className="h-3.5 w-3.5 rounded border-slate-300 text-esmeralda focus:ring-esmeralda"
+                          />
+                          Dom
+                        </label>
+                      </div>
+                    ) : (
+                      <div className="flex gap-1.5">
+                        <span
+                          className={`rounded-full px-2 py-0.5 text-xs font-medium ${
+                            turno.ativo_sabado
+                              ? 'bg-esmeralda-light text-esmeralda-dark'
+                              : 'bg-slate-100 text-slate-400'
+                          }`}
+                        >
+                          Sáb
+                        </span>
+                        <span
+                          className={`rounded-full px-2 py-0.5 text-xs font-medium ${
+                            turno.ativo_domingo
+                              ? 'bg-esmeralda-light text-esmeralda-dark'
+                              : 'bg-slate-100 text-slate-400'
+                          }`}
+                        >
+                          Dom
+                        </span>
+                      </div>
                     )}
                   </td>
                   <td className="px-4 py-3">

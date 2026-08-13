@@ -8,6 +8,8 @@ interface Turno {
   hora_fim: string;
   ordem_exibicao: number | null;
   ativo: boolean;
+  ativo_sabado: boolean;
+  ativo_domingo: boolean;
 }
 
 interface DadosTurno {
@@ -15,6 +17,8 @@ interface DadosTurno {
   hora_inicio: string;
   hora_fim: string;
   ordem_exibicao: number | null;
+  ativo_sabado: boolean;
+  ativo_domingo: boolean;
 }
 
 export function useTurnos() {
@@ -29,7 +33,7 @@ export function useTurnos() {
 
     const { data, error } = await supabase
       .from('turnos')
-      .select('id, nome, hora_inicio, hora_fim, ordem_exibicao, ativo')
+      .select('id, nome, hora_inicio, hora_fim, ordem_exibicao, ativo, ativo_sabado, ativo_domingo')
       .order('ordem_exibicao', { nullsFirst: false });
 
     if (error) {

@@ -48,7 +48,7 @@ export function useVisaoAdmin() {
 
     const { data: turnosData, error: erroTurnos } = await supabase
       .from('turnos')
-      .select('id, nome, hora_inicio, hora_fim, ordem_exibicao')
+      .select('id, nome, hora_inicio, hora_fim, ordem_exibicao, ativo_sabado, ativo_domingo')
       .eq('ativo', true)
       .order('ordem_exibicao');
 
