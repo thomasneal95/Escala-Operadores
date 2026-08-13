@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from 'react';
 import { useCriarColaborador } from '../../features/employees/useCriarColaborador';
 import { useColaboradores } from '../../features/employees/useColaboradores';
+import { useAlterarSenhaColaborador } from '../../features/employees/useAlterarSenhaColaborador';
 import { useEquipes } from '../../features/teams/useEquipes';
 
 interface FormularioNovoColaborador {
@@ -21,6 +22,12 @@ const formularioVazio: FormularioNovoColaborador = {
   matricula: '',
 };
 
+interface DadosEdicao {
+  nome_completo: string;
+  telefone: string;
+  matricula: string;
+}
+
 export function ColaboradoresPage() {
   const { criar, processando: criando } = useCriarColaborador();
   const {
@@ -31,12 +38,27 @@ export function ColaboradoresPage() {
     recarregar,
     atualizarEquipe,
     alternarAtivo,
+    atualizarCadastro,
   } = useColaboradores();
+  const { alterarSenha, processando: alterandoSenha } = useAlterarSenhaColaborador();
   const { equipes } = useEquipes();
 
   const [form, setForm] = useState<FormularioNovoColaborador>(formularioVazio);
   const [erroForm, setErroForm] = useState<string | null>(null);
   const [sucesso, setSucesso] = useState<string | null>(null);
+
+  const [editandoId, setEditandoId] = useState<string | null>(null);
+  const [dadosEdicao, setDadosEdicao] = useState<DadosEdicao>({
+    nome_completo: '',
+    telefone: '',
+    matricula: '',
+  });
+
+  const [senhaId, setSenhaId] = useState<string | null>(null);
+  const [novaSenha, setNovaSenha] = useState('');
+
+  const [erroLinha, setErroLinha] = useState<Record<string, string>>({});
+  const [sucessoLinha, setSucessoLinha] = useState<Record<string, string>>({});
 
   async function handleCriar(event: FormEvent) {
     event.preventDefault();
@@ -60,6 +82,68 @@ export function ColaboradoresPage() {
     setSucesso(`Colaborador "${form.nome_completo}" criado com sucesso.`);
     setForm(formularioVazio);
     await recarregar();
+  }
+
+  function iniciarEdicao(colaborador: {
+    id: string;
+    nome_completo: string;
+    telefone: string | null;
+    matricula: string | null;
+  }) {
+    setSenhaId(null);
+    setEditandoId(colaborador.id);
+    setDadosEdicao({
+      nome_completo: colaborador.nome_completo,
+      telefone: colaborador.telefone ?? '',
+      matricula: colaborador.matricula ?? '',
+    });
+  }
+
+  async function salvarEdicao(colaboradorId: string, perfilId: string) {
+    setErroLinha((atual) => ({ ...atual, [colaboradorId]: '' }));
+
+    const resultado = await atualizarCadastro(colaboradorId, perfilId, {
+      nome_completo: dadosEdicao.nome_completo,
+      telefone: dadosEdicao.telefone || null,
+      matricula: dadosEdicao.matricula || null,
+    });
+
+    if (resultado.erro) {
+      setErroLinha((atual) => ({ ...atual, [colaboradorId]: resultado.erro as string }));
+      return;
+    }
+
+    setEditandoId(null);
+    setSucessoLinha((atual) => ({ ...atual, [colaboradorId]: 'Cadastro atualizado.' }));
+  }
+
+  function iniciarAlterarSenha(colaboradorId: string) {
+    setEditandoId(null);
+    setSenhaId(colaboradorId);
+    setNovaSenha('');
+  }
+
+  async function salvarSenha(colaboradorId: string, perfilId: string) {
+    setErroLinha((atual) => ({ ...atual, [colaboradorId]: '' }));
+
+    if (novaSenha.length < 6) {
+      setErroLinha((atual) => ({
+        ...atual,
+        [colaboradorId]: 'A senha precisa ter pelo menos 6 caracteres.',
+      }));
+      return;
+    }
+
+    const resultado = await alterarSenha(perfilId, novaSenha);
+
+    if (resultado.erro) {
+      setErroLinha((atual) => ({ ...atual, [colaboradorId]: resultado.erro as string }));
+      return;
+    }
+
+    setSenhaId(null);
+    setNovaSenha('');
+    setSucessoLinha((atual) => ({ ...atual, [colaboradorId]: 'Senha alterada com sucesso.' }));
   }
 
   return (
@@ -179,53 +263,155 @@ export function ColaboradoresPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {colaboradores.map((colaborador) => (
-                <tr key={colaborador.id}>
-                  <td className="px-4 py-3 font-medium text-tinta">
-                    {colaborador.nome_completo}
-                  </td>
-                  <td className="px-4 py-3">
-                    <select
-                      value={colaborador.equipe_id ?? ''}
-                      onChange={(e) => atualizarEquipe(colaborador.id, e.target.value || null)}
-                      disabled={atualizando}
-                      className="rounded-md border border-slate-300 px-2 py-1 text-sm"
-                    >
-                      <option value="">Sem equipe</option>
-                      {equipes
-                        .filter((e) => e.ativo)
-                        .map((e) => (
-                          <option key={e.id} value={e.id}>
-                            {e.nome}
-                          </option>
-                        ))}
-                    </select>
-                  </td>
-                  <td className="px-4 py-3 font-mono text-slate-500">
-                    {colaborador.telefone ?? '—'}
-                  </td>
-                  <td className="px-4 py-3">
-                    <span
-                      className={`rounded-full px-2 py-0.5 text-xs font-medium ${
-                        colaborador.ativo
-                          ? 'bg-esmeralda-light text-esmeralda-dark'
-                          : 'bg-slate-100 text-slate-500'
-                      }`}
-                    >
-                      {colaborador.ativo ? 'Ativo' : 'Inativo'}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3">
-                    <button
-                      onClick={() => alternarAtivo(colaborador.id, !colaborador.ativo)}
-                      disabled={atualizando}
-                      className="text-sm font-medium text-slate-600 hover:text-tinta"
-                    >
-                      {colaborador.ativo ? 'Desativar' : 'Ativar'}
-                    </button>
-                  </td>
-                </tr>
-              ))}
+              {colaboradores.map((colaborador) => {
+                const emEdicao = editandoId === colaborador.id;
+                const alterandoSenhaDele = senhaId === colaborador.id;
+
+                return (
+                  <tr key={colaborador.id}>
+                    <td className="px-4 py-3">
+                      {emEdicao ? (
+                        <input
+                          type="text"
+                          value={dadosEdicao.nome_completo}
+                          onChange={(e) =>
+                            setDadosEdicao({ ...dadosEdicao, nome_completo: e.target.value })
+                          }
+                          className="w-full rounded-md border border-slate-300 px-2 py-1"
+                        />
+                      ) : (
+                        <p className="font-medium text-tinta">{colaborador.nome_completo}</p>
+                      )}
+                    </td>
+                    <td className="px-4 py-3">
+                      <select
+                        value={colaborador.equipe_id ?? ''}
+                        onChange={(e) => atualizarEquipe(colaborador.id, e.target.value || null)}
+                        disabled={atualizando}
+                        className="rounded-md border border-slate-300 px-2 py-1 text-sm"
+                      >
+                        <option value="">Sem equipe</option>
+                        {equipes
+                          .filter((e) => e.ativo)
+                          .map((e) => (
+                            <option key={e.id} value={e.id}>
+                              {e.nome}
+                            </option>
+                          ))}
+                      </select>
+                    </td>
+                    <td className="px-4 py-3 font-mono text-slate-500">
+                      {emEdicao ? (
+                        <input
+                          type="text"
+                          value={dadosEdicao.telefone}
+                          onChange={(e) =>
+                            setDadosEdicao({ ...dadosEdicao, telefone: e.target.value })
+                          }
+                          className="w-full rounded-md border border-slate-300 px-2 py-1 font-sans"
+                          placeholder="Telefone"
+                        />
+                      ) : (
+                        colaborador.telefone ?? '—'
+                      )}
+                    </td>
+                    <td className="px-4 py-3">
+                      <span
+                        className={`rounded-full px-2 py-0.5 text-xs font-medium ${
+                          colaborador.ativo
+                            ? 'bg-esmeralda-light text-esmeralda-dark'
+                            : 'bg-slate-100 text-slate-500'
+                        }`}
+                      >
+                        {colaborador.ativo ? 'Ativo' : 'Inativo'}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3">
+                      {emEdicao ? (
+                        <div className="flex flex-wrap items-center gap-3">
+                          <input
+                            type="text"
+                            value={dadosEdicao.matricula}
+                            onChange={(e) =>
+                              setDadosEdicao({ ...dadosEdicao, matricula: e.target.value })
+                            }
+                            className="w-28 rounded-md border border-slate-300 px-2 py-1 text-sm"
+                            placeholder="Matrícula"
+                          />
+                          <button
+                            onClick={() => salvarEdicao(colaborador.id, colaborador.perfil_id)}
+                            disabled={atualizando}
+                            className="text-sm font-medium text-esmeralda-dark hover:text-esmeralda"
+                          >
+                            Salvar
+                          </button>
+                          <button
+                            onClick={() => setEditandoId(null)}
+                            className="text-sm font-medium text-slate-500 hover:text-slate-700"
+                          >
+                            Cancelar
+                          </button>
+                        </div>
+                      ) : alterandoSenhaDele ? (
+                        <div className="flex flex-wrap items-center gap-3">
+                          <input
+                            type="text"
+                            value={novaSenha}
+                            onChange={(e) => setNovaSenha(e.target.value)}
+                            className="w-40 rounded-md border border-slate-300 px-2 py-1 text-sm"
+                            placeholder="Nova senha (mín. 6)"
+                            autoFocus
+                          />
+                          <button
+                            onClick={() => salvarSenha(colaborador.id, colaborador.perfil_id)}
+                            disabled={alterandoSenha}
+                            className="text-sm font-medium text-esmeralda-dark hover:text-esmeralda"
+                          >
+                            Salvar senha
+                          </button>
+                          <button
+                            onClick={() => setSenhaId(null)}
+                            className="text-sm font-medium text-slate-500 hover:text-slate-700"
+                          >
+                            Cancelar
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="flex flex-wrap gap-3">
+                          <button
+                            onClick={() => iniciarEdicao(colaborador)}
+                            className="text-sm font-medium text-slate-600 hover:text-tinta"
+                          >
+                            Editar
+                          </button>
+                          <button
+                            onClick={() => iniciarAlterarSenha(colaborador.id)}
+                            className="text-sm font-medium text-slate-600 hover:text-tinta"
+                          >
+                            Alterar senha
+                          </button>
+                          <button
+                            onClick={() => alternarAtivo(colaborador.id, !colaborador.ativo)}
+                            disabled={atualizando}
+                            className="text-sm font-medium text-slate-600 hover:text-tinta"
+                          >
+                            {colaborador.ativo ? 'Desativar' : 'Ativar'}
+                          </button>
+                        </div>
+                      )}
+
+                      {erroLinha[colaborador.id] && (
+                        <p className="mt-1 text-xs text-red-600">{erroLinha[colaborador.id]}</p>
+                      )}
+                      {sucessoLinha[colaborador.id] && !erroLinha[colaborador.id] && (
+                        <p className="mt-1 text-xs text-esmeralda-dark">
+                          {sucessoLinha[colaborador.id]}
+                        </p>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         )}

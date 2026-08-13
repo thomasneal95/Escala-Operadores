@@ -3,12 +3,19 @@ import { supabase } from '../../lib/supabase/client';
 
 interface ColaboradorLista {
   id: string;
+  perfil_id: string;
   nome_completo: string;
   equipe_id: string | null;
   equipe_nome: string | null;
   telefone: string | null;
   matricula: string | null;
   ativo: boolean;
+}
+
+interface DadosCadastro {
+  nome_completo: string;
+  telefone: string | null;
+  matricula: string | null;
 }
 
 export function useColaboradores() {
@@ -23,7 +30,9 @@ export function useColaboradores() {
 
     const { data, error } = await supabase
       .from('colaboradores')
-      .select('id, equipe_id, telefone, matricula, ativo, perfis(nome_completo), equipes(nome)');
+      .select(
+        'id, perfil_id, equipe_id, telefone, matricula, ativo, perfis(nome_completo), equipes(nome)'
+      );
 
     if (error) {
       setErro('Não foi possível carregar os colaboradores.');
@@ -36,6 +45,7 @@ export function useColaboradores() {
       const equipe = c.equipes as unknown as { nome: string } | null;
       return {
         id: c.id,
+        perfil_id: c.perfil_id,
         nome_completo: perfil?.nome_completo ?? '(sem nome)',
         equipe_id: c.equipe_id,
         equipe_nome: equipe?.nome ?? null,
@@ -77,5 +87,51 @@ export function useColaboradores() {
     return { erro: null };
   }
 
-  return { colaboradores, carregando, erro, processando, recarregar: carregar, atualizarEquipe, alternarAtivo };
+  // Atualiza nome (em perfis) e telefone/matrícula (em colaboradores) juntos.
+  async function atualizarCadastro(
+    colaboradorId: string,
+    perfilId: string,
+    dados: DadosCadastro
+  ) {
+    setProcessando(true);
+
+    const { error: erroPerfil } = await supabase
+      .from('perfis')
+      .update({ nome_completo: dados.nome_completo })
+      .eq('id', perfilId);
+
+    if (erroPerfil) {
+      setProcessando(false);
+      return { erro: 'Não foi possível atualizar o nome.' };
+    }
+
+    const { error: erroColaborador } = await supabase
+      .from('colaboradores')
+      .update({ telefone: dados.telefone, matricula: dados.matricula })
+      .eq('id', colaboradorId);
+
+    setProcessando(false);
+
+    if (erroColaborador) {
+      let mensagem = 'Não foi possível atualizar o cadastro.';
+      if (erroColaborador.code === '23505') {
+        mensagem = 'Já existe um colaborador com essa matrícula.';
+      }
+      return { erro: mensagem };
+    }
+
+    await carregar();
+    return { erro: null };
+  }
+
+  return {
+    colaboradores,
+    carregando,
+    erro,
+    processando,
+    recarregar: carregar,
+    atualizarEquipe,
+    alternarAtivo,
+    atualizarCadastro,
+  };
 }
