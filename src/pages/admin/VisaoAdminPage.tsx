@@ -36,10 +36,13 @@ export function VisaoAdminPage() {
     carregando,
     erro,
     respostaDe,
+    temAlgumaResposta,
     encerrarRecebimento,
     confirmarEscala,
     criarNovoPeriodo,
     resetarPeriodo,
+    excluirDisponibilidadeDoColaborador,
+    excluindoDisponibilidade,
     atualizandoStatus,
   } = useVisaoAdmin();
   const {
@@ -53,6 +56,7 @@ export function VisaoAdminPage() {
   } = useEscala(periodo?.id ?? null);
 
   const [edicaoHabilitada, setEdicaoHabilitada] = useState(false);
+  const [erroLinha, setErroLinha] = useState<Record<string, string>>({});
 
   useEffect(() => {
     setEdicaoHabilitada(false);
@@ -113,6 +117,21 @@ export function VisaoAdminPage() {
     );
     if (confirmou) {
       await resetarPeriodo(false);
+    }
+  }
+
+  async function handleExcluirDisponibilidade(colaboradorId: string, nome: string) {
+    const confirmou = window.confirm(
+      `Excluir a disponibilidade enviada por "${nome}"?\n\n` +
+        'As respostas dos demais colaboradores não serão afetadas. ' +
+        'Se o período ainda estiver "Aberto", esta pessoa poderá enviar a disponibilidade de novo.'
+    );
+    if (!confirmou) return;
+
+    setErroLinha((atual) => ({ ...atual, [colaboradorId]: '' }));
+    const resultado = await excluirDisponibilidadeDoColaborador(colaboradorId);
+    if (resultado.erro) {
+      setErroLinha((atual) => ({ ...atual, [colaboradorId]: resultado.erro as string }));
     }
   }
 
@@ -194,7 +213,7 @@ export function VisaoAdminPage() {
             Disponibilidade informada
           </p>
           <div className="mt-3 overflow-x-auto rounded-lg border border-slate-200 bg-white">
-            <table className="w-full min-w-[640px] text-left text-sm">
+            <table className="w-full min-w-[720px] text-left text-sm">
               <thead className="border-b border-slate-200 bg-slate-50 text-slate-500">
                 <tr>
                   <th className="px-4 py-3 font-medium">Colaborador</th>
@@ -207,6 +226,7 @@ export function VisaoAdminPage() {
                       </th>
                     ))
                   )}
+                  <th className="px-4 py-3 font-medium">Ações</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
@@ -241,6 +261,33 @@ export function VisaoAdminPage() {
                         );
                       })
                     )}
+                    <td className="px-4 py-3">
+                      {temAlgumaResposta(colaborador.id) ? (
+                        <>
+                          <button
+                            onClick={() =>
+                              handleExcluirDisponibilidade(
+                                colaborador.id,
+                                colaborador.nome_completo
+                              )
+                            }
+                            disabled={excluindoDisponibilidade === colaborador.id}
+                            className="text-sm font-medium text-red-600 hover:text-red-700 disabled:opacity-50"
+                          >
+                            {excluindoDisponibilidade === colaborador.id
+                              ? 'Excluindo...'
+                              : 'Excluir envio'}
+                          </button>
+                          {erroLinha[colaborador.id] && (
+                            <p className="mt-1 text-xs text-red-600">
+                              {erroLinha[colaborador.id]}
+                            </p>
+                          )}
+                        </>
+                      ) : (
+                        <span className="text-xs text-slate-300">—</span>
+                      )}
+                    </td>
                   </tr>
                 ))}
               </tbody>

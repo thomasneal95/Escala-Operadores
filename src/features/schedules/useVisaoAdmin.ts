@@ -25,6 +25,7 @@ export function useVisaoAdmin() {
   const [carregando, setCarregando] = useState(true);
   const [erro, setErro] = useState<string | null>(null);
   const [atualizandoStatus, setAtualizandoStatus] = useState(false);
+  const [excluindoDisponibilidade, setExcluindoDisponibilidade] = useState<string | null>(null);
 
   const carregar = useCallback(async () => {
     setCarregando(true);
@@ -113,6 +114,10 @@ export function useVisaoAdmin() {
     return respostas.find(
       (r) => r.colaborador_id === colaboradorId && r.data === data && r.turno_id === turnoId
     );
+  }
+
+  function temAlgumaResposta(colaboradorId: string) {
+    return respostas.some((r) => r.colaborador_id === colaboradorId);
   }
 
   async function encerrarRecebimento() {
@@ -230,6 +235,29 @@ export function useVisaoAdmin() {
     return { erro: null };
   }
 
+  // Exclui a disponibilidade de UM único colaborador neste período, sem
+  // afetar as respostas de ninguém mais. Não altera o status do período.
+  async function excluirDisponibilidadeDoColaborador(colaboradorId: string) {
+    if (!periodo) return { erro: 'Nenhum período carregado.' };
+
+    setExcluindoDisponibilidade(colaboradorId);
+
+    const { error } = await supabase
+      .from('disponibilidades')
+      .delete()
+      .eq('periodo_id', periodo.id)
+      .eq('colaborador_id', colaboradorId);
+
+    setExcluindoDisponibilidade(null);
+
+    if (error) {
+      return { erro: 'Não foi possível excluir a disponibilidade deste colaborador.' };
+    }
+
+    setRespostas((atual) => atual.filter((r) => r.colaborador_id !== colaboradorId));
+    return { erro: null };
+  }
+
   return {
     periodo,
     turnos,
@@ -237,11 +265,14 @@ export function useVisaoAdmin() {
     carregando,
     erro,
     respostaDe,
+    temAlgumaResposta,
     recarregar: carregar,
     encerrarRecebimento,
     confirmarEscala,
     criarNovoPeriodo,
     resetarPeriodo,
+    excluirDisponibilidadeDoColaborador,
+    excluindoDisponibilidade,
     atualizandoStatus,
   };
 }
