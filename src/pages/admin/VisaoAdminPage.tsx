@@ -43,6 +43,7 @@ export function VisaoAdminPage() {
     resetarPeriodo,
     excluirDisponibilidadeDoColaborador,
     excluindoDisponibilidade,
+    reabrirRecebimento,
     atualizandoStatus,
   } = useVisaoAdmin();
   const {
@@ -82,6 +83,16 @@ export function VisaoAdminPage() {
     );
     if (confirmou) {
       await encerrarRecebimento();
+    }
+  }
+
+async function handleReabrirRecebimento() {
+    const confirmou = window.confirm(
+      'Isso vai reabrir o recebimento de disponibilidade (status volta para "Aberto"), ' +
+        'sem apagar nada do que já foi enviado ou já foi escalado. Deseja continuar?'
+    );
+    if (confirmou) {
+      await reabrirRecebimento();
     }
   }
 
@@ -201,6 +212,16 @@ export function VisaoAdminPage() {
                 className="ml-auto rounded-md bg-esmeralda px-3 py-1.5 text-sm font-medium text-white hover:bg-esmeralda-dark disabled:opacity-60"
               >
                 {atualizandoStatus ? 'Confirmando...' : 'Confirmar escala'}
+              </button>
+            )}
+
+            {(periodo.status === 'em_organizacao' || periodo.status === 'confirmado') && (
+              <button
+                onClick={handleReabrirRecebimento}
+                disabled={atualizandoStatus}
+                className="ml-auto rounded-md border border-slate-300 px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-100 disabled:opacity-60"
+              >
+                {atualizandoStatus ? 'Reabrindo...' : 'Reabrir recebimento'}
               </button>
             )}
 

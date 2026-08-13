@@ -258,6 +258,26 @@ export function useVisaoAdmin() {
     return { erro: null };
   }
 
+  // Reabre o recebimento de disponibilidade sem apagar nada — nem
+  // disponibilidades já enviadas, nem escalas já montadas.
+  async function reabrirRecebimento() {
+    if (!periodo) return { erro: 'Nenhum período carregado.' };
+
+    setAtualizandoStatus(true);
+    const { error } = await supabase
+      .from('periodos_operacao')
+      .update({ status: 'aberto', confirmed_at: null, confirmed_by: null })
+      .eq('id', periodo.id);
+    setAtualizandoStatus(false);
+
+    if (error) {
+      return { erro: 'Não foi possível reabrir o recebimento.' };
+    }
+
+    setPeriodo({ ...periodo, status: 'aberto' });
+    return { erro: null };
+  }
+
   return {
     periodo,
     turnos,
@@ -273,6 +293,7 @@ export function useVisaoAdmin() {
     resetarPeriodo,
     excluirDisponibilidadeDoColaborador,
     excluindoDisponibilidade,
+    reabrirRecebimento,
     atualizandoStatus,
   };
 }
