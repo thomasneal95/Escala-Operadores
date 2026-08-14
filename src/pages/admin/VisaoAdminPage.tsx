@@ -185,7 +185,7 @@ async function handleReabrirRecebimento() {
         </div>
       ) : (
         <div>
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-3">
             <h1 className="font-display text-2xl font-semibold text-tinta">
               {formatarData(periodo.data_inicio)} – {formatarData(periodo.data_fim)}
             </h1>
@@ -194,12 +194,14 @@ async function handleReabrirRecebimento() {
             >
               {rotuloStatus[periodo.status]}
             </span>
+          </div>
 
+          <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:flex-wrap">
             {periodo.status === 'aberto' && (
               <button
                 onClick={handleEncerrarRecebimento}
                 disabled={atualizandoStatus}
-                className="ml-auto rounded-md border border-slate-300 px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-100 disabled:opacity-60"
+                className="w-full rounded-md border border-slate-300 px-4 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-100 disabled:opacity-60 sm:w-auto"
               >
                 {atualizandoStatus ? 'Encerrando...' : 'Encerrar recebimento'}
               </button>
@@ -209,7 +211,7 @@ async function handleReabrirRecebimento() {
               <button
                 onClick={handleConfirmarEscala}
                 disabled={atualizandoStatus}
-                className="ml-auto rounded-md bg-esmeralda px-3 py-1.5 text-sm font-medium text-white hover:bg-esmeralda-dark disabled:opacity-60"
+                className="w-full rounded-md bg-esmeralda px-4 py-2.5 text-sm font-medium text-white hover:bg-esmeralda-dark disabled:opacity-60 sm:w-auto"
               >
                 {atualizandoStatus ? 'Confirmando...' : 'Confirmar escala'}
               </button>
@@ -219,7 +221,7 @@ async function handleReabrirRecebimento() {
               <button
                 onClick={handleReabrirRecebimento}
                 disabled={atualizandoStatus}
-                className="ml-auto rounded-md border border-slate-300 px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-100 disabled:opacity-60"
+                className="w-full rounded-md bg-ceruleo-light px-4 py-2.5 text-sm font-medium text-ceruleo hover:bg-ceruleo/20 disabled:opacity-60 sm:w-auto"
               >
                 {atualizandoStatus ? 'Reabrindo...' : 'Reabrir recebimento'}
               </button>
@@ -228,7 +230,7 @@ async function handleReabrirRecebimento() {
             {escalaEstaTrancada && (
               <button
                 onClick={handleHabilitarEdicao}
-                className="ml-auto rounded-md border border-profundo/30 px-3 py-1.5 text-sm font-medium text-profundo hover:bg-profundo-light"
+                className="w-full rounded-md border border-profundo/30 px-4 py-2.5 text-sm font-medium text-profundo hover:bg-profundo-light sm:w-auto"
               >
                 Editar escala confirmada
               </button>
