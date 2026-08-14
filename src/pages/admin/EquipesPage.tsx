@@ -1,12 +1,18 @@
 import { useState, type FormEvent } from 'react';
 import { useEquipes } from '../../features/teams/useEquipes';
+import { useVagasEquipe } from '../../features/teams/useVagasEquipe';
+import { useTurnos } from '../../features/shifts/useTurnos';
 
 export function EquipesPage() {
   const { equipes, carregando, erro, processando, criar, renomear, alternarAtivo } = useEquipes();
+  const { turnos } = useTurnos();
+  const { vagasDe, definirVagas, salvando } = useVagasEquipe();
+
   const [novoNome, setNovoNome] = useState('');
   const [erroForm, setErroForm] = useState<string | null>(null);
   const [editandoId, setEditandoId] = useState<string | null>(null);
   const [nomeEditado, setNomeEditado] = useState('');
+  const [equipeExpandida, setEquipeExpandida] = useState<string | null>(null);
 
   async function handleCriar(event: FormEvent) {
     event.preventDefault();
@@ -31,6 +37,10 @@ export function EquipesPage() {
     if (!resultado.erro) {
       setEditandoId(null);
     }
+  }
+
+  function alternarExpansao(equipeId: string) {
+    setEquipeExpandida((atual) => (atual === equipeId ? null : equipeId));
   }
 
   if (carregando) {
@@ -73,32 +83,28 @@ export function EquipesPage() {
         )}
       </div>
 
-      <div className="mt-6 overflow-hidden rounded-lg border border-slate-200 bg-white">
-        <table className="w-full text-left text-sm">
-          <thead className="border-b border-slate-200 bg-slate-50 text-slate-500">
-            <tr>
-              <th className="px-4 py-3 font-medium">Nome</th>
-              <th className="px-4 py-3 font-medium">Status</th>
-              <th className="px-4 py-3 font-medium">Ações</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-100">
-            {equipes.map((equipe) => (
-              <tr key={equipe.id}>
-                <td className="px-4 py-3">
+      <div className="mt-6 space-y-3">
+        {equipes.map((equipe) => {
+          const expandida = equipeExpandida === equipe.id;
+
+          return (
+            <div
+              key={equipe.id}
+              className="overflow-hidden rounded-lg border border-slate-200 bg-white"
+            >
+              <div className="flex items-center justify-between px-4 py-3">
+                <div className="flex items-center gap-3">
                   {editandoId === equipe.id ? (
                     <input
                       type="text"
                       value={nomeEditado}
                       onChange={(e) => setNomeEditado(e.target.value)}
-                      className="rounded-md border border-slate-300 px-2 py-1"
+                      className="rounded-md border border-slate-300 px-2 py-1 text-sm"
                       autoFocus
                     />
                   ) : (
                     <span className="font-medium text-tinta">{equipe.nome}</span>
                   )}
-                </td>
-                <td className="px-4 py-3">
                   <span
                     className={`rounded-full px-2 py-0.5 text-xs font-medium ${
                       equipe.ativo
@@ -108,48 +114,83 @@ export function EquipesPage() {
                   >
                     {equipe.ativo ? 'Ativa' : 'Inativa'}
                   </span>
-                </td>
-                <td className="px-4 py-3">
-                  <div className="flex gap-3">
-                    {editandoId === equipe.id ? (
-                      <>
-                        <button
-                          onClick={() => salvarEdicao(equipe.id)}
-                          disabled={processando}
-                          className="text-sm font-medium text-esmeralda-dark hover:text-esmeralda"
-                        >
-                          Salvar
-                        </button>
-                        <button
-                          onClick={() => setEditandoId(null)}
-                          className="text-sm font-medium text-slate-500 hover:text-slate-700"
-                        >
-                          Cancelar
-                        </button>
-                      </>
-                    ) : (
-                      <>
-                        <button
-                          onClick={() => iniciarEdicao(equipe.id, equipe.nome)}
-                          className="text-sm font-medium text-slate-600 hover:text-tinta"
-                        >
-                          Renomear
-                        </button>
-                        <button
-                          onClick={() => alternarAtivo(equipe.id, !equipe.ativo)}
-                          disabled={processando}
-                          className="text-sm font-medium text-slate-600 hover:text-tinta"
-                        >
-                          {equipe.ativo ? 'Desativar' : 'Ativar'}
-                        </button>
-                      </>
-                    )}
+                </div>
+
+                <div className="flex flex-wrap gap-3">
+                  {editandoId === equipe.id ? (
+                    <>
+                      <button
+                        onClick={() => salvarEdicao(equipe.id)}
+                        disabled={processando}
+                        className="text-sm font-medium text-esmeralda-dark hover:text-esmeralda"
+                      >
+                        Salvar
+                      </button>
+                      <button
+                        onClick={() => setEditandoId(null)}
+                        className="text-sm font-medium text-slate-500 hover:text-slate-700"
+                      >
+                        Cancelar
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      <button
+                        onClick={() => alternarExpansao(equipe.id)}
+                        className="text-sm font-medium text-ceruleo hover:text-ceruleo/80"
+                      >
+                        {expandida ? 'Ocultar vagas' : 'Configurar vagas'}
+                      </button>
+                      <button
+                        onClick={() => iniciarEdicao(equipe.id, equipe.nome)}
+                        className="text-sm font-medium text-slate-600 hover:text-tinta"
+                      >
+                        Renomear
+                      </button>
+                      <button
+                        onClick={() => alternarAtivo(equipe.id, !equipe.ativo)}
+                        disabled={processando}
+                        className="text-sm font-medium text-slate-600 hover:text-tinta"
+                      >
+                        {equipe.ativo ? 'Desativar' : 'Ativar'}
+                      </button>
+                    </>
+                  )}
+                </div>
+              </div>
+
+              {expandida && (
+                <div className="border-t border-slate-100 bg-slate-50 px-4 py-4">
+                  <p className="text-xs font-medium uppercase tracking-wide text-slate-500">
+                    Vagas necessárias por turno (fim de semana)
+                  </p>
+                  <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-3">
+                    {turnos.map((turno) => (
+                      <div key={turno.id} className="flex items-center justify-between rounded-md border border-slate-200 bg-white px-3 py-2">
+                        <span className="text-sm text-tinta">{turno.nome}</span>
+                        <input
+                          type="number"
+                          min={0}
+                          value={vagasDe(equipe.id, turno.id)}
+                          onChange={(e) =>
+                            definirVagas(equipe.id, turno.id, Number(e.target.value))
+                          }
+                          disabled={salvando}
+                          className="w-16 rounded-md border border-slate-300 px-2 py-1 text-center text-sm"
+                        />
+                      </div>
+                    ))}
                   </div>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+                  {turnos.length === 0 && (
+                    <p className="mt-2 text-sm text-slate-400">
+                      Nenhum turno cadastrado ainda.
+                    </p>
+                  )}
+                </div>
+              )}
+            </div>
+          );
+        })}
       </div>
     </div>
   );
