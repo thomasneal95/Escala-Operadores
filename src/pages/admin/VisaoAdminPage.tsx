@@ -73,6 +73,10 @@ export function VisaoAdminPage() {
     return colaboradores.find((c) => c.id === colaboradorId)?.nome_completo ?? '(desconhecido)';
   }
 
+  function equipeNomePorId(colaboradorId: string) {
+    return colaboradores.find((c) => c.id === colaboradorId)?.equipe_nome ?? 'Sem equipe';
+  }
+
   async function handleAdicionar(colaboradorId: string, data: string, turnoId: string) {
     await adicionar(colaboradorId, data, turnoId);
   }
@@ -86,22 +90,22 @@ export function VisaoAdminPage() {
     }
   }
 
-async function handleReabrirRecebimento() {
-    const confirmou = window.confirm(
-      'Isso vai reabrir o recebimento de disponibilidade (status volta para "Aberto"), ' +
-        'sem apagar nada do que já foi enviado ou já foi escalado. Deseja continuar?'
-    );
-    if (confirmou) {
-      await reabrirRecebimento();
-    }
-  }
-
   async function handleConfirmarEscala() {
     const confirmou = window.confirm(
       'Ao confirmar a escala, os colaboradores poderão visualizar suas respectivas escalas. Deseja continuar?'
     );
     if (confirmou) {
       await confirmarEscala();
+    }
+  }
+
+  async function handleReabrirRecebimento() {
+    const confirmou = window.confirm(
+      'Isso vai reabrir o recebimento de disponibilidade (status volta para "Aberto"), ' +
+        'sem apagar nada do que já foi enviado ou já foi escalado. Deseja continuar?'
+    );
+    if (confirmou) {
+      await reabrirRecebimento();
     }
   }
 
@@ -164,7 +168,7 @@ async function handleReabrirRecebimento() {
     (periodo.status === 'confirmado' || periodo.status === 'encerrado') &&
     !edicaoHabilitada;
 
-    return (
+  return (
     <div>
       {erro && (
         <p className="mb-4 rounded-md bg-red-50 px-4 py-3 text-sm text-red-700">{erro}</p>
@@ -365,8 +369,18 @@ async function handleReabrirRecebimento() {
                               !colaboradorJaEscalado(c.id, data, turno.id)
                           );
 
+                          const contagemPorEquipe: Record<string, number> = {};
+                          for (const e of escalados) {
+                            const nomeEquipe = equipeNomePorId(e.colaborador_id);
+                            contagemPorEquipe[nomeEquipe] =
+                              (contagemPorEquipe[nomeEquipe] ?? 0) + 1;
+                          }
+
                           return (
-                            <div key={turno.id} className="rounded-md border border-slate-200 p-3">
+                            <div
+                              key={turno.id}
+                              className="rounded-md border border-slate-200 p-3"
+                            >
                               <div className="flex items-center gap-1.5">
                                 <span className={`h-2 w-2 rounded-full ${cor.dot}`} />
                                 <p className="font-medium text-tinta">{turno.nome}</p>
@@ -375,13 +389,33 @@ async function handleReabrirRecebimento() {
                                 {turno.hora_inicio.slice(0, 5)} – {turno.hora_fim.slice(0, 5)}
                               </p>
 
-                              <div className="mt-3 space-y-1.5">
+                              {escalados.length > 0 && (
+                                <div className="mt-3 flex flex-wrap gap-1.5">
+                                  {Object.entries(contagemPorEquipe).map(
+                                    ([nomeEquipe, contagem]) => (
+                                      <span
+                                        key={nomeEquipe}
+                                        className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-600"
+                                      >
+                                        {nomeEquipe} · {contagem}
+                                      </span>
+                                    )
+                                  )}
+                                </div>
+                              )}
+
+                              <div className="mt-2 space-y-1.5">
                                 {escalados.map((e) => (
                                   <div
                                     key={e.id}
-                                    className={`flex items-center justify-between rounded-md ${cor.bgLight} px-2 py-1 text-sm ${cor.text}`}
+                                    className={`flex items-center justify-between rounded-md ${cor.bgLight} px-2 py-1.5 text-sm ${cor.text}`}
                                   >
-                                    <span>{nomePorId(e.colaborador_id)}</span>
+                                    <div className="flex flex-col leading-tight">
+                                      <span>{nomePorId(e.colaborador_id)}</span>
+                                      <span className="text-[11px] opacity-70">
+                                        {equipeNomePorId(e.colaborador_id)}
+                                      </span>
+                                    </div>
                                     {!escalaEstaTrancada && (
                                       <button
                                         onClick={() => remover(e.id)}
