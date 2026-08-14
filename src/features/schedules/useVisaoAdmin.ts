@@ -6,7 +6,9 @@ import type { PeriodoOperacao, Turno } from '../../types/database';
 interface ColaboradorComPerfil {
   id: string;
   nome_completo: string;
+  equipe_id: string | null;
   equipe_nome: string | null;
+  turno_semana_id: string | null;
 }
 
 interface DisponibilidadeResposta {
@@ -62,7 +64,7 @@ export function useVisaoAdmin() {
 
     const { data: colaboradoresData, error: erroColaboradores } = await supabase
       .from('colaboradores')
-      .select('id, perfis(nome_completo), equipes(nome)')
+      .select('id, equipe_id, turno_semana_id, perfis(nome_completo), equipes(nome)')
       .eq('ativo', true);
 
     if (erroColaboradores) {
@@ -78,7 +80,9 @@ export function useVisaoAdmin() {
         return {
           id: c.id,
           nome_completo: perfil?.nome_completo ?? '(sem nome)',
+          equipe_id: c.equipe_id,
           equipe_nome: equipe?.nome ?? null,
+          turno_semana_id: c.turno_semana_id,
         };
       }
     );

@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import { useVisaoAdmin } from '../../features/schedules/useVisaoAdmin';
 import { useEscala } from '../../features/schedules/useEscala';
+import { useGerarEscalaAutomatica } from '../../features/schedules/useGerarEscalaAutomatica';
+import { useVagasEquipe } from '../../features/teams/useVagasEquipe';
 import { SeletorColaborador } from '../../features/schedules/SeletorColaborador';
 import { NovoPeriodoForm } from '../../features/schedules/NovoPeriodoForm';
 import { corTurno } from '../../lib/turnoColors';
@@ -55,9 +57,12 @@ export function VisaoAdminPage() {
     adicionar,
     remover,
   } = useEscala(periodo?.id ?? null);
+  const { gerar, gerando } = useGerarEscalaAutomatica();
+  const { vagas } = useVagasEquipe();
 
   const [edicaoHabilitada, setEdicaoHabilitada] = useState(false);
   const [erroLinha, setErroLinha] = useState<Record<string, string>>({});
+  const [mensagemGeracao, setMensagemGeracao] = useState<string | null>(null);
 
   useEffect(() => {
     setEdicaoHabilitada(false);
@@ -154,6 +159,70 @@ export function VisaoAdminPage() {
     if (resultado.erro) {
       setErroLinha((atual) => ({ ...atual, [colaboradorId]: resultado.erro as string }));
     }
+  }
+
+  async function handleGerarAutomatico() {
+    if (!periodo) return;
+    setMensagemGeracao(null);
+
+    const confirmou = window.confirm(
+      'Isso vai preencher automaticamente as vagas ainda vazias, priorizando quem ' +
+        'trabalha aquele turno durante a semana. Escalas já feitas manualmente não ' +
+        'serão alteradas. Deseja continuar?'
+    );
+    if (!confirmou) return;
+
+    const dias = [periodo.data_inicio, periodo.data_fim];
+    const escalasExistentes: { colaborador_id: string; data: string; turno_id: string }[] = [];
+    const disponibilidadesFlat: {
+      colaborador_id: string;
+      data: string;
+      turno_id: string;
+      disponivel: boolean;
+    }[] = [];
+
+    for (const data of dias) {
+      for (const turno of turnosDoDia(data)) {
+        for (const e of escaladosEm(data, turno.id)) {
+          escalasExistentes.push({ colaborador_id: e.colaborador_id, data, turno_id: turno.id });
+        }
+        for (const c of colaboradores) {
+          const resposta = respostaDe(c.id, data, turno.id);
+          if (resposta) {
+            disponibilidadesFlat.push({
+              colaborador_id: c.id,
+              data,
+              turno_id: turno.id,
+              disponivel: resposta.disponivel,
+            });
+          }
+        }
+      }
+    }
+
+    const resultado = await gerar({
+      periodo,
+      colaboradores: colaboradores.map((c) => ({
+        id: c.id,
+        equipe_id: c.equipe_id,
+        turno_semana_id: c.turno_semana_id,
+      })),
+      turnos,
+      escalasExistentes,
+      disponibilidades: disponibilidadesFlat,
+      vagas,
+    });
+
+    if (resultado.erro) {
+      setMensagemGeracao(resultado.erro);
+      return;
+    }
+
+    setMensagemGeracao(
+      resultado.quantidadeAdicionada > 0
+        ? `${resultado.quantidadeAdicionada} colaborador(es) adicionado(s) automaticamente.`
+        : 'Nenhuma vaga livre para preencher (tudo já escalado ou sem disponibilidade suficiente).'
+    );
   }
 
   if (carregando) {
@@ -328,9 +397,24 @@ export function VisaoAdminPage() {
           </div>
 
           {/* Montagem da escala */}
-          <p className="mt-10 font-mono text-xs font-medium uppercase tracking-widest text-slate-400">
-            Escala
-          </p>
+          <div className="mt-10 flex flex-wrap items-center justify-between gap-3">
+            <p className="font-mono text-xs font-medium uppercase tracking-widest text-slate-400">
+              Escala
+            </p>
+            {periodo.status === 'em_organizacao' && (
+              <button
+                onClick={handleGerarAutomatico}
+                disabled={gerando}
+                className="rounded-md bg-profundo px-3 py-1.5 text-sm font-medium text-white hover:bg-profundo/90 disabled:opacity-60"
+              >
+                {gerando ? 'Gerando...' : 'Gerar escala automaticamente'}
+              </button>
+            )}
+          </div>
+
+          {mensagemGeracao && (
+            <p className="mt-2 text-sm text-slate-600">{mensagemGeracao}</p>
+          )}
 
           {escalaEstaTrancada && (
             <p className="mt-3 rounded-md bg-slate-100 px-4 py-3 text-sm text-slate-600">
