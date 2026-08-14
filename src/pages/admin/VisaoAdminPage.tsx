@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useVisaoAdmin } from '../../features/schedules/useVisaoAdmin';
+import { useAuth } from '../../features/auth/AuthContext';
 import { useEscala } from '../../features/schedules/useEscala';
 import { useGerarEscalaAutomatica } from '../../features/schedules/useGerarEscalaAutomatica';
 import { useVagasEquipe } from '../../features/teams/useVagasEquipe';
@@ -59,6 +60,8 @@ export function VisaoAdminPage() {
   } = useEscala(periodo?.id ?? null);
   const { gerar, gerando } = useGerarEscalaAutomatica();
   const { vagas } = useVagasEquipe();
+  const { session } = useAuth();
+
 
   const [edicaoHabilitada, setEdicaoHabilitada] = useState(false);
   const [erroLinha, setErroLinha] = useState<Record<string, string>>({});
@@ -200,8 +203,11 @@ export function VisaoAdminPage() {
       }
     }
 
+    if (!session?.user) return;
+
     const resultado = await gerar({
       periodo,
+      adminId: session.user.id,
       colaboradores: colaboradores.map((c) => ({
         id: c.id,
         equipe_id: c.equipe_id,

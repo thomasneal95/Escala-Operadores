@@ -35,6 +35,7 @@ interface VagaEquipeTurno {
 
 interface ParametrosGeracao {
   periodo: PeriodoOperacao;
+  adminId: string;
   colaboradores: ColaboradorParaGeracao[];
   turnos: TurnoParaGeracao[];
   escalasExistentes: EscalaExistente[];
@@ -47,6 +48,7 @@ export function useGerarEscalaAutomatica() {
 
   async function gerar({
     periodo,
+    adminId,
     colaboradores,
     turnos,
     escalasExistentes,
@@ -60,7 +62,13 @@ export function useGerarEscalaAutomatica() {
       new Set(colaboradores.map((c) => c.equipe_id).filter((id): id is string => !!id))
     );
 
-    const novasLinhas: { colaborador_id: string; periodo_id: string; data: string; turno_id: string }[] = [];
+    const novasLinhas: {
+      colaborador_id: string;
+      periodo_id: string;
+      data: string;
+      turno_id: string;
+      created_by: string;
+    }[] = [];
 
     // Cópia mutável de "quem já está escalado" — vai crescendo conforme
     // preenchemos vagas, para não escalar a mesma pessoa duas vezes no
@@ -128,6 +136,7 @@ export function useGerarEscalaAutomatica() {
               periodo_id: periodo.id,
               data,
               turno_id: turno.id,
+              created_by: adminId,
             });
             escaladosAtuais.add(`${data}|${turno.id}|${candidato.id}`);
             vagasLivres--;
