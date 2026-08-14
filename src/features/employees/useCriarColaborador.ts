@@ -8,6 +8,7 @@ interface DadosNovoColaborador {
   equipe_id: string | null;
   telefone: string | null;
   matricula: string | null;
+  turno_semana_id: string | null;
 }
 
 export function useCriarColaborador() {

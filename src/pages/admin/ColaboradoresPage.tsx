@@ -3,6 +3,7 @@ import { useCriarColaborador } from '../../features/employees/useCriarColaborado
 import { useColaboradores } from '../../features/employees/useColaboradores';
 import { useAlterarSenhaColaborador } from '../../features/employees/useAlterarSenhaColaborador';
 import { useEquipes } from '../../features/teams/useEquipes';
+import { useTurnos } from '../../features/shifts/useTurnos';
 
 interface FormularioNovoColaborador {
   nome_completo: string;
@@ -11,6 +12,7 @@ interface FormularioNovoColaborador {
   equipe_id: string;
   telefone: string;
   matricula: string;
+  turno_semana_id: string;
 }
 
 const formularioVazio: FormularioNovoColaborador = {
@@ -20,12 +22,14 @@ const formularioVazio: FormularioNovoColaborador = {
   equipe_id: '',
   telefone: '',
   matricula: '',
+  turno_semana_id: '',
 };
 
 interface DadosEdicao {
   nome_completo: string;
   telefone: string;
   matricula: string;
+  turno_semana_id: string;
 }
 
 export function ColaboradoresPage() {
@@ -42,6 +46,7 @@ export function ColaboradoresPage() {
   } = useColaboradores();
   const { alterarSenha, processando: alterandoSenha } = useAlterarSenhaColaborador();
   const { equipes } = useEquipes();
+  const { turnos } = useTurnos();
 
   const [form, setForm] = useState<FormularioNovoColaborador>(formularioVazio);
   const [erroForm, setErroForm] = useState<string | null>(null);
@@ -52,6 +57,7 @@ export function ColaboradoresPage() {
     nome_completo: '',
     telefone: '',
     matricula: '',
+    turno_semana_id: '',
   });
 
   const [senhaId, setSenhaId] = useState<string | null>(null);
@@ -59,6 +65,11 @@ export function ColaboradoresPage() {
 
   const [erroLinha, setErroLinha] = useState<Record<string, string>>({});
   const [sucessoLinha, setSucessoLinha] = useState<Record<string, string>>({});
+
+  function nomeTurnoPorId(turnoId: string | null) {
+    if (!turnoId) return '—';
+    return turnos.find((t) => t.id === turnoId)?.nome ?? '—';
+  }
 
   async function handleCriar(event: FormEvent) {
     event.preventDefault();
@@ -72,6 +83,7 @@ export function ColaboradoresPage() {
       equipe_id: form.equipe_id || null,
       telefone: form.telefone || null,
       matricula: form.matricula || null,
+      turno_semana_id: form.turno_semana_id || null,
     });
 
     if (resultado.erro) {
@@ -89,6 +101,7 @@ export function ColaboradoresPage() {
     nome_completo: string;
     telefone: string | null;
     matricula: string | null;
+    turno_semana_id: string | null;
   }) {
     setSenhaId(null);
     setEditandoId(colaborador.id);
@@ -96,6 +109,7 @@ export function ColaboradoresPage() {
       nome_completo: colaborador.nome_completo,
       telefone: colaborador.telefone ?? '',
       matricula: colaborador.matricula ?? '',
+      turno_semana_id: colaborador.turno_semana_id ?? '',
     });
   }
 
@@ -106,6 +120,7 @@ export function ColaboradoresPage() {
       nome_completo: dadosEdicao.nome_completo,
       telefone: dadosEdicao.telefone || null,
       matricula: dadosEdicao.matricula || null,
+      turno_semana_id: dadosEdicao.turno_semana_id || null,
     });
 
     if (resultado.erro) {
@@ -205,6 +220,27 @@ export function ColaboradoresPage() {
           </div>
 
           <div>
+            <label className="block text-sm font-medium text-slate-700">
+              Turno da semana
+            </label>
+            <select
+              value={form.turno_semana_id}
+              onChange={(e) => setForm({ ...form, turno_semana_id: e.target.value })}
+              className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-tinta focus:border-esmeralda focus:outline-none focus:ring-1 focus:ring-esmeralda"
+            >
+              <option value="">Não informado</option>
+              {turnos.map((t) => (
+                <option key={t.id} value={t.id}>
+                  {t.nome}
+                </option>
+              ))}
+            </select>
+            <p className="mt-1 text-xs text-slate-400">
+              Turno que a pessoa trabalha durante a semana (usado na escala automática).
+            </p>
+          </div>
+
+          <div>
             <label className="block text-sm font-medium text-slate-700">Telefone (opcional)</label>
             <input
               type="text"
@@ -257,6 +293,7 @@ export function ColaboradoresPage() {
               <tr>
                 <th className="px-4 py-3 font-medium">Nome</th>
                 <th className="px-4 py-3 font-medium">Equipe</th>
+                <th className="px-4 py-3 font-medium">Turno semana</th>
                 <th className="px-4 py-3 font-medium">Telefone</th>
                 <th className="px-4 py-3 font-medium">Status</th>
                 <th className="px-4 py-3 font-medium">Ações</th>
@@ -299,6 +336,28 @@ export function ColaboradoresPage() {
                             </option>
                           ))}
                       </select>
+                    </td>
+                    <td className="px-4 py-3">
+                      {emEdicao ? (
+                        <select
+                          value={dadosEdicao.turno_semana_id}
+                          onChange={(e) =>
+                            setDadosEdicao({ ...dadosEdicao, turno_semana_id: e.target.value })
+                          }
+                          className="rounded-md border border-slate-300 px-2 py-1 text-sm"
+                        >
+                          <option value="">Não informado</option>
+                          {turnos.map((t) => (
+                            <option key={t.id} value={t.id}>
+                              {t.nome}
+                            </option>
+                          ))}
+                        </select>
+                      ) : (
+                        <span className="text-slate-500">
+                          {nomeTurnoPorId(colaborador.turno_semana_id)}
+                        </span>
+                      )}
                     </td>
                     <td className="px-4 py-3 font-mono text-slate-500">
                       {emEdicao ? (

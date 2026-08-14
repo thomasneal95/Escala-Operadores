@@ -7,6 +7,7 @@ interface ColaboradorLista {
   nome_completo: string;
   equipe_id: string | null;
   equipe_nome: string | null;
+  turno_semana_id: string | null;
   telefone: string | null;
   matricula: string | null;
   ativo: boolean;
@@ -16,6 +17,7 @@ interface DadosCadastro {
   nome_completo: string;
   telefone: string | null;
   matricula: string | null;
+  turno_semana_id: string | null;
 }
 
 export function useColaboradores() {
@@ -31,7 +33,7 @@ export function useColaboradores() {
     const { data, error } = await supabase
       .from('colaboradores')
       .select(
-        'id, perfil_id, equipe_id, telefone, matricula, ativo, perfis(nome_completo), equipes(nome)'
+        'id, perfil_id, equipe_id, turno_semana_id, telefone, matricula, ativo, perfis(nome_completo), equipes(nome)'
       );
 
     if (error) {
@@ -49,6 +51,7 @@ export function useColaboradores() {
         nome_completo: perfil?.nome_completo ?? '(sem nome)',
         equipe_id: c.equipe_id,
         equipe_nome: equipe?.nome ?? null,
+        turno_semana_id: c.turno_semana_id,
         telefone: c.telefone,
         matricula: c.matricula,
         ativo: c.ativo,
@@ -105,9 +108,13 @@ export function useColaboradores() {
       return { erro: 'Não foi possível atualizar o nome.' };
     }
 
-    const { error: erroColaborador } = await supabase
+   const { error: erroColaborador } = await supabase
       .from('colaboradores')
-      .update({ telefone: dados.telefone, matricula: dados.matricula })
+      .update({
+        telefone: dados.telefone,
+        matricula: dados.matricula,
+        turno_semana_id: dados.turno_semana_id,
+      })
       .eq('id', colaboradorId);
 
     setProcessando(false);

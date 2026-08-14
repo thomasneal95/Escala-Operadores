@@ -8,6 +8,7 @@ interface CriarColaboradorBody {
   equipe_id: string | null;
   telefone: string | null;
   matricula: string | null;
+  turno_semana_id: string | null;
 }
 
 export default {
@@ -77,6 +78,7 @@ export default {
       equipe_id: body.equipe_id,
       telefone: body.telefone,
       matricula: body.matricula,
+      turno_semana_id: body.turno_semana_id,
     });
 
     if (erroColaborador) {
