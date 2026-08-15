@@ -57,6 +57,7 @@ export function VisaoAdminPage() {
     colaboradorJaEscalado,
     adicionar,
     remover,
+    recarregar: recarregarEscala,
   } = useEscala(periodo?.id ?? null);
   const { gerar, gerando } = useGerarEscalaAutomatica();
   const { vagas } = useVagasEquipe();
@@ -229,6 +230,8 @@ export function VisaoAdminPage() {
         ? `${resultado.quantidadeAdicionada} colaborador(es) adicionado(s) automaticamente.`
         : 'Nenhuma vaga livre para preencher (tudo já escalado ou sem disponibilidade suficiente).'
     );
+
+    await recarregarEscala();
   }
 
   if (carregando) {

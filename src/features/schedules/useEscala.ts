@@ -112,5 +112,6 @@ export function useEscala(periodoId: string | null) {
     colaboradorJaEscalado,
     adicionar,
     remover,
+    recarregar: carregar,
   };
 }
