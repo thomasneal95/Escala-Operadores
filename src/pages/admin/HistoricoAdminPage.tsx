@@ -16,7 +16,7 @@ const rotuloStatus: Record<string, string> = {
 };
 
 export function HistoricoAdminPage() {
-  const { periodos, carregando, erro } = useHistoricoAdmin();
+  const { periodos, carregando, erro, processando, marcarPresenca } = useHistoricoAdmin();
 
   if (carregando) {
     return <p className="text-sm text-slate-400">Carregando...</p>;
@@ -34,6 +34,10 @@ export function HistoricoAdminPage() {
       <h1 className="mt-1 font-display text-2xl font-semibold text-tinta">
         Escalas de finais de semana anteriores
       </h1>
+      <p className="mt-2 text-sm text-slate-500">
+        Use os botões ✓ / × ao lado de cada nome para confirmar quem
+        realmente compareceu ao turno.
+      </p>
 
       {periodos.length === 0 ? (
         <div className="mt-6 rounded-lg border border-slate-200 bg-white p-8 text-center">
@@ -77,19 +81,48 @@ export function HistoricoAdminPage() {
                             <p className="mt-2 text-sm text-slate-400">Ninguém escalado</p>
                           ) : (
                             <div className="mt-2 space-y-1.5">
-                              {escalasDoDia.map((e, i) => {
+                              {escalasDoDia.map((e) => {
                                 const cor = corTurno(e.turno_nome_snapshot);
                                 return (
                                   <div
-                                    key={i}
-                                    className={`flex items-center justify-between rounded-md ${cor.bgLight} px-2 py-1 text-sm`}
+                                    key={e.id}
+                                    className={`flex items-center justify-between rounded-md ${cor.bgLight} px-2 py-1.5 text-sm`}
                                   >
-                                    <span className="text-tinta">{e.colaborador_nome}</span>
-                                    <span className={`font-mono text-xs ${cor.text}`}>
-                                      {e.turno_nome_snapshot} ·{' '}
-                                      {e.turno_hora_inicio_snapshot.slice(0, 5)}–
-                                      {e.turno_hora_fim_snapshot.slice(0, 5)}
-                                    </span>
+                                    <div className="flex flex-col leading-tight">
+                                      <span className="text-tinta">{e.colaborador_nome}</span>
+                                      <span className={`font-mono text-xs ${cor.text}`}>
+                                        {e.turno_nome_snapshot} ·{' '}
+                                        {e.turno_hora_inicio_snapshot.slice(0, 5)}–
+                                        {e.turno_hora_fim_snapshot.slice(0, 5)}
+                                      </span>
+                                    </div>
+
+                                    <div className="flex items-center gap-1">
+                                      <button
+                                        onClick={() => marcarPresenca(e.id, true)}
+                                        disabled={processando === e.id}
+                                        title="Confirmar que compareceu"
+                                        className={`rounded px-1.5 py-0.5 text-xs font-bold ${
+                                          e.compareceu === true
+                                            ? 'bg-esmeralda text-white'
+                                            : 'bg-white/70 text-slate-600 hover:bg-white'
+                                        }`}
+                                      >
+                                        ✓
+                                      </button>
+                                      <button
+                                        onClick={() => marcarPresenca(e.id, false)}
+                                        disabled={processando === e.id}
+                                        title="Marcar que faltou"
+                                        className={`rounded px-1.5 py-0.5 text-xs font-bold ${
+                                          e.compareceu === false
+                                            ? 'bg-red-500 text-white'
+                                            : 'bg-white/70 text-slate-600 hover:bg-white'
+                                        }`}
+                                      >
+                                        ×
+                                      </button>
+                                    </div>
                                   </div>
                                 );
                               })}
