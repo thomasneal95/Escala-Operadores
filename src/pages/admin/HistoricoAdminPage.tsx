@@ -15,6 +15,35 @@ const rotuloStatus: Record<string, string> = {
   encerrado: 'Encerrado',
 };
 
+interface EscalaComDia {
+  id: string;
+  colaborador_id: string;
+  colaborador_nome: string;
+  data: string;
+  turno_nome_snapshot: string;
+  turno_hora_inicio_snapshot: string;
+  turno_hora_fim_snapshot: string;
+  compareceu: boolean | null;
+}
+
+function agruparPorTurno(escalas: EscalaComDia[]) {
+  const grupos = new Map<string, EscalaComDia[]>();
+
+  for (const e of escalas) {
+    const lista = grupos.get(e.turno_nome_snapshot) ?? [];
+    lista.push(e);
+    grupos.set(e.turno_nome_snapshot, lista);
+  }
+
+  // Ordena os grupos pelo horário de início do turno (Manhã antes de Tarde
+  // antes de Noite), usando o primeiro registro de cada grupo como referência.
+  return Array.from(grupos.entries()).sort(([, listaA], [, listaB]) => {
+    return listaA[0].turno_hora_inicio_snapshot.localeCompare(
+      listaB[0].turno_hora_inicio_snapshot
+    );
+  });
+}
+
 export function HistoricoAdminPage() {
   const { periodos, carregando, erro, processando, marcarPresenca } = useHistoricoAdmin();
 
@@ -46,7 +75,7 @@ export function HistoricoAdminPage() {
       ) : (
         <div className="mt-6 space-y-6">
           {periodos.map((periodo) => {
-            const dias = [periodo.data_inicio, periodo.data_fim];
+            const gruposPorTurno = agruparPorTurno(periodo.escalas);
 
             return (
               <div key={periodo.id} className="rounded-lg border border-slate-200 bg-white p-5">
@@ -59,75 +88,72 @@ export function HistoricoAdminPage() {
                   </span>
                 </div>
 
-                {periodo.escalas.length === 0 ? (
+                {gruposPorTurno.length === 0 ? (
                   <p className="mt-3 text-sm text-slate-400">
                     Nenhum colaborador foi escalado neste período.
                   </p>
                 ) : (
-                  <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
-                    {dias.map((data) => {
-                      const escalasDoDia = periodo.escalas.filter((e) => e.data === data);
+                  <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-3">
+                    {gruposPorTurno.map(([nomeTurno, escalasDoTurno]) => {
+                      const cor = corTurno(nomeTurno);
+                      const horario = escalasDoTurno[0];
 
                       return (
-                        <div key={data} className="rounded-md border border-slate-100 p-3">
-                          <p className="font-medium text-tinta">
-                            {nomeDoDia(data, periodo.data_inicio)}
-                            <span className="ml-2 font-mono text-xs font-normal text-slate-400">
-                              {formatarData(data)}
-                            </span>
+                        <div key={nomeTurno} className="rounded-md border border-slate-100 p-3">
+                          <div className="flex items-center gap-1.5">
+                            <span className={`h-2 w-2 rounded-full ${cor.dot}`} />
+                            <p className="font-medium text-tinta">{nomeTurno}</p>
+                          </div>
+                          <p className="font-mono text-xs text-slate-400">
+                            {horario.turno_hora_inicio_snapshot.slice(0, 5)} –{' '}
+                            {horario.turno_hora_fim_snapshot.slice(0, 5)}
                           </p>
 
-                          {escalasDoDia.length === 0 ? (
-                            <p className="mt-2 text-sm text-slate-400">Ninguém escalado</p>
-                          ) : (
-                            <div className="mt-2 space-y-1.5">
-                              {escalasDoDia.map((e) => {
-                                const cor = corTurno(e.turno_nome_snapshot);
-                                return (
-                                  <div
-                                    key={e.id}
-                                    className={`flex items-center justify-between rounded-md ${cor.bgLight} px-2 py-1.5 text-sm`}
-                                  >
-                                    <div className="flex flex-col leading-tight">
-                                      <span className="text-tinta">{e.colaborador_nome}</span>
-                                      <span className={`font-mono text-xs ${cor.text}`}>
-                                        {e.turno_nome_snapshot} ·{' '}
-                                        {e.turno_hora_inicio_snapshot.slice(0, 5)}–
-                                        {e.turno_hora_fim_snapshot.slice(0, 5)}
-                                      </span>
-                                    </div>
-
-                                    <div className="flex items-center gap-1">
-                                      <button
-                                        onClick={() => marcarPresenca(e.id, true)}
-                                        disabled={processando === e.id}
-                                        title="Confirmar que compareceu"
-                                        className={`rounded px-1.5 py-0.5 text-xs font-bold ${
-                                          e.compareceu === true
-                                            ? 'bg-esmeralda text-white'
-                                            : 'bg-white/70 text-slate-600 hover:bg-white'
-                                        }`}
-                                      >
-                                        ✓
-                                      </button>
-                                      <button
-                                        onClick={() => marcarPresenca(e.id, false)}
-                                        disabled={processando === e.id}
-                                        title="Marcar que faltou"
-                                        className={`rounded px-1.5 py-0.5 text-xs font-bold ${
-                                          e.compareceu === false
-                                            ? 'bg-red-500 text-white'
-                                            : 'bg-white/70 text-slate-600 hover:bg-white'
-                                        }`}
-                                      >
-                                        ×
-                                      </button>
-                                    </div>
+                          <div className="mt-3 space-y-1.5">
+                            {escalasDoTurno
+                              .slice()
+                              .sort((a, b) => a.colaborador_nome.localeCompare(b.colaborador_nome))
+                              .map((e) => (
+                                <div
+                                  key={e.id}
+                                  className={`flex items-center justify-between rounded-md ${cor.bgLight} px-2 py-1.5 text-sm`}
+                                >
+                                  <div className="flex flex-col leading-tight">
+                                    <span className="text-tinta">{e.colaborador_nome}</span>
+                                    <span className={`font-mono text-xs ${cor.text}`}>
+                                      {nomeDoDia(e.data, periodo.data_inicio)}
+                                    </span>
                                   </div>
-                                );
-                              })}
-                            </div>
-                          )}
+
+                                  <div className="flex items-center gap-1">
+                                    <button
+                                      onClick={() => marcarPresenca(e.id, true)}
+                                      disabled={processando === e.id}
+                                      title="Confirmar que compareceu"
+                                      className={`rounded px-1.5 py-0.5 text-xs font-bold ${
+                                        e.compareceu === true
+                                          ? 'bg-esmeralda text-white'
+                                          : 'bg-white/70 text-slate-600 hover:bg-white'
+                                      }`}
+                                    >
+                                      ✓
+                                    </button>
+                                    <button
+                                      onClick={() => marcarPresenca(e.id, false)}
+                                      disabled={processando === e.id}
+                                      title="Marcar que faltou"
+                                      className={`rounded px-1.5 py-0.5 text-xs font-bold ${
+                                        e.compareceu === false
+                                          ? 'bg-red-500 text-white'
+                                          : 'bg-white/70 text-slate-600 hover:bg-white'
+                                      }`}
+                                    >
+                                      ×
+                                    </button>
+                                  </div>
+                                </div>
+                              ))}
+                          </div>
                         </div>
                       );
                     })}

@@ -112,7 +112,17 @@ export function useHistoricoAdmin() {
       return { erro: 'Não foi possível confirmar a presença.' };
     }
 
-    await carregar();
+    // Atualiza só esta linha em memória, sem recarregar tudo do banco —
+    // evita que a lista "pisque" e a página role para o topo.
+    setPeriodos((atual) =>
+      atual.map((periodo) => ({
+        ...periodo,
+        escalas: periodo.escalas.map((e) =>
+          e.id === escalaId ? { ...e, compareceu } : e
+        ),
+      }))
+    );
+
     return { erro: null };
   }
 
