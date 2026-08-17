@@ -3,10 +3,12 @@ import { supabase } from '../../lib/supabase/client';
 import { useAuth } from '../auth/AuthContext';
 
 interface EscalaHistorico {
+  id: string;
   data: string;
   turno_nome_snapshot: string;
   turno_hora_inicio_snapshot: string;
   turno_hora_fim_snapshot: string;
+  compareceu: boolean | null;
 }
 
 interface PeriodoHistorico {
@@ -58,7 +60,9 @@ export function useHistoricoEscalas() {
 
       const { data: escalasData, error: erroEscalas } = await supabase
         .from('escalas')
-        .select('periodo_id, data, turno_nome_snapshot, turno_hora_inicio_snapshot, turno_hora_fim_snapshot')
+        .select(
+          'id, periodo_id, data, turno_nome_snapshot, turno_hora_inicio_snapshot, turno_hora_fim_snapshot, compareceu'
+        )
         .eq('colaborador_id', colaborador.id)
         .in('periodo_id', idsPeriodos.length > 0 ? idsPeriodos : ['00000000-0000-0000-0000-000000000000']);
 
@@ -76,10 +80,12 @@ export function useHistoricoEscalas() {
         escalas: (escalasData ?? [])
           .filter((e) => e.periodo_id === p.id)
           .map((e) => ({
+            id: e.id,
             data: e.data,
             turno_nome_snapshot: e.turno_nome_snapshot,
             turno_hora_inicio_snapshot: e.turno_hora_inicio_snapshot,
             turno_hora_fim_snapshot: e.turno_hora_fim_snapshot,
+            compareceu: e.compareceu,
           })),
       }));
 
