@@ -57,7 +57,6 @@ export function VisaoAdminPage() {
     colaboradorJaEscalado,
     adicionar,
     remover,
-    marcarPresenca,
     recarregar: recarregarEscala,
   } = useEscala(periodo?.id ?? null);
   const { gerar, gerando } = useGerarEscalaAutomatica();
@@ -499,66 +498,29 @@ export function VisaoAdminPage() {
                               )}
 
                               <div className="mt-2 space-y-1.5">
-                                {escalados.map((e) => {
-                                  const podeConfirmarPresenca =
-                                    periodo.status === 'confirmado' ||
-                                    periodo.status === 'encerrado';
-
-                                  return (
-                                    <div
-                                      key={e.id}
-                                      className={`flex items-center justify-between rounded-md ${cor.bgLight} px-2 py-1.5 text-sm ${cor.text}`}
-                                    >
-                                      <div className="flex flex-col leading-tight">
-                                        <span>{nomePorId(e.colaborador_id)}</span>
-                                        <span className="text-[11px] opacity-70">
-                                          {equipeNomePorId(e.colaborador_id)}
-                                        </span>
-                                      </div>
-
-                                      <div className="flex items-center gap-2">
-                                        {podeConfirmarPresenca && (
-                                          <div className="flex items-center gap-1">
-                                            <button
-                                              onClick={() => marcarPresenca(e.id, true)}
-                                              disabled={processando === e.id}
-                                              title="Confirmar que compareceu"
-                                              className={`rounded px-1.5 py-0.5 text-xs font-bold ${
-                                                e.compareceu === true
-                                                  ? 'bg-esmeralda text-white'
-                                                  : 'bg-white/60 hover:bg-white'
-                                              }`}
-                                            >
-                                              ✓
-                                            </button>
-                                            <button
-                                              onClick={() => marcarPresenca(e.id, false)}
-                                              disabled={processando === e.id}
-                                              title="Marcar que faltou"
-                                              className={`rounded px-1.5 py-0.5 text-xs font-bold ${
-                                                e.compareceu === false
-                                                  ? 'bg-red-500 text-white'
-                                                  : 'bg-white/60 hover:bg-white'
-                                              }`}
-                                            >
-                                              ×
-                                            </button>
-                                          </div>
-                                        )}
-                                        {!escalaEstaTrancada && (
-                                          <button
-                                            onClick={() => remover(e.id)}
-                                            disabled={processando === e.id}
-                                            className="opacity-70 hover:opacity-100 disabled:opacity-40"
-                                            title="Remover da escala"
-                                          >
-                                            ×
-                                          </button>
-                                        )}
-                                      </div>
+                                {escalados.map((e) => (
+                                  <div
+                                    key={e.id}
+                                    className={`flex items-center justify-between rounded-md ${cor.bgLight} px-2 py-1.5 text-sm ${cor.text}`}
+                                  >
+                                    <div className="flex flex-col leading-tight">
+                                      <span>{nomePorId(e.colaborador_id)}</span>
+                                      <span className="text-[11px] opacity-70">
+                                        {equipeNomePorId(e.colaborador_id)}
+                                      </span>
                                     </div>
-                                  );
-                                })}
+                                    {!escalaEstaTrancada && (
+                                      <button
+                                        onClick={() => remover(e.id)}
+                                        disabled={processando === e.id}
+                                        className="opacity-70 hover:opacity-100 disabled:opacity-40"
+                                        title="Remover da escala"
+                                      >
+                                        ×
+                                      </button>
+                                    )}
+                                  </div>
+                                ))}
                               </div>
                               {!escalaEstaTrancada && (
                                 <div className="mt-2">
