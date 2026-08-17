@@ -7,6 +7,7 @@ interface EscalaLinha {
   colaborador_id: string;
   data: string;
   turno_id: string;
+  compareceu: boolean | null;
 }
 
 export function useEscala(periodoId: string | null) {
@@ -28,7 +29,7 @@ export function useEscala(periodoId: string | null) {
 
     const { data, error } = await supabase
       .from('escalas')
-      .select('id, colaborador_id, data, turno_id')
+      .select('id, colaborador_id, data, turno_id, compareceu')
       .eq('periodo_id', periodoId);
 
     if (error) {
@@ -103,6 +104,33 @@ export function useEscala(periodoId: string | null) {
     await carregar();
   }
 
+  async function marcarPresenca(escalaId: string, compareceu: boolean) {
+    if (!session?.user) return { erro: 'Sessão inválida.' };
+
+    setProcessando(escalaId);
+    setErro(null);
+
+    const { error } = await supabase
+      .from('escalas')
+      .update({
+        compareceu,
+        presenca_confirmada_em: new Date().toISOString(),
+        presenca_confirmada_por: session.user.id,
+      })
+      .eq('id', escalaId);
+
+    setProcessando(null);
+
+    if (error) {
+      const mensagem = 'Não foi possível confirmar a presença.';
+      setErro(mensagem);
+      return { erro: mensagem };
+    }
+
+    await carregar();
+    return { erro: null };
+  }
+
   return {
     escalas,
     carregando,
@@ -112,6 +140,7 @@ export function useEscala(periodoId: string | null) {
     colaboradorJaEscalado,
     adicionar,
     remover,
+    marcarPresenca,
     recarregar: carregar,
   };
 }
