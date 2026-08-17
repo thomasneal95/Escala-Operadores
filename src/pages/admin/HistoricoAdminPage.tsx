@@ -104,8 +104,9 @@ export function HistoricoAdminPage() {
           {/* Seletor de período */}
           <div className="mt-5 flex gap-2 overflow-x-auto pb-2">
             {periodos.map((periodo) => {
-              const total = periodo.escalas.length;
-              const confirmados = periodo.escalas.filter((e) => e.compareceu !== null).length;
+              const presentes = periodo.escalas.filter((e) => e.compareceu === true).length;
+              const faltas = periodo.escalas.filter((e) => e.compareceu === false).length;
+              const pendentes = periodo.escalas.filter((e) => e.compareceu === null).length;
               const selecionado = periodo.id === periodoSelecionadoId;
 
               return (
@@ -122,13 +123,22 @@ export function HistoricoAdminPage() {
                     {formatarData(periodo.data_inicio)} – {formatarData(periodo.data_fim)}
                   </p>
                   <p
-                    className={`mt-0.5 text-xs ${
+                    className={`mt-0.5 whitespace-nowrap text-xs ${
                       selecionado ? 'text-white/70' : 'text-slate-400'
                     }`}
                   >
                     {rotuloStatus[periodo.status]}
-                    {total > 0 && ` · ${confirmados}/${total} confirmados`}
                   </p>
+                  {periodo.escalas.length > 0 && (
+                    <p
+                      className={`mt-1 whitespace-nowrap text-xs ${
+                        selecionado ? 'text-white/70' : 'text-slate-500'
+                      }`}
+                    >
+                      ✓ {presentes} · ✗ {faltas}
+                      {pendentes > 0 && ` · ${pendentes} pendente${pendentes > 1 ? 's' : ''}`}
+                    </p>
+                  )}
                 </button>
               );
             })}
