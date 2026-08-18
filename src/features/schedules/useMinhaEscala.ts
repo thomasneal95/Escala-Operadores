@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { supabase } from '../../lib/supabase/client';
 
 interface EscalaDoColaborador {
@@ -14,36 +14,61 @@ export function useMinhaEscala(colaboradorId: string | null, periodoId: string |
   const [carregando, setCarregando] = useState(true);
   const [erro, setErro] = useState<string | null>(null);
 
-  useEffect(() => {
-    async function carregar() {
-      if (!colaboradorId || !periodoId) {
-        setEscalas([]);
-        setCarregando(false);
-        return;
-      }
-
-      setCarregando(true);
-      setErro(null);
-
-      const { data, error } = await supabase
-        .from('escalas')
-        .select('id, data, turno_nome_snapshot, turno_hora_inicio_snapshot, turno_hora_fim_snapshot')
-        .eq('colaborador_id', colaboradorId)
-        .eq('periodo_id', periodoId)
-        .order('data');
-
-      if (error) {
-        setErro('Não foi possível carregar sua escala.');
-        setCarregando(false);
-        return;
-      }
-
-      setEscalas(data ?? []);
+  const carregar = useCallback(async () => {
+    if (!colaboradorId || !periodoId) {
+      setEscalas([]);
       setCarregando(false);
+      return;
     }
 
-    carregar();
+    setCarregando(true);
+    setErro(null);
+
+    const { data, error } = await supabase
+      .from('escalas')
+      .select('id, data, turno_nome_snapshot, turno_hora_inicio_snapshot, turno_hora_fim_snapshot')
+      .eq('colaborador_id', colaboradorId)
+      .eq('periodo_id', periodoId)
+      .order('data');
+
+    if (error) {
+      setErro('Não foi possível carregar sua escala.');
+      setCarregando(false);
+      return;
+    }
+
+    setEscalas(data ?? []);
+    setCarregando(false);
   }, [colaboradorId, periodoId]);
+
+  useEffect(() => {
+    carregar();
+  }, [carregar]);
+
+  // Escuta mudanças em tempo real na própria escala deste período.
+  useEffect(() => {
+    if (!colaboradorId || !periodoId) return;
+
+    const canal = supabase
+      .channel(`minha-escala-${colaboradorId}-${periodoId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'escalas',
+          filter: `periodo_id=eq.${periodoId}`,
+        },
+        () => {
+          carregar();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(canal);
+    };
+  }, [colaboradorId, periodoId, carregar]);
 
   return { escalas, carregando, erro };
 }

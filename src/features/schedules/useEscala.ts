@@ -42,9 +42,34 @@ export function useEscala(periodoId: string | null) {
     setCarregando(false);
   }, [periodoId]);
 
-  useEffect(() => {
+    useEffect(() => {
     carregar();
   }, [carregar]);
+
+  // Escuta mudanças em tempo real na escala deste período.
+  useEffect(() => {
+    if (!periodoId) return;
+
+    const canal = supabase
+      .channel(`escalas-periodo-${periodoId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'escalas',
+          filter: `periodo_id=eq.${periodoId}`,
+        },
+        () => {
+          carregar();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(canal);
+    };
+  }, [periodoId, carregar]);
 
   function escaladosEm(data: string, turnoId: string) {
     return escalas.filter((e) => e.data === data && e.turno_id === turnoId);
