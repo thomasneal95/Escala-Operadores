@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useAuth } from '../../features/auth/AuthContext';
+import { PainelAdminPage } from './PainelAdminPage';
 import { VisaoAdminPage } from './VisaoAdminPage';
 import { EquipesPage } from './EquipesPage';
 import { TurnosPage } from './TurnosPage';
@@ -9,6 +10,7 @@ import { HistoricoAdminPage } from './HistoricoAdminPage';
 import { GestaoAcessoPage } from './GestaoAcessoPage';
 
 type Aba =
+  | 'painel'
   | 'escala'
   | 'equipes'
   | 'turnos'
@@ -18,6 +20,7 @@ type Aba =
   | 'acesso';
 
 const abas: { id: Aba; rotulo: string }[] = [
+  { id: 'painel', rotulo: 'Painel' },
   { id: 'escala', rotulo: 'Escala' },
   { id: 'equipes', rotulo: 'Equipes' },
   { id: 'turnos', rotulo: 'Turnos' },
@@ -29,7 +32,7 @@ const abas: { id: Aba; rotulo: string }[] = [
 
 export function AdminApp() {
   const { perfil, sair } = useAuth();
-  const [abaAtiva, setAbaAtiva] = useState<Aba>('escala');
+  const [abaAtiva, setAbaAtiva] = useState<Aba>('painel');
 
   return (
     <div className="min-h-screen bg-nuvem">
@@ -67,6 +70,7 @@ export function AdminApp() {
       </header>
 
       <main className="mx-auto max-w-5xl px-6 py-10">
+        {abaAtiva === 'painel' && <PainelAdminPage aoNavegar={setAbaAtiva} />}
         {abaAtiva === 'escala' && <VisaoAdminPage />}
         {abaAtiva === 'equipes' && <EquipesPage />}
         {abaAtiva === 'turnos' && <TurnosPage />}
