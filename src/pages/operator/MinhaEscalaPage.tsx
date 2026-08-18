@@ -1,4 +1,5 @@
 import { useMinhaEscala } from '../../features/schedules/useMinhaEscala';
+import { useVisualizacaoEscala } from '../../features/schedules/useVisualizacaoEscala';
 import { corTurno } from '../../lib/turnoColors';
 import type { PeriodoOperacao } from '../../types/database';
 
@@ -18,9 +19,16 @@ interface MinhaEscalaPageProps {
 
 export function MinhaEscalaPage({ colaboradorId, periodo }: MinhaEscalaPageProps) {
   const { escalas, carregando, erro } = useMinhaEscala(colaboradorId, periodo.id);
+  const { processando, marcarComoVisto, foiVisualizada } = useVisualizacaoEscala(
+    escalas.map((e) => e.id)
+  );
 
   if (carregando) {
     return <p className="text-sm text-slate-400">Carregando...</p>;
+  }
+
+  async function handleMarcarComoVisto(escalaId: string) {
+    await marcarComoVisto(escalaId);
   }
 
   return (
@@ -53,20 +61,40 @@ export function MinhaEscalaPage({ colaboradorId, periodo }: MinhaEscalaPageProps
 
               {escalasDoDia.length > 0 ? (
                 <div className="mt-3 space-y-2">
-                  {escalasDoDia.map((escala, i) => {
+                  {escalasDoDia.map((escala) => {
                     const cor = corTurno(escala.turno_nome_snapshot);
+                    const visto = foiVisualizada(escala.id);
+
                     return (
                       <div
-                        key={i}
-                        className={`flex items-center justify-between rounded-md ${cor.bgLight} px-4 py-3`}
+                        key={escala.id}
+                        className={`rounded-md ${cor.bgLight} px-4 py-3`}
                       >
-                        <span className={`font-medium ${cor.text}`}>
-                          {escala.turno_nome_snapshot}
-                        </span>
-                        <span className={`font-mono text-sm ${cor.text}`}>
-                          {escala.turno_hora_inicio_snapshot.slice(0, 5)} –{' '}
-                          {escala.turno_hora_fim_snapshot.slice(0, 5)}
-                        </span>
+                        <div className="flex items-center justify-between">
+                          <span className={`font-medium ${cor.text}`}>
+                            {escala.turno_nome_snapshot}
+                          </span>
+                          <span className={`font-mono text-sm ${cor.text}`}>
+                            {escala.turno_hora_inicio_snapshot.slice(0, 5)} –{' '}
+                            {escala.turno_hora_fim_snapshot.slice(0, 5)}
+                          </span>
+                        </div>
+
+                        <div className="mt-2">
+                          {visto ? (
+                            <span className="inline-flex items-center gap-1 text-xs font-medium text-esmeralda-dark">
+                              ✓ Confirmado que você viu
+                            </span>
+                          ) : (
+                            <button
+                              onClick={() => handleMarcarComoVisto(escala.id)}
+                              disabled={processando === escala.id}
+                              className="rounded-md bg-white/70 px-2.5 py-1 text-xs font-medium text-tinta hover:bg-white disabled:opacity-60"
+                            >
+                              {processando === escala.id ? 'Confirmando...' : 'Marcar que vi'}
+                            </button>
+                          )}
+                        </div>
                       </div>
                     );
                   })}
