@@ -110,9 +110,62 @@ export function useVisaoAdmin() {
     setCarregando(false);
   }, []);
 
-  useEffect(() => {
+    useEffect(() => {
     carregar();
   }, [carregar]);
+
+  // Escuta mudanças em tempo real na tabela de disponibilidades deste
+  // período, para que o admin veja quem enviou sem precisar recarregar.
+  useEffect(() => {
+    if (!periodo) return;
+
+    const canal = supabase
+      .channel(`disponibilidades-periodo-${periodo.id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'disponibilidades',
+          filter: `periodo_id=eq.${periodo.id}`,
+        },
+        (payload) => {
+          setRespostas((atual) => {
+            if (payload.eventType === 'DELETE') {
+              const antiga = payload.old as {
+                colaborador_id: string;
+                data: string;
+                turno_id: string;
+              };
+              return atual.filter(
+                (r) =>
+                  !(
+                    r.colaborador_id === antiga.colaborador_id &&
+                    r.data === antiga.data &&
+                    r.turno_id === antiga.turno_id
+                  )
+              );
+            }
+
+            const nova = payload.new as DisponibilidadeResposta;
+            const semAAntiga = atual.filter(
+              (r) =>
+                !(
+                  r.colaborador_id === nova.colaborador_id &&
+                  r.data === nova.data &&
+                  r.turno_id === nova.turno_id
+                )
+            );
+            return [...semAAntiga, nova];
+          });
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(canal);
+    };
+  }, [periodo?.id]);
 
   function respostaDe(colaboradorId: string, data: string, turnoId: string) {
     return respostas.find(
