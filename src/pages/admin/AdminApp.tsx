@@ -8,6 +8,7 @@ import { ColaboradoresPage } from './ColaboradoresPage';
 import { ConfiguracoesPage } from './ConfiguracoesPage';
 import { HistoricoAdminPage } from './HistoricoAdminPage';
 import { GestaoAcessoPage } from './GestaoAcessoPage';
+import { SolicitacoesTrocaAdminPage } from './SolicitacoesTrocaAdminPage';
 
 type Aba =
   | 'painel'
@@ -15,6 +16,7 @@ type Aba =
   | 'equipes'
   | 'turnos'
   | 'colaboradores'
+  | 'trocas'
   | 'configuracoes'
   | 'historico'
   | 'acesso';
@@ -25,6 +27,7 @@ const abas: { id: Aba; rotulo: string }[] = [
   { id: 'equipes', rotulo: 'Equipes' },
   { id: 'turnos', rotulo: 'Turnos' },
   { id: 'colaboradores', rotulo: 'Colaboradores' },
+  { id: 'trocas', rotulo: 'Trocas' },
   { id: 'historico', rotulo: 'Histórico' },
   { id: 'acesso', rotulo: 'Acesso' },
   { id: 'configuracoes', rotulo: 'Configurações' },
@@ -75,6 +78,7 @@ export function AdminApp() {
         {abaAtiva === 'equipes' && <EquipesPage />}
         {abaAtiva === 'turnos' && <TurnosPage />}
         {abaAtiva === 'colaboradores' && <ColaboradoresPage />}
+        {abaAtiva === 'trocas' && <SolicitacoesTrocaAdminPage />}
         {abaAtiva === 'historico' && <HistoricoAdminPage />}
         {abaAtiva === 'acesso' && <GestaoAcessoPage />}
         {abaAtiva === 'configuracoes' && <ConfiguracoesPage />}
