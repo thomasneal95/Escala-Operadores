@@ -140,10 +140,11 @@ export function DisponibilidadePage() {
 
                         {detalheEstaAberto && contagem.total > 0 && (
                           <div className="absolute right-0 top-6 z-10 w-52 rounded-md border border-slate-200 bg-white p-3 text-xs text-slate-600 shadow-lg">
-                            <p>
+                                                        <p>
                               <span className="font-medium text-tinta">{contagem.total}</span>{' '}
-                              da sua equipe já marcou{contagem.total > 1 ? 'aram' : ''}{' '}
-                              disponível para este turno.
+                              da sua equipe{' '}
+                              {contagem.total > 1 ? 'já marcaram' : 'já marcou'} disponível
+                              para este turno.
                             </p>
                             {contagem.preferencial > 0 && (
                               <p className="mt-1">
