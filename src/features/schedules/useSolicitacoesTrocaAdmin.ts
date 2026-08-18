@@ -88,8 +88,24 @@ export function useSolicitacoesTrocaAdmin() {
     setCarregando(false);
   }, []);
 
-  useEffect(() => {
+    useEffect(() => {
     carregar();
+  }, [carregar]);
+
+  // Escuta em tempo real qualquer mudança nas solicitações de troca.
+  useEffect(() => {
+    const canal = supabase
+      .channel('solicitacoes-troca-admin')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'solicitacoes_troca' },
+        () => carregar()
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(canal);
+    };
   }, [carregar]);
 
   async function aprovar(solicitacaoId: string, escalaSolicitanteId: string, escalaColegaId: string) {

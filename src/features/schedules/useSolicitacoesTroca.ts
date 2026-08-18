@@ -121,9 +121,42 @@ export function useSolicitacoesTroca() {
     setCarregando(false);
   }, [session]);
 
-  useEffect(() => {
+    useEffect(() => {
     carregar();
   }, [carregar]);
+
+  // Escuta em tempo real solicitações onde sou solicitante OU colega.
+  useEffect(() => {
+    if (!colaboradorId) return;
+
+    const canal = supabase
+      .channel(`solicitacoes-troca-${colaboradorId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'solicitacoes_troca',
+          filter: `solicitante_id=eq.${colaboradorId}`,
+        },
+        () => carregar()
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'solicitacoes_troca',
+          filter: `colega_id=eq.${colaboradorId}`,
+        },
+        () => carregar()
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(canal);
+    };
+  }, [colaboradorId, carregar]);
 
   async function criarSolicitacao(periodoId: string, escalaSolicitanteId: string, colegaId: string) {
     if (!colaboradorId) return { erro: 'Não foi possível identificar seus dados.' };
