@@ -63,8 +63,13 @@ export function ColaboradoresPage() {
   const [senhaId, setSenhaId] = useState<string | null>(null);
   const [novaSenha, setNovaSenha] = useState('');
 
-  const [erroLinha, setErroLinha] = useState<Record<string, string>>({});
+    const [erroLinha, setErroLinha] = useState<Record<string, string>>({});
   const [sucessoLinha, setSucessoLinha] = useState<Record<string, string>>({});
+  const [busca, setBusca] = useState('');
+
+  const colaboradoresFiltrados = colaboradores.filter((c) =>
+    c.nome_completo.toLowerCase().includes(busca.toLowerCase())
+  );
 
   function nomeTurnoPorId(turnoId: string | null) {
     if (!turnoId) return '—';
@@ -281,7 +286,17 @@ export function ColaboradoresPage() {
         )}
       </div>
 
-      <div className="mt-6 overflow-hidden rounded-lg border border-slate-200 bg-white">
+            <div className="mt-6">
+        <input
+          type="text"
+          value={busca}
+          onChange={(e) => setBusca(e.target.value)}
+          placeholder="Buscar colaborador por nome..."
+          className="w-full max-w-sm rounded-md border border-slate-300 px-3 py-2 text-sm text-tinta focus:border-esmeralda focus:outline-none focus:ring-1 focus:ring-esmeralda"
+        />
+      </div>
+
+      <div className="mt-3 overflow-hidden rounded-lg border border-slate-200 bg-white">
         {erro && (
           <p className="m-4 rounded-md bg-red-50 px-4 py-3 text-sm text-red-700">{erro}</p>
         )}
@@ -300,7 +315,7 @@ export function ColaboradoresPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {colaboradores.map((colaborador) => {
+                            {colaboradoresFiltrados.map((colaborador) => {
                 const emEdicao = editandoId === colaborador.id;
                 const alterandoSenhaDele = senhaId === colaborador.id;
 
@@ -471,8 +486,11 @@ export function ColaboradoresPage() {
                   </tr>
                 );
               })}
-            </tbody>
+                        </tbody>
           </table>
+        )}
+        {!carregando && colaboradoresFiltrados.length === 0 && (
+          <p className="p-4 text-sm text-slate-400">Nenhum colaborador encontrado.</p>
         )}
       </div>
     </div>
