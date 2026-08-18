@@ -24,7 +24,8 @@ export function DisponibilidadePage() {
     temAlteracoesPendentes,
     enviando,
     enviadoComSucesso,
-    enviarDisponibilidade,
+       enviarDisponibilidade,
+    repetirAnterior,
   } = useDisponibilidade();
     const { texto: textoPrazo, ativo: prazoAtivo } = usePrazoDisponibilidade();
 
@@ -57,6 +58,13 @@ export function DisponibilidadePage() {
     await enviarDisponibilidade();
   }
 
+    async function handleRepetirAnterior() {
+    const resultado = await repetirAnterior();
+    if (resultado.erro) {
+      window.alert(resultado.erro);
+    }
+  }
+
   function chaveDetalhe(data: string, turnoId: string) {
     return `${data}|${turnoId}`;
   }
@@ -79,12 +87,21 @@ export function DisponibilidadePage() {
         enquanto o período estiver aberto.
       </p>
 
-      {prazoAtivo && textoPrazo && (
+            {prazoAtivo && textoPrazo && (
         <p className="mt-3 inline-flex items-center gap-2 rounded-full bg-amber-50 px-3 py-1.5 text-sm font-medium text-amber-700">
           <span className="h-2 w-2 rounded-full bg-amber-500" />
           {textoPrazo}
         </p>
       )}
+
+      <div className="mt-3">
+        <button
+          onClick={handleRepetirAnterior}
+          className="text-sm font-medium text-ceruleo hover:text-ceruleo/80"
+        >
+          Usar a mesma disponibilidade de antes
+        </button>
+      </div>
 
       <div className="mt-8 space-y-6">
         {[periodo.data_inicio, periodo.data_fim].map((data) => {

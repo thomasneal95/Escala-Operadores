@@ -246,6 +246,64 @@ export function useDisponibilidade() {
     return { erro: null };
   }
 
+    async function repetirAnterior() {
+    if (!colaboradorId || !periodo) {
+      return { erro: 'Não foi possível identificar seus dados.' };
+    }
+
+    // Busca o período mais recente ANTES do atual.
+    const { data: periodoAnterior, error: erroPeriodoAnterior } = await supabase
+      .from('periodos_operacao')
+      .select('id')
+      .lt('data_inicio', periodo.data_inicio)
+      .order('data_inicio', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (erroPeriodoAnterior || !periodoAnterior) {
+      return { erro: 'Não há um período anterior para repetir.' };
+    }
+
+    const { data: disponibilidadesAnteriores, error: erroDisponibilidades } = await supabase
+      .from('disponibilidades')
+      .select('data, turno_id, disponivel')
+      .eq('colaborador_id', colaboradorId)
+      .eq('periodo_id', periodoAnterior.id);
+
+    if (erroDisponibilidades || !disponibilidadesAnteriores) {
+      return { erro: 'Não foi possível carregar a disponibilidade anterior.' };
+    }
+
+    if (disponibilidadesAnteriores.length === 0) {
+      return { erro: 'Você não enviou disponibilidade no período anterior.' };
+    }
+
+    // Precisamos saber as datas do período anterior para identificar se
+    // cada linha era "sábado" ou "domingo", e aplicar no dia correspondente
+    // do período atual (as datas mudam toda semana, o dia da semana não).
+    const { data: infoPeriodoAnterior } = await supabase
+      .from('periodos_operacao')
+      .select('data_inicio, data_fim')
+      .eq('id', periodoAnterior.id)
+      .single();
+
+    if (!infoPeriodoAnterior) {
+      return { erro: 'Não foi possível identificar as datas do período anterior.' };
+    }
+
+    const novoRascunho: Record<string, boolean> = { ...rascunho };
+
+    for (const d of disponibilidadesAnteriores) {
+      const eraSabado = d.data === infoPeriodoAnterior.data_inicio;
+      const dataCorrespondenteAtual = eraSabado ? periodo.data_inicio : periodo.data_fim;
+      novoRascunho[chave(dataCorrespondenteAtual, d.turno_id)] = d.disponivel;
+    }
+
+    setRascunho(novoRascunho);
+    setEnviadoComSucesso(false);
+    return { erro: null };
+  }
+
   return {
     periodo,
     turnos,
@@ -259,5 +317,6 @@ export function useDisponibilidade() {
     enviando,
     enviadoComSucesso,
     enviarDisponibilidade,
+    repetirAnterior,
   };
 }
