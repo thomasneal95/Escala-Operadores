@@ -1,4 +1,5 @@
 import { AuthProvider, useAuth } from './features/auth/AuthContext';
+import { FeedbackProvider } from './components/FeedbackProvider';
 import { LoginPage } from './pages/LoginPage';
 import { OperatorApp } from './pages/operator/OperatorApp';
 import { AdminApp } from './pages/admin/AdminApp';
@@ -30,7 +31,9 @@ function ConteudoPrincipal() {
 function App() {
   return (
     <AuthProvider>
-      <ConteudoPrincipal />
+      <FeedbackProvider>
+        <ConteudoPrincipal />
+      </FeedbackProvider>
     </AuthProvider>
   );
 }
