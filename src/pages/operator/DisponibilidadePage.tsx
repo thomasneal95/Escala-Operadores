@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { useDisponibilidade } from '../../features/availability/useDisponibilidade';
 import { corTurno } from '../../lib/turnoColors';
 
@@ -18,11 +19,15 @@ export function DisponibilidadePage() {
     erro,
     alternar,
     estaDisponivel,
+    contagemDe,
     temAlteracoesPendentes,
     enviando,
     enviadoComSucesso,
     enviarDisponibilidade,
   } = useDisponibilidade();
+
+  // Controla qual bolinha de contagem está com o detalhe aberto no momento.
+  const [detalheAberto, setDetalheAberto] = useState<string | null>(null);
 
   if (carregando) {
     return <p className="text-sm text-slate-400">Carregando...</p>;
@@ -48,6 +53,10 @@ export function DisponibilidadePage() {
 
   async function handleEnviar() {
     await enviarDisponibilidade();
+  }
+
+  function chaveDetalhe(data: string, turnoId: string) {
+    return `${data}|${turnoId}`;
   }
 
   return (
@@ -88,30 +97,66 @@ export function DisponibilidadePage() {
                   {turnosDisponiveisNesseDia.map((turno) => {
                     const ativo = estaDisponivel(data, turno.id);
                     const cor = corTurno(turno.nome);
+                    const contagem = contagemDe(data, turno.id);
+                    const chaveEsseCard = chaveDetalhe(data, turno.id);
+                    const detalheEstaAberto = detalheAberto === chaveEsseCard;
 
                     return (
-                      <button
-                        key={turno.id}
-                        onClick={() => alternar(data, turno.id)}
-                        disabled={enviando}
-                        className={`rounded-md border px-4 py-3 text-left transition disabled:cursor-wait disabled:opacity-70 ${
-                          ativo
-                            ? `${cor.border} ${cor.bgLight}`
-                            : 'border-slate-200 bg-white hover:border-slate-300'
-                        }`}
-                      >
-                        <p className="font-medium text-tinta">{turno.nome}</p>
-                        <p className="font-mono text-sm text-slate-500">
-                          {turno.hora_inicio.slice(0, 5)} – {turno.hora_fim.slice(0, 5)}
-                        </p>
-                        <p
-                          className={`mt-2 text-xs font-medium ${
-                            ativo ? cor.text : 'text-slate-400'
+                      <div key={turno.id} className="relative">
+                        <button
+                          onClick={() => alternar(data, turno.id)}
+                          disabled={enviando}
+                          className={`w-full rounded-md border px-4 py-3 text-left transition disabled:cursor-wait disabled:opacity-70 ${
+                            ativo
+                              ? `${cor.border} ${cor.bgLight}`
+                              : 'border-slate-200 bg-white hover:border-slate-300'
                           }`}
                         >
-                          {ativo ? 'Disponível' : 'Indisponível'}
-                        </p>
-                      </button>
+                          <p className="font-medium text-tinta">{turno.nome}</p>
+                          <p className="font-mono text-sm text-slate-500">
+                            {turno.hora_inicio.slice(0, 5)} – {turno.hora_fim.slice(0, 5)}
+                          </p>
+                          <p
+                            className={`mt-2 text-xs font-medium ${
+                              ativo ? cor.text : 'text-slate-400'
+                            }`}
+                          >
+                            {ativo ? 'Disponível' : 'Indisponível'}
+                          </p>
+                        </button>
+
+                        {contagem.total > 0 && (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setDetalheAberto(detalheEstaAberto ? null : chaveEsseCard);
+                            }}
+                            className="absolute -right-1.5 -top-1.5 flex h-6 w-6 items-center justify-center rounded-full bg-slate-700 text-[11px] font-semibold text-white shadow-sm hover:bg-slate-800"
+                            title="Ver quantas pessoas já marcaram este turno"
+                          >
+                            {contagem.total}
+                          </button>
+                        )}
+
+                        {detalheEstaAberto && contagem.total > 0 && (
+                          <div className="absolute right-0 top-6 z-10 w-52 rounded-md border border-slate-200 bg-white p-3 text-xs text-slate-600 shadow-lg">
+                            <p>
+                              <span className="font-medium text-tinta">{contagem.total}</span>{' '}
+                              da sua equipe já marcou{contagem.total > 1 ? 'aram' : ''}{' '}
+                              disponível para este turno.
+                            </p>
+                            {contagem.preferencial > 0 && (
+                              <p className="mt-1">
+                                <span className="font-medium text-tinta">
+                                  {contagem.preferencial}
+                                </span>{' '}
+                                {contagem.preferencial > 1 ? 'trabalham' : 'trabalha'} nesse
+                                turno durante a semana.
+                              </p>
+                            )}
+                          </div>
+                        )}
+                      </div>
                     );
                   })}
                 </div>

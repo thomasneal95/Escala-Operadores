@@ -8,6 +8,11 @@ function chave(data: string, turnoId: string) {
   return `${data}|${turnoId}`;
 }
 
+interface ContagemTurno {
+  total: number;
+  preferencial: number;
+}
+
 export function useDisponibilidade() {
   const { session } = useAuth();
   const [colaboradorId, setColaboradorId] = useState<string | null>(null);
@@ -15,6 +20,8 @@ export function useDisponibilidade() {
   const [turnos, setTurnos] = useState<Turno[]>([]);
   const [respostasSalvas, setRespostasSalvas] = useState<Record<string, boolean>>({});
   const [rascunho, setRascunho] = useState<Record<string, boolean>>({});
+  const [jaEnviouAntes, setJaEnviouAntes] = useState(false);
+  const [contagensEquipe, setContagensEquipe] = useState<Record<string, ContagemTurno>>({});
   const [carregando, setCarregando] = useState(true);
   const [erro, setErro] = useState<string | null>(null);
   const [enviando, setEnviando] = useState(false);
@@ -30,7 +37,7 @@ export function useDisponibilidade() {
     // 1. Colaborador correspondente ao usuário logado.
     const { data: colaborador, error: erroColaborador } = await supabase
       .from('colaboradores')
-      .select('id')
+      .select('id, equipe_id')
       .eq('perfil_id', session.user.id)
       .single();
 
@@ -72,7 +79,7 @@ export function useDisponibilidade() {
 
     setTurnos(turnosData ?? []);
 
-    // 4. Disponibilidade já registrada para este período.
+    // 4. Disponibilidade já registrada para este período (só a própria).
     if (periodoAberto) {
       const { data: disponibilidades, error: erroDisponibilidade } = await supabase
         .from('disponibilidades')
@@ -92,9 +99,46 @@ export function useDisponibilidade() {
       }
       setRespostasSalvas(mapa);
       setRascunho(mapa);
+      setJaEnviouAntes((disponibilidades ?? []).length > 0);
+
+      // 5. Contagem por turno entre os colegas de equipe (só números,
+      // nunca nomes — usado para ajudar na escolha do turno).
+      if (colaborador.equipe_id) {
+        const { data: colegas } = await supabase
+          .from('colaboradores')
+          .select('id, turno_semana_id')
+          .eq('equipe_id', colaborador.equipe_id)
+          .eq('ativo', true);
+
+        const { data: disponibilidadesEquipe } = await supabase
+          .from('disponibilidades')
+          .select('colaborador_id, data, turno_id, disponivel')
+          .eq('periodo_id', periodoAberto.id)
+          .eq('disponivel', true);
+
+        const mapaTurnoSemana = new Map(
+          (colegas ?? []).map((c) => [c.id, c.turno_semana_id])
+        );
+
+        const contagens: Record<string, ContagemTurno> = {};
+        for (const d of disponibilidadesEquipe ?? []) {
+          if (!mapaTurnoSemana.has(d.colaborador_id)) continue; // só da mesma equipe
+          const k = chave(d.data, d.turno_id);
+          if (!contagens[k]) contagens[k] = { total: 0, preferencial: 0 };
+          contagens[k].total += 1;
+          if (mapaTurnoSemana.get(d.colaborador_id) === d.turno_id) {
+            contagens[k].preferencial += 1;
+          }
+        }
+        setContagensEquipe(contagens);
+      } else {
+        setContagensEquipe({});
+      }
     } else {
       setRespostasSalvas({});
       setRascunho({});
+      setJaEnviouAntes(false);
+      setContagensEquipe({});
     }
 
     setCarregando(false);
@@ -114,6 +158,10 @@ export function useDisponibilidade() {
     return rascunho[chave(data, turnoId)] ?? false;
   }
 
+  function contagemDe(data: string, turnoId: string): ContagemTurno {
+    return contagensEquipe[chave(data, turnoId)] ?? { total: 0, preferencial: 0 };
+  }
+
   const temAlteracoesPendentes = useMemo(() => {
     const todasAsChaves = new Set([
       ...Object.keys(respostasSalvas),
@@ -127,7 +175,8 @@ export function useDisponibilidade() {
     return false;
   }, [respostasSalvas, rascunho]);
 
-  // Avisa o navegador ao tentar sair/recarregar com alterações não enviadas.
+  const podeEnviar = temAlteracoesPendentes || !jaEnviouAntes;
+
   useEffect(() => {
     function handler(event: BeforeUnloadEvent) {
       if (temAlteracoesPendentes) {
@@ -149,10 +198,6 @@ export function useDisponibilidade() {
       return { erro: 'Nenhum turno disponível para enviar.' };
     }
 
-    // Envia TODOS os turnos de ambos os dias, explicitamente — inclusive os
-    // que ficaram no padrão "Indisponível" e nunca foram clicados. Isso
-    // garante que o administrador veja "Indisponível" em vez de "—" (sem
-    // resposta) para qualquer turno que o colaborador já revisou e enviou.
     const dias = [periodo.data_inicio, periodo.data_fim];
     const linhas = dias.flatMap((data) => {
       const ehSabado = data === periodo.data_inicio;
@@ -166,6 +211,10 @@ export function useDisponibilidade() {
           disponivel: rascunho[chave(data, turno.id)] ?? false,
         }));
     });
+
+    if (linhas.length === 0) {
+      return { erro: 'Não há turnos disponíveis para enviar neste período.' };
+    }
 
     setEnviando(true);
     setErro(null);
@@ -188,7 +237,12 @@ export function useDisponibilidade() {
     }
     setRespostasSalvas(mapaCompleto);
     setRascunho(mapaCompleto);
+    setJaEnviouAntes(true);
     setEnviadoComSucesso(true);
+
+    // Recarrega para atualizar as contagens da equipe também.
+    await carregar();
+
     return { erro: null };
   }
 
@@ -199,7 +253,9 @@ export function useDisponibilidade() {
     erro,
     alternar,
     estaDisponivel,
+    contagemDe,
     temAlteracoesPendentes,
+    podeEnviar,
     enviando,
     enviadoComSucesso,
     enviarDisponibilidade,
