@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useDisponibilidade } from '../../features/availability/useDisponibilidade';
+import { usePrazoDisponibilidade } from '../../features/availability/usePrazoDisponibilidade';
 import { corTurno } from '../../lib/turnoColors';
 
 function formatarData(data: string) {
@@ -25,6 +26,7 @@ export function DisponibilidadePage() {
     enviadoComSucesso,
     enviarDisponibilidade,
   } = useDisponibilidade();
+    const { texto: textoPrazo, ativo: prazoAtivo } = usePrazoDisponibilidade();
 
   // Controla qual bolinha de contagem está com o detalhe aberto no momento.
   const [detalheAberto, setDetalheAberto] = useState<string | null>(null);
@@ -71,11 +73,18 @@ export function DisponibilidadePage() {
       <h1 className="mt-1 font-display text-2xl font-semibold text-tinta">
         {formatarData(periodo.data_inicio)} – {formatarData(periodo.data_fim)}
       </h1>
-      <p className="mt-2 text-slate-500">
+            <p className="mt-2 text-slate-500">
         Selecione os turnos em que você está disponível para trabalhar e clique em
         "Enviar disponibilidade" para confirmar. Você pode alterar suas respostas
         enquanto o período estiver aberto.
       </p>
+
+      {prazoAtivo && textoPrazo && (
+        <p className="mt-3 inline-flex items-center gap-2 rounded-full bg-amber-50 px-3 py-1.5 text-sm font-medium text-amber-700">
+          <span className="h-2 w-2 rounded-full bg-amber-500" />
+          {textoPrazo}
+        </p>
+      )}
 
       <div className="mt-8 space-y-6">
         {[periodo.data_inicio, periodo.data_fim].map((data) => {
