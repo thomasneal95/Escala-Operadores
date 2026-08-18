@@ -3,12 +3,14 @@ import { useAuth } from '../../features/auth/AuthContext';
 import { AreaColaboradorPage } from './AreaColaboradorPage';
 import { ColegasEquipePage } from './ColegasEquipePage';
 import { HistoricoEscalasPage } from './HistoricoEscalasPage';
+import { SolicitacoesTrocaPage } from './SolicitacoesTrocaPage';
 
-type Aba = 'minha-area' | 'equipe' | 'historico';
+type Aba = 'minha-area' | 'equipe' | 'historico' | 'trocas';
 
 const abas: { id: Aba; rotulo: string }[] = [
   { id: 'minha-area', rotulo: 'Minha área' },
   { id: 'equipe', rotulo: 'Equipe' },
+  { id: 'trocas', rotulo: 'Trocas' },
   { id: 'historico', rotulo: 'Histórico' },
 ];
 
@@ -33,12 +35,12 @@ export function OperatorApp() {
         </div>
 
         <nav className="px-6">
-          <div className="mx-auto flex max-w-2xl gap-6">
+          <div className="mx-auto flex max-w-2xl gap-6 overflow-x-auto">
             {abas.map((aba) => (
               <button
                 key={aba.id}
                 onClick={() => setAbaAtiva(aba.id)}
-                className={`border-b-2 px-1 py-3 text-sm font-medium transition ${
+                className={`whitespace-nowrap border-b-2 px-1 py-3 text-sm font-medium transition ${
                   abaAtiva === aba.id
                     ? 'border-esmeralda text-white'
                     : 'border-transparent text-slate-400 hover:text-slate-200'
@@ -54,6 +56,7 @@ export function OperatorApp() {
       <main className="mx-auto max-w-2xl px-6 py-10">
         {abaAtiva === 'minha-area' && <AreaColaboradorPage />}
         {abaAtiva === 'equipe' && <ColegasEquipePage />}
+        {abaAtiva === 'trocas' && <SolicitacoesTrocaPage />}
         {abaAtiva === 'historico' && <HistoricoEscalasPage />}
       </main>
     </div>
