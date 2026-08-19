@@ -1,4 +1,5 @@
 import { useState, type FormEvent } from 'react';
+import { Skeleton, SkeletonLinhaTabela } from '../../components/Skeleton';
 import { useCriarColaborador } from '../../features/employees/useCriarColaborador';
 import { useColaboradores } from '../../features/employees/useColaboradores';
 import { useAlterarSenhaColaborador } from '../../features/employees/useAlterarSenhaColaborador';
@@ -300,8 +301,24 @@ export function ColaboradoresPage() {
         {erro && (
           <p className="m-4 rounded-md bg-red-50 px-4 py-3 text-sm text-red-700">{erro}</p>
         )}
-        {carregando ? (
-          <p className="p-4 text-sm text-slate-400">Carregando...</p>
+                {carregando ? (
+          <table className="w-full text-left text-sm">
+            <thead className="border-b border-slate-200 bg-slate-50 text-slate-500">
+              <tr>
+                <th className="px-4 py-3 font-medium">Nome</th>
+                <th className="px-4 py-3 font-medium">Equipe</th>
+                <th className="px-4 py-3 font-medium">Turno semana</th>
+                <th className="px-4 py-3 font-medium">Telefone</th>
+                <th className="px-4 py-3 font-medium">Status</th>
+                <th className="px-4 py-3 font-medium">Ações</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {[0, 1, 2, 3, 4].map((i) => (
+                <SkeletonLinhaTabela key={i} colunas={6} />
+              ))}
+            </tbody>
+          </table>
         ) : (
           <table className="w-full text-left text-sm">
             <thead className="border-b border-slate-200 bg-slate-50 text-slate-500">
