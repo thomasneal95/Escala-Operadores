@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from 'react';
-import { Skeleton, SkeletonLinhaTabela } from '../../components/Skeleton';
+import { SkeletonLinhaTabela } from '../../components/Skeleton';
 import { useCriarColaborador } from '../../features/employees/useCriarColaborador';
 import { useColaboradores } from '../../features/employees/useColaboradores';
 import { useAlterarSenhaColaborador } from '../../features/employees/useAlterarSenhaColaborador';
