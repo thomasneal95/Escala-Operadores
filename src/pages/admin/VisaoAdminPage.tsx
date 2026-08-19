@@ -7,6 +7,7 @@ import { useVagasEquipe } from '../../features/teams/useVagasEquipe';
 import { SeletorColaborador } from '../../features/schedules/SeletorColaborador';
 import { NovoPeriodoForm } from '../../features/schedules/NovoPeriodoForm';
 import { corTurno } from '../../lib/turnoColors';
+import { useToast } from '../../components/FeedbackProvider';
 import { useConfirm } from '../../components/FeedbackProvider';
 
 function formatarData(data: string) {
@@ -63,6 +64,7 @@ export function VisaoAdminPage() {
   const { gerar, gerando } = useGerarEscalaAutomatica();
   const { vagas } = useVagasEquipe();
   const { session } = useAuth();
+  const toast = useToast();
   const confirmar = useConfirm();
 
 
@@ -450,10 +452,34 @@ export function VisaoAdminPage() {
                       </span>
                     </h2>
 
-                    {turnosDisponiveisNesseDia.length === 0 ? (
+                                        {turnosDisponiveisNesseDia.length === 0 ? (
                       <p className="mt-3 text-sm text-slate-400">Não há operação neste dia.</p>
                     ) : (
-                      <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
+                      <>
+                        {!escalaEstaTrancada && (
+                          <div className="mt-4 hidden flex-wrap gap-2 rounded-md border border-dashed border-slate-300 bg-slate-50 p-3 sm:flex">
+                            {colaboradores
+                              .filter((c) =>
+                                turnosDisponiveisNesseDia.some(
+                                  (t) => respostaDe(c.id, data, t.id)?.disponivel
+                                )
+                              )
+                              .map((c) => (
+                                <span
+                                  key={c.id}
+                                  draggable
+                                  onDragStart={(e) => {
+                                    e.dataTransfer.setData('text/colaborador-id', c.id);
+                                  }}
+                                  className="cursor-grab rounded-full border border-slate-300 bg-white px-3 py-1 text-xs font-medium text-tinta active:cursor-grabbing"
+                                  title="Arraste para um turno"
+                                >
+                                  {c.nome_completo}
+                                </span>
+                              ))}
+                          </div>
+                        )}
+                        <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
                         {turnosDisponiveisNesseDia.map((turno) => {
                           const escalados = escaladosEm(data, turno.id);
                           const cor = corTurno(turno.nome);
@@ -472,9 +498,32 @@ export function VisaoAdminPage() {
                           }
 
                           return (
-                            <div
+                                                        <div
                               key={turno.id}
-                              className="rounded-md border border-slate-200 p-3"
+                              onDragOver={(e) => {
+                                if (!escalaEstaTrancada) e.preventDefault();
+                              }}
+                              onDrop={(e) => {
+                                if (escalaEstaTrancada) return;
+                                e.preventDefault();
+                                const colaboradorId = e.dataTransfer.getData('text/colaborador-id');
+                                if (!colaboradorId) return;
+
+                                const podeEscalar =
+                                  respostaDe(colaboradorId, data, turno.id)?.disponivel &&
+                                  !colaboradorJaEscalado(colaboradorId, data, turno.id);
+
+                                if (!podeEscalar) {
+                                  toast(
+                                    'Esta pessoa não está disponível para este turno, ou já está escalada nele.',
+                                    'erro'
+                                  );
+                                  return;
+                                }
+
+                                handleAdicionar(colaboradorId, data, turno.id);
+                              }}
+                              className="rounded-md border border-slate-200 p-3 transition sm:border-dashed sm:hover:border-esmeralda sm:hover:bg-esmeralda-light/30"
                             >
                               <div className="flex items-center gap-1.5">
                                 <span className={`h-2 w-2 rounded-full ${cor.dot}`} />
@@ -535,10 +584,11 @@ export function VisaoAdminPage() {
                                   />
                                 </div>
                               )}
-                            </div>
+                                                        </div>
                           );
                         })}
                       </div>
+                      </>
                     )}
                   </div>
                 );
