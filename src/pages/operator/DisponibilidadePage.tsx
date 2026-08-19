@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { Skeleton } from '../../components/Skeleton';
 import { useDisponibilidade } from '../../features/availability/useDisponibilidade';
 import { usePrazoDisponibilidade } from '../../features/availability/usePrazoDisponibilidade';
 import { useToast } from '../../components/FeedbackProvider';
@@ -34,8 +35,27 @@ export function DisponibilidadePage() {
   // Controla qual bolinha de contagem está com o detalhe aberto no momento.
   const [detalheAberto, setDetalheAberto] = useState<string | null>(null);
 
-  if (carregando) {
-    return <p className="text-sm text-slate-400">Carregando...</p>;
+    if (carregando) {
+    return (
+      <div>
+        <Skeleton className="h-3 w-24" />
+        <Skeleton className="mt-2 h-7 w-64" />
+        <Skeleton className="mt-3 h-4 w-full max-w-md" />
+
+        <div className="mt-8 space-y-6">
+          {[0, 1].map((i) => (
+            <div key={i} className="rounded-lg border border-slate-200 bg-white p-5">
+              <Skeleton className="h-5 w-32" />
+              <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
+                {[0, 1, 2].map((j) => (
+                  <Skeleton key={j} className="h-20 w-full" />
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
   }
 
   if (!periodo) {
