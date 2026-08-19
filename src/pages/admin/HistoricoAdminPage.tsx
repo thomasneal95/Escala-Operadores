@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { Skeleton } from '../../components/Skeleton';
 import { useHistoricoAdmin } from '../../features/schedules/useHistoricoAdmin';
 import { corTurno } from '../../lib/turnoColors';
 
@@ -76,8 +77,21 @@ export function HistoricoAdminPage() {
     });
   }
 
-  if (carregando) {
-    return <p className="text-sm text-slate-400">Carregando...</p>;
+    if (carregando) {
+    return (
+      <div>
+        <Skeleton className="h-3 w-16" />
+        <Skeleton className="mt-2 h-7 w-64" />
+        <Skeleton className="mt-5 h-9 w-full max-w-sm" />
+        <div className="mt-4 rounded-lg border border-slate-200 bg-white p-5">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+            {[0, 1, 2].map((i) => (
+              <Skeleton key={i} className="h-32 w-full" />
+            ))}
+          </div>
+        </div>
+      </div>
+    );
   }
 
   const periodoSelecionado = periodos.find((p) => p.id === periodoSelecionadoId) ?? null;
