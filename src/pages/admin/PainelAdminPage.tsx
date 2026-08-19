@@ -1,4 +1,5 @@
 import { usePainelAdmin } from '../../features/schedules/usePainelAdmin';
+import { Skeleton } from '../../components/Skeleton';
 
 function formatarData(data: string) {
   const [ano, mes, dia] = data.split('-');
@@ -26,8 +27,25 @@ interface PainelAdminPageProps {
 export function PainelAdminPage({ aoNavegar }: PainelAdminPageProps) {
   const { dados, carregando, erro } = usePainelAdmin();
 
-  if (carregando) {
-    return <p className="text-sm text-slate-400">Carregando...</p>;
+    if (carregando) {
+    return (
+      <div>
+        <Skeleton className="h-3 w-16" />
+        <Skeleton className="mt-2 h-7 w-40" />
+
+        <div className="mt-6 rounded-lg border border-slate-200 bg-white p-6">
+          <Skeleton className="h-6 w-56" />
+          <Skeleton className="mt-4 h-4 w-72" />
+          <Skeleton className="mt-2 h-2 w-full max-w-sm" />
+          <Skeleton className="mt-4 h-9 w-40" />
+        </div>
+
+        <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <Skeleton className="h-24 w-full" />
+          <Skeleton className="h-24 w-full" />
+        </div>
+      </div>
+    );
   }
 
   if (erro || !dados) {
