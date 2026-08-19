@@ -1,4 +1,5 @@
 import { useSolicitacoesTrocaAdmin } from '../../features/schedules/useSolicitacoesTrocaAdmin';
+import { useConfirm } from '../../components/FeedbackProvider';
 
 function formatarData(data: string) {
   const [ano, mes, dia] = data.split('-');
@@ -26,6 +27,7 @@ const corStatus: Record<string, string> = {
 export function SolicitacoesTrocaAdminPage() {
   const { solicitacoes, carregando, erro, processando, aprovar, rejeitar } =
     useSolicitacoesTrocaAdmin();
+  const confirmar = useConfirm();
 
   if (carregando) {
     return <p className="text-sm text-slate-400">Carregando...</p>;
@@ -37,7 +39,7 @@ export function SolicitacoesTrocaAdminPage() {
   async function handleAprovar(s: (typeof solicitacoes)[number]) {
     if (!s.escalaSolicitante || !s.escalaColega) return;
 
-    const confirmou = window.confirm(
+        const confirmou = await confirmar(
       `Aprovar a troca entre ${s.solicitanteNome} e ${s.colegaNome}? ` +
         'Os dois turnos vão trocar de dono imediatamente na escala.'
     );
@@ -47,7 +49,7 @@ export function SolicitacoesTrocaAdminPage() {
   }
 
   async function handleRejeitar(id: string) {
-    const confirmou = window.confirm('Rejeitar esta solicitação de troca?');
+        const confirmou = await confirmar('Rejeitar esta solicitação de troca?');
     if (!confirmou) return;
     await rejeitar(id);
   }

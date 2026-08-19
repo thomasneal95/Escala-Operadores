@@ -1,10 +1,12 @@
 import { useState } from 'react';
 import { useGestaoAcesso } from '../../features/employees/useGestaoAcesso';
 import { useExcluirColaborador } from '../../features/employees/useExcluirColaborador';
+import { useConfirm } from '../../components/FeedbackProvider';
 
 export function GestaoAcessoPage() {
   const { perfis, carregando, erro, processando, alterarPapel, recarregar } = useGestaoAcesso();
   const { excluir, processando: excluindo } = useExcluirColaborador();
+  const confirmar = useConfirm();
   const [erroLinha, setErroLinha] = useState<Record<string, string>>({});
   const [mensagemLinha, setMensagemLinha] = useState<Record<string, string>>({});
 
@@ -16,8 +18,8 @@ export function GestaoAcessoPage() {
     }
   }
 
-  async function handleExcluir(perfilId: string, nome: string) {
-    const confirmou = window.confirm(
+    async function handleExcluir(perfilId: string, nome: string) {
+    const confirmou = await confirmar(
       `Tem certeza que deseja excluir "${nome}"?\n\n` +
         'Se este colaborador nunca teve disponibilidade ou escala registrada, ' +
         'ele será excluído completamente do sistema.\n\n' +

@@ -1,18 +1,20 @@
 ﻿import { useAreaColaborador } from '../../features/schedules/useAreaColaborador';
 import { useCalendarioToken } from '../../features/schedules/useCalendarioToken';
+import { useToast } from '../../components/FeedbackProvider';
 import { DisponibilidadePage } from './DisponibilidadePage';
 import { MinhaEscalaPage } from './MinhaEscalaPage';
 
 function SecaoCalendario() {
   const { urlHttps, urlWebcal, carregando } = useCalendarioToken();
+  const toast = useToast();
 
   async function copiarLink() {
     if (!urlHttps) return;
     try {
       await navigator.clipboard.writeText(urlHttps);
-      window.alert('Link copiado! Cole no seu app de calendario em "Adicionar por URL".');
+      toast('Link copiado! Cole no seu app de calendário em "Adicionar por URL".');
     } catch {
-      window.alert(urlHttps);
+      toast('Não foi possível copiar automaticamente. Link: ' + urlHttps, 'erro');
     }
   }
 

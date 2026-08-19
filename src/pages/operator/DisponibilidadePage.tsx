@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useDisponibilidade } from '../../features/availability/useDisponibilidade';
 import { usePrazoDisponibilidade } from '../../features/availability/usePrazoDisponibilidade';
+import { useToast } from '../../components/FeedbackProvider';
 import { corTurno } from '../../lib/turnoColors';
 
 function formatarData(data: string) {
@@ -26,8 +27,9 @@ export function DisponibilidadePage() {
     enviadoComSucesso,
        enviarDisponibilidade,
     repetirAnterior,
-  } = useDisponibilidade();
-    const { texto: textoPrazo, ativo: prazoAtivo } = usePrazoDisponibilidade();
+    } = useDisponibilidade();
+  const { texto: textoPrazo, ativo: prazoAtivo } = usePrazoDisponibilidade();
+  const toast = useToast();
 
   // Controla qual bolinha de contagem está com o detalhe aberto no momento.
   const [detalheAberto, setDetalheAberto] = useState<string | null>(null);
@@ -58,10 +60,10 @@ export function DisponibilidadePage() {
     await enviarDisponibilidade();
   }
 
-    async function handleRepetirAnterior() {
+      async function handleRepetirAnterior() {
     const resultado = await repetirAnterior();
     if (resultado.erro) {
-      window.alert(resultado.erro);
+      toast(resultado.erro, 'erro');
     }
   }
 
