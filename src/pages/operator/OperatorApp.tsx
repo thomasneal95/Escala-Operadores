@@ -4,6 +4,7 @@ import { AreaColaboradorPage } from './AreaColaboradorPage';
 import { ColegasEquipePage } from './ColegasEquipePage';
 import { HistoricoEscalasPage } from './HistoricoEscalasPage';
 import { SolicitacoesTrocaPage } from './SolicitacoesTrocaPage';
+import { TourOperador } from '../../components/TourOperador';
 
 type Aba = 'minha-area' | 'equipe' | 'trocas' | 'historico';
 
@@ -30,8 +31,9 @@ export function OperatorApp() {
     setMenuAberto(false);
   }
 
-  return (
+    return (
     <div className="min-h-screen bg-nuvem">
+      <TourOperador />
       <header className="bg-tinta">
         <div className="flex items-center justify-between px-6 py-4">
           <div className="flex items-center gap-3">
