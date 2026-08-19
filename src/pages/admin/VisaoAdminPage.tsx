@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { Skeleton } from '../../components/Skeleton';
 import { useVisaoAdmin } from '../../features/schedules/useVisaoAdmin';
 import { useAuth } from '../../features/auth/AuthContext';
 import { useEscala } from '../../features/schedules/useEscala';
@@ -238,8 +239,22 @@ export function VisaoAdminPage() {
     await recarregarEscala();
   }
 
-  if (carregando) {
-    return <p className="text-sm text-slate-400">Carregando...</p>;
+    if (carregando) {
+    return (
+      <div>
+        <Skeleton className="h-7 w-56" />
+        <div className="mt-4 flex gap-2">
+          <Skeleton className="h-9 w-32" />
+          <Skeleton className="h-9 w-32" />
+        </div>
+        <Skeleton className="mt-8 h-4 w-40" />
+        <div className="mt-3 overflow-hidden rounded-lg border border-slate-200 bg-white p-4">
+          {[0, 1, 2, 3].map((i) => (
+            <Skeleton key={i} className="mt-3 h-8 w-full first:mt-0" />
+          ))}
+        </div>
+      </div>
+    );
   }
 
   const podeSeCriarNovoPeriodo =
@@ -436,8 +451,19 @@ export function VisaoAdminPage() {
             </p>
           )}
 
-          {carregandoEscala ? (
-            <p className="mt-3 text-sm text-slate-400">Carregando escala...</p>
+                    {carregandoEscala ? (
+            <div className="mt-3 space-y-6">
+              {[0, 1].map((i) => (
+                <div key={i} className="rounded-lg border border-slate-200 bg-white p-5">
+                  <Skeleton className="h-5 w-32" />
+                  <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
+                    {[0, 1, 2].map((j) => (
+                      <Skeleton key={j} className="h-24 w-full" />
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
           ) : (
             <div className="mt-3 space-y-6">
               {[periodo.data_inicio, periodo.data_fim].map((data) => {
