@@ -7,6 +7,7 @@ import { useVagasEquipe } from '../../features/teams/useVagasEquipe';
 import { SeletorColaborador } from '../../features/schedules/SeletorColaborador';
 import { NovoPeriodoForm } from '../../features/schedules/NovoPeriodoForm';
 import { corTurno } from '../../lib/turnoColors';
+import { useConfirm } from '../../components/FeedbackProvider';
 
 function formatarData(data: string) {
   const [ano, mes, dia] = data.split('-');
@@ -62,6 +63,7 @@ export function VisaoAdminPage() {
   const { gerar, gerando } = useGerarEscalaAutomatica();
   const { vagas } = useVagasEquipe();
   const { session } = useAuth();
+  const confirmar = useConfirm();
 
 
   const [edicaoHabilitada, setEdicaoHabilitada] = useState(false);
@@ -91,7 +93,7 @@ export function VisaoAdminPage() {
   }
 
   async function handleEncerrarRecebimento() {
-    const confirmou = window.confirm(
+    const confirmou = await confirmar(
       'Ao encerrar o recebimento, os colaboradores não poderão mais alterar a disponibilidade. Deseja continuar?'
     );
     if (confirmou) {
@@ -100,7 +102,7 @@ export function VisaoAdminPage() {
   }
 
   async function handleConfirmarEscala() {
-    const confirmou = window.confirm(
+    const confirmou = await confirmar(
       'Ao confirmar a escala, os colaboradores poderão visualizar suas respectivas escalas. Deseja continuar?'
     );
     if (confirmou) {
@@ -109,7 +111,7 @@ export function VisaoAdminPage() {
   }
 
   async function handleReabrirRecebimento() {
-    const confirmou = window.confirm(
+    const confirmou = await confirmar(
       'Isso vai reabrir o recebimento de disponibilidade (status volta para "Aberto"), ' +
         'sem apagar nada do que já foi enviado ou já foi escalado. Deseja continuar?'
     );
@@ -118,8 +120,8 @@ export function VisaoAdminPage() {
     }
   }
 
-  function handleHabilitarEdicao() {
-    const confirmou = window.confirm(
+    async function handleHabilitarEdicao() {
+    const confirmou = await confirmar(
       'Esta escala já foi confirmada e os colaboradores já podem ter visto seus turnos. ' +
         'Alterações feitas agora NÃO enviam nenhum aviso automático a eles. ' +
         'Deseja mesmo habilitar a edição desta escala confirmada?'
@@ -130,7 +132,7 @@ export function VisaoAdminPage() {
   }
 
   async function handleResetarComDisponibilidades() {
-    const confirmou = window.confirm(
+    const confirmou = await confirmar(
       'Isso vai EXCLUIR a escala e TODAS as disponibilidades enviadas para este período, ' +
         'e reabrir o recebimento de disponibilidade do zero (status volta para "Aberto"). ' +
         'Os colaboradores precisarão enviar a disponibilidade novamente. Esta ação não pode ser desfeita. Deseja continuar?'
@@ -141,7 +143,7 @@ export function VisaoAdminPage() {
   }
 
   async function handleResetarSoEscala() {
-    const confirmou = window.confirm(
+    const confirmou = await confirmar(
       'Isso vai EXCLUIR apenas a escala montada, mantendo as disponibilidades já enviadas. ' +
         'O status volta para "Em organização", para você remontar a escala. Esta ação não pode ser desfeita. Deseja continuar?'
     );
@@ -151,7 +153,7 @@ export function VisaoAdminPage() {
   }
 
   async function handleExcluirDisponibilidade(colaboradorId: string, nome: string) {
-    const confirmou = window.confirm(
+    const confirmou = await confirmar(
       `Excluir a disponibilidade enviada por "${nome}"?\n\n` +
         'As respostas dos demais colaboradores não serão afetadas. ' +
         'Se o período ainda estiver "Aberto", esta pessoa poderá enviar a disponibilidade de novo.'
@@ -169,7 +171,7 @@ export function VisaoAdminPage() {
     if (!periodo) return;
     setMensagemGeracao(null);
 
-    const confirmou = window.confirm(
+    const confirmou = await confirmar(
       'Isso vai preencher automaticamente as vagas ainda vazias, priorizando quem ' +
         'trabalha aquele turno durante a semana. Escalas já feitas manualmente não ' +
         'serão alteradas. Deseja continuar?'
