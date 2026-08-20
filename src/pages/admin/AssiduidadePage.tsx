@@ -8,7 +8,7 @@ function corDaBarra(percentual: number) {
 }
 
 export function AssiduidadePage() {
-  const { dados, carregando, erro } = useAssiduidade();
+  const { dados, diasPossiveis, carregando, erro } = useAssiduidade();
 
   return (
     <div>
@@ -20,19 +20,20 @@ export function AssiduidadePage() {
         Assiduidade
       </p>
       <h1 className="mt-1 font-display text-2xl font-semibold text-tinta">
-        Presença por colaborador
+        Dias trabalhados por colaborador
       </h1>
       <p className="mt-2 text-sm text-slate-500">
-        Proporção de presenças confirmadas em relação ao total de turnos com presença já
-        confirmada (presença ou falta), considerando todo o histórico.
+        Quantos dias de fim de semana cada colaborador trabalhou, em relação ao total de{' '}
+        <span className="font-medium text-tinta">{diasPossiveis}</span> dias de operação já
+        confirmados no histórico.
       </p>
 
       {carregando ? (
         <p className="mt-6 text-sm text-slate-400">Carregando...</p>
-      ) : dados.length === 0 ? (
+      ) : dados.length === 0 || diasPossiveis === 0 ? (
         <div className="mt-6 rounded-lg border border-slate-200 bg-white p-8 text-center">
           <p className="text-slate-600">
-            Ainda não há confirmações de presença registradas no histórico.
+            Ainda não há períodos suficientes no histórico para calcular isso.
           </p>
         </div>
       ) : (
@@ -45,7 +46,7 @@ export function AssiduidadePage() {
                   <div className="flex items-center justify-between text-sm">
                     <span className="font-medium text-tinta">{c.nome_completo}</span>
                     <span className="text-slate-500">
-                      {c.presencas}/{c.totalConfirmado} ({Math.round(percentual * 100)}%)
+                      {c.diasTrabalhados}/{diasPossiveis} dias ({Math.round(percentual * 100)}%)
                     </span>
                   </div>
                   <div className="mt-1.5 h-3 w-full overflow-hidden rounded-full bg-slate-100">

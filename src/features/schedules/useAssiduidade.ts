@@ -4,14 +4,13 @@ import { supabase } from '../../lib/supabase/client';
 interface AssiduidadeColaborador {
   id: string;
   nome_completo: string;
-  presencas: number;
-  faltas: number;
-  totalConfirmado: number;
+  diasTrabalhados: number;
   percentual: number | null;
 }
 
 export function useAssiduidade() {
   const [dados, setDados] = useState<AssiduidadeColaborador[]>([]);
+  const [diasPossiveis, setDiasPossiveis] = useState(0);
   const [carregando, setCarregando] = useState(true);
   const [erro, setErro] = useState<string | null>(null);
 
@@ -19,6 +18,22 @@ export function useAssiduidade() {
     async function carregar() {
       setCarregando(true);
       setErro(null);
+
+      // Todos os períodos já confirmados/encerrados = todo o histórico de
+      // finais de semana que realmente aconteceram (cada um com 2 dias).
+      const { data: periodosData, error: erroPeriodos } = await supabase
+        .from('periodos_operacao')
+        .select('id, data_inicio, data_fim')
+        .in('status', ['confirmado', 'encerrado']);
+
+      if (erroPeriodos) {
+        setErro('Não foi possível carregar os períodos.');
+        setCarregando(false);
+        return;
+      }
+
+      const totalDiasPossiveis = (periodosData ?? []).length * 2;
+      setDiasPossiveis(totalDiasPossiveis);
 
       const { data: colaboradoresData, error: erroColaboradores } = await supabase
         .from('colaboradores')
@@ -31,43 +46,43 @@ export function useAssiduidade() {
         return;
       }
 
+      const idsPeriodos = (periodosData ?? []).map((p) => p.id);
+
       const { data: escalasData, error: erroEscalas } = await supabase
         .from('escalas')
-        .select('colaborador_id, compareceu')
-        .not('compareceu', 'is', null);
+        .select('colaborador_id, data')
+        .in('periodo_id', idsPeriodos.length > 0 ? idsPeriodos : ['00000000-0000-0000-0000-000000000000']);
 
       if (erroEscalas) {
-        setErro('Não foi possível carregar os dados de presença.');
+        setErro('Não foi possível carregar as escalas.');
         setCarregando(false);
         return;
       }
 
       const resultado: AssiduidadeColaborador[] = (colaboradoresData ?? []).map((c) => {
         const perfil = c.perfis as unknown as { nome_completo: string } | null;
-        const registros = (escalasData ?? []).filter((e) => e.colaborador_id === c.id);
-        const presencas = registros.filter((r) => r.compareceu === true).length;
-        const faltas = registros.filter((r) => r.compareceu === false).length;
-        const total = presencas + faltas;
+
+        // Conta dias distintos (não turnos) em que a pessoa trabalhou.
+        const diasUnicos = new Set(
+          (escalasData ?? []).filter((e) => e.colaborador_id === c.id).map((e) => e.data)
+        );
 
         return {
           id: c.id,
           nome_completo: perfil?.nome_completo ?? '(sem nome)',
-          presencas,
-          faltas,
-          totalConfirmado: total,
-          percentual: total > 0 ? presencas / total : null,
+          diasTrabalhados: diasUnicos.size,
+          percentual: totalDiasPossiveis > 0 ? diasUnicos.size / totalDiasPossiveis : null,
         };
       });
 
-      const comDados = resultado.filter((r) => r.totalConfirmado > 0);
-      comDados.sort((a, b) => (b.percentual ?? 0) - (a.percentual ?? 0));
+      resultado.sort((a, b) => (b.percentual ?? 0) - (a.percentual ?? 0));
 
-      setDados(comDados);
+      setDados(resultado);
       setCarregando(false);
     }
 
     carregar();
   }, []);
 
-  return { dados, carregando, erro };
+  return { dados, diasPossiveis, carregando, erro };
 }
