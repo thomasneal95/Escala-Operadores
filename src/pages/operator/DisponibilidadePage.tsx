@@ -15,7 +15,7 @@ function nomeDoDia(data: string, dataInicio: string) {
 }
 
 export function DisponibilidadePage() {
-  const {
+    const {
     periodo,
     turnos,
     carregando,
@@ -24,11 +24,13 @@ export function DisponibilidadePage() {
     estaDisponivel,
     contagemDe,
     temAlteracoesPendentes,
+    podeEnviar,
     enviando,
     enviadoComSucesso,
-       enviarDisponibilidade,
+    enviarDisponibilidade,
     repetirAnterior,
-    } = useDisponibilidade();
+  } = useDisponibilidade();
+
   const { texto: textoPrazo, ativo: prazoAtivo } = usePrazoDisponibilidade();
   const toast = useToast();
 
@@ -215,11 +217,19 @@ export function DisponibilidadePage() {
         })}
       </div>
 
-      <div className="mt-8 flex flex-col items-start gap-3 border-t border-slate-200 pt-6">
+            <div className="mt-8 flex flex-col items-start gap-3 border-t border-slate-200 pt-6">
         {temAlteracoesPendentes && (
           <p className="flex items-center gap-2 text-sm font-medium text-amber-600">
             <span className="h-2 w-2 rounded-full bg-amber-500" />
             Você tem alterações não enviadas.
+          </p>
+        )}
+
+        {!temAlteracoesPendentes && podeEnviar && (
+          <p className="flex items-center gap-2 text-sm font-medium text-slate-500">
+            <span className="h-2 w-2 rounded-full bg-slate-400" />
+            Você ainda não marcou nenhum turno. Se enviar assim, será registrado que você
+            está indisponível para todos os turnos deste fim de semana.
           </p>
         )}
 
@@ -230,9 +240,9 @@ export function DisponibilidadePage() {
           </p>
         )}
 
-        <button
+                <button
           onClick={handleEnviar}
-          disabled={!temAlteracoesPendentes || enviando}
+          disabled={!podeEnviar || enviando}
           className="rounded-md bg-esmeralda px-5 py-2.5 font-medium text-white transition hover:bg-esmeralda-dark disabled:cursor-not-allowed disabled:opacity-50"
         >
           {enviando ? 'Enviando...' : 'Enviar disponibilidade'}
