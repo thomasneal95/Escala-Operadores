@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Skeleton } from '../../components/Skeleton';
 import { useDisponibilidade } from '../../features/availability/useDisponibilidade';
 import { usePrazoDisponibilidade } from '../../features/availability/usePrazoDisponibilidade';
-import { useToast } from '../../components/FeedbackProvider';
+import { useToast, useConfirm } from '../../components/FeedbackProvider';
 import { corTurno } from '../../lib/turnoColors';
 
 function formatarData(data: string) {
@@ -33,6 +33,7 @@ export function DisponibilidadePage() {
 
   const { texto: textoPrazo, ativo: prazoAtivo } = usePrazoDisponibilidade();
   const toast = useToast();
+  const confirmar = useConfirm();
 
   // Controla qual bolinha de contagem está com o detalhe aberto no momento.
   const [detalheAberto, setDetalheAberto] = useState<string | null>(null);
@@ -78,7 +79,17 @@ export function DisponibilidadePage() {
     return turnos.filter((t) => (ehSabado ? t.ativo_sabado : t.ativo_domingo));
   }
 
-  async function handleEnviar() {
+    async function handleEnviar() {
+    if (!temAlteracoesPendentes && podeEnviar) {
+      const confirmou = await confirmar({
+        titulo: 'Enviar tudo como indisponível?',
+        mensagem:
+          'Você não marcou nenhum turno. Se continuar, será registrado que você está indisponível para todos os turnos deste fim de semana.',
+        textoConfirmar: 'Sim, enviar assim',
+      });
+      if (!confirmou) return;
+    }
+
     await enviarDisponibilidade();
   }
 
@@ -222,14 +233,6 @@ export function DisponibilidadePage() {
           <p className="flex items-center gap-2 text-sm font-medium text-amber-600">
             <span className="h-2 w-2 rounded-full bg-amber-500" />
             Você tem alterações não enviadas.
-          </p>
-        )}
-
-        {!temAlteracoesPendentes && podeEnviar && (
-          <p className="flex items-center gap-2 text-sm font-medium text-slate-500">
-            <span className="h-2 w-2 rounded-full bg-slate-400" />
-            Você ainda não marcou nenhum turno. Se enviar assim, será registrado que você
-            está indisponível para todos os turnos deste fim de semana.
           </p>
         )}
 
