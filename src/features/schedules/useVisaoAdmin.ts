@@ -62,9 +62,9 @@ export function useVisaoAdmin() {
 
     setTurnos(turnosData ?? []);
 
-    const { data: colaboradoresData, error: erroColaboradores } = await supabase
+        const { data: colaboradoresData, error: erroColaboradores } = await supabase
       .from('colaboradores')
-      .select('id, equipe_id, turno_semana_id, perfis(nome_completo), equipes(nome)')
+      .select('id, equipe_id, turno_semana_id, perfis(nome_completo, papel), equipes(nome)')
       .eq('ativo', true);
 
     if (erroColaboradores) {
@@ -73,19 +73,23 @@ export function useVisaoAdmin() {
       return;
     }
 
-    const colaboradoresFormatados: ColaboradorComPerfil[] = (colaboradoresData ?? []).map(
-      (c) => {
-        const perfil = c.perfis as unknown as { nome_completo: string } | null;
-        const equipe = c.equipes as unknown as { nome: string } | null;
-        return {
-          id: c.id,
-          nome_completo: perfil?.nome_completo ?? '(sem nome)',
-          equipe_id: c.equipe_id,
-          equipe_nome: equipe?.nome ?? null,
-          turno_semana_id: c.turno_semana_id,
-        };
-      }
-    );
+    // Administradores não aparecem na tela de escala.
+    const colaboradoresSemAdmin = (colaboradoresData ?? []).filter((c) => {
+      const perfil = c.perfis as unknown as { papel: string } | null;
+      return perfil?.papel !== 'administrador';
+    });
+
+    const colaboradoresFormatados: ColaboradorComPerfil[] = colaboradoresSemAdmin.map((c) => {
+      const perfil = c.perfis as unknown as { nome_completo: string } | null;
+      const equipe = c.equipes as unknown as { nome: string } | null;
+      return {
+        id: c.id,
+        nome_completo: perfil?.nome_completo ?? '(sem nome)',
+        equipe_id: c.equipe_id,
+        equipe_nome: equipe?.nome ?? null,
+        turno_semana_id: c.turno_semana_id,
+      };
+    });
 
     colaboradoresFormatados.sort((a, b) => a.nome_completo.localeCompare(b.nome_completo));
     setColaboradores(colaboradoresFormatados);

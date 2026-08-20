@@ -30,10 +30,10 @@ export function useColaboradores() {
     setCarregando(true);
     setErro(null);
 
-    const { data, error } = await supabase
+        const { data, error } = await supabase
       .from('colaboradores')
       .select(
-        'id, perfil_id, equipe_id, turno_semana_id, telefone, matricula, ativo, perfis(nome_completo), equipes(nome)'
+        'id, perfil_id, equipe_id, turno_semana_id, telefone, matricula, ativo, perfis(nome_completo, papel), equipes(nome)'
       );
 
     if (error) {
@@ -42,7 +42,13 @@ export function useColaboradores() {
       return;
     }
 
-    const formatados: ColaboradorLista[] = (data ?? []).map((c) => {
+    // Administradores não aparecem na lista de colaboradores.
+    const semAdmin = (data ?? []).filter((c) => {
+      const perfil = c.perfis as unknown as { papel: string } | null;
+      return perfil?.papel !== 'administrador';
+    });
+
+    const formatados: ColaboradorLista[] = semAdmin.map((c) => {
       const perfil = c.perfis as unknown as { nome_completo: string } | null;
       const equipe = c.equipes as unknown as { nome: string } | null;
       return {

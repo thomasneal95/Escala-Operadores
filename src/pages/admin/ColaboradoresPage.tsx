@@ -2,7 +2,6 @@ import { useState, type FormEvent } from 'react';
 import { SkeletonLinhaTabela } from '../../components/Skeleton';
 import { useCriarColaborador } from '../../features/employees/useCriarColaborador';
 import { useColaboradores } from '../../features/employees/useColaboradores';
-import { useAlterarSenhaColaborador } from '../../features/employees/useAlterarSenhaColaborador';
 import { useEquipes } from '../../features/teams/useEquipes';
 import { useTurnos } from '../../features/shifts/useTurnos';
 
@@ -45,7 +44,6 @@ export function ColaboradoresPage() {
     alternarAtivo,
     atualizarCadastro,
   } = useColaboradores();
-  const { alterarSenha, processando: alterandoSenha } = useAlterarSenhaColaborador();
   const { equipes } = useEquipes();
   const { turnos } = useTurnos();
 
@@ -60,9 +58,6 @@ export function ColaboradoresPage() {
     matricula: '',
     turno_semana_id: '',
   });
-
-  const [senhaId, setSenhaId] = useState<string | null>(null);
-  const [novaSenha, setNovaSenha] = useState('');
 
     const [erroLinha, setErroLinha] = useState<Record<string, string>>({});
   const [sucessoLinha, setSucessoLinha] = useState<Record<string, string>>({});
@@ -102,14 +97,13 @@ export function ColaboradoresPage() {
     await recarregar();
   }
 
-  function iniciarEdicao(colaborador: {
+    function iniciarEdicao(colaborador: {
     id: string;
     nome_completo: string;
     telefone: string | null;
     matricula: string | null;
     turno_semana_id: string | null;
   }) {
-    setSenhaId(null);
     setEditandoId(colaborador.id);
     setDadosEdicao({
       nome_completo: colaborador.nome_completo,
@@ -136,35 +130,6 @@ export function ColaboradoresPage() {
 
     setEditandoId(null);
     setSucessoLinha((atual) => ({ ...atual, [colaboradorId]: 'Cadastro atualizado.' }));
-  }
-
-  function iniciarAlterarSenha(colaboradorId: string) {
-    setEditandoId(null);
-    setSenhaId(colaboradorId);
-    setNovaSenha('');
-  }
-
-  async function salvarSenha(colaboradorId: string, perfilId: string) {
-    setErroLinha((atual) => ({ ...atual, [colaboradorId]: '' }));
-
-    if (novaSenha.length < 6) {
-      setErroLinha((atual) => ({
-        ...atual,
-        [colaboradorId]: 'A senha precisa ter pelo menos 6 caracteres.',
-      }));
-      return;
-    }
-
-    const resultado = await alterarSenha(perfilId, novaSenha);
-
-    if (resultado.erro) {
-      setErroLinha((atual) => ({ ...atual, [colaboradorId]: resultado.erro as string }));
-      return;
-    }
-
-    setSenhaId(null);
-    setNovaSenha('');
-    setSucessoLinha((atual) => ({ ...atual, [colaboradorId]: 'Senha alterada com sucesso.' }));
   }
 
   return (
@@ -332,9 +297,8 @@ export function ColaboradoresPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-                            {colaboradoresFiltrados.map((colaborador) => {
+                                          {colaboradoresFiltrados.map((colaborador) => {
                 const emEdicao = editandoId === colaborador.id;
-                const alterandoSenhaDele = senhaId === colaborador.id;
 
                 return (
                   <tr key={colaborador.id}>
@@ -443,43 +407,13 @@ export function ColaboradoresPage() {
                             Cancelar
                           </button>
                         </div>
-                      ) : alterandoSenhaDele ? (
-                        <div className="flex flex-wrap items-center gap-3">
-                          <input
-                            type="text"
-                            value={novaSenha}
-                            onChange={(e) => setNovaSenha(e.target.value)}
-                            className="w-40 rounded-md border border-slate-300 px-2 py-1 text-sm"
-                            placeholder="Nova senha (mín. 6)"
-                            autoFocus
-                          />
-                          <button
-                            onClick={() => salvarSenha(colaborador.id, colaborador.perfil_id)}
-                            disabled={alterandoSenha}
-                            className="text-sm font-medium text-esmeralda-dark hover:text-esmeralda"
-                          >
-                            Salvar senha
-                          </button>
-                          <button
-                            onClick={() => setSenhaId(null)}
-                            className="text-sm font-medium text-slate-500 hover:text-slate-700"
-                          >
-                            Cancelar
-                          </button>
-                        </div>
-                      ) : (
+                                            ) : (
                         <div className="flex flex-wrap gap-3">
                           <button
                             onClick={() => iniciarEdicao(colaborador)}
                             className="text-sm font-medium text-slate-600 hover:text-tinta"
                           >
                             Editar
-                          </button>
-                          <button
-                            onClick={() => iniciarAlterarSenha(colaborador.id)}
-                            className="text-sm font-medium text-slate-600 hover:text-tinta"
-                          >
-                            Alterar senha
                           </button>
                           <button
                             onClick={() => alternarAtivo(colaborador.id, !colaborador.ativo)}
