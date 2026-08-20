@@ -1,5 +1,6 @@
 ﻿import { useAreaColaborador } from '../../features/schedules/useAreaColaborador';
 import { useCalendarioToken } from '../../features/schedules/useCalendarioToken';
+import { TermoAceiteModal } from '../../components/TermoAceiteModal';
 import { useToast } from '../../components/FeedbackProvider';
 import { DisponibilidadePage } from './DisponibilidadePage';
 import { MinhaEscalaPage } from './MinhaEscalaPage';
@@ -51,9 +52,14 @@ export function AreaColaboradorPage() {
     return <p className="rounded-md bg-red-50 px-4 py-3 text-sm text-red-700">{erro}</p>;
   }
 
-  if (periodo && (periodo.status === 'confirmado' || periodo.status === 'encerrado') && colaboradorId) {
+    if (periodo && (periodo.status === 'confirmado' || periodo.status === 'encerrado') && colaboradorId) {
     return (
       <div>
+        <TermoAceiteModal
+          periodoId={periodo.id}
+          dataInicio={periodo.data_inicio}
+          dataFim={periodo.data_fim}
+        />
         <MinhaEscalaPage colaboradorId={colaboradorId} periodo={periodo} />
         <SecaoCalendario />
       </div>
