@@ -256,9 +256,9 @@ export function MapaCoberturaPage() {
                   const cor = corDaBarraVertical(proporcao);
 
                   return (
-                    <div
+                                                            <div
                       key={`${dia.periodoId}-${dia.data}`}
-                      className="flex w-16 shrink-0 flex-col items-center"
+                      className="flex w-20 shrink-0 flex-col items-center"
                     >
                       <span className={`text-sm font-bold ${cor.texto}`}>
                         {Math.round(proporcao * 100)}%
@@ -270,10 +270,10 @@ export function MapaCoberturaPage() {
                           title={`${dia.preenchidas} de ${dia.vagasTotais} vagas preenchidas`}
                         />
                       </div>
-                      <span className="mt-2 text-xs font-medium text-tinta">
+                                            <span className="mt-2 whitespace-nowrap text-xs font-medium text-tinta">
                         {dia.ehSabado ? 'Sáb' : 'Dom'} {formatarDataCurta(dia.data)}
                       </span>
-                      <span className="mt-1 rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-medium text-slate-500">
+                                            <span className="mt-1 whitespace-nowrap rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-medium text-slate-500">
                         {dia.preenchidas}/{dia.vagasTotais} vagas
                       </span>
                     </div>
