@@ -13,7 +13,7 @@ interface TurnoParaGeracao {
   nome: string;
   ativo_sabado: boolean;
   ativo_domingo: boolean;
-  ordem_exibicao: number;
+  ordem_exibicao: number | null;
 }
 
 interface EscalaExistente {
@@ -64,9 +64,12 @@ export function useGerarEscalaAutomatica() {
       new Set(colaboradores.map((c) => c.equipe_id).filter((id): id is string => !!id))
     );
 
-    // Turnos ordenados pela ordem de exibição (Manhã, Tarde, Noite, etc.),
-    // necessário para calcular "turno mais próximo".
-    const turnosOrdenados = [...turnos].sort((a, b) => a.ordem_exibicao - b.ordem_exibicao);
+        // Turnos ordenados pela ordem de exibição (Manhã, Tarde, Noite, etc.),
+    // necessário para calcular "turno mais próximo". Turnos sem ordem
+    // configurada (null) vão para o final.
+    const turnosOrdenados = [...turnos].sort(
+      (a, b) => (a.ordem_exibicao ?? 999) - (b.ordem_exibicao ?? 999)
+    );
 
     function indiceDoTurno(turnoId: string) {
       return turnosOrdenados.findIndex((t) => t.id === turnoId);
