@@ -43,10 +43,11 @@ export function usePainelAdmin() {
       return;
     }
 
-    const { count: totalColaboradoresAtivos } = await supabase
+        const { count: totalColaboradoresAtivos } = await supabase
       .from('colaboradores')
-      .select('id', { count: 'exact', head: true })
-      .eq('ativo', true);
+      .select('id, perfis!inner(papel)', { count: 'exact', head: true })
+      .eq('ativo', true)
+      .eq('perfis.papel', 'colaborador');
 
     const { count: totalEquipesAtivas } = await supabase
       .from('equipes')

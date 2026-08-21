@@ -36,9 +36,9 @@ export function useAssiduidade() {
       const totalDiasPossiveis = (periodosData ?? []).length * 2;
       setDiasPossiveis(totalDiasPossiveis);
 
-            const { data: colaboradoresData, error: erroColaboradores } = await supabase
+                  const { data: colaboradoresData, error: erroColaboradores } = await supabase
         .from('colaboradores')
-        .select('id, data_admissao, perfis(nome_completo)')
+        .select('id, data_admissao, perfis(nome_completo, papel)')
         .eq('ativo', true);
 
       if (erroColaboradores) {
@@ -60,9 +60,13 @@ export function useAssiduidade() {
         return;
       }
 
-            const resultado: AssiduidadeColaborador[] = (colaboradoresData ?? []).map((c) => {
-        const perfil = c.perfis as unknown as { nome_completo: string } | null;
+                  const semAdmin = (colaboradoresData ?? []).filter((c) => {
+        const perfil = c.perfis as unknown as { papel: string } | null;
+        return perfil?.papel !== 'administrador';
+      });
 
+      const resultado: AssiduidadeColaborador[] = semAdmin.map((c) => {
+        const perfil = c.perfis as unknown as { nome_completo: string } | null;
         // Conta dias distintos (não turnos) em que a pessoa trabalhou.
         const diasUnicos = new Set(
           (escalasData ?? []).filter((e) => e.colaborador_id === c.id).map((e) => e.data)
