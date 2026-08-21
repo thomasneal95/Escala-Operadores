@@ -141,10 +141,12 @@ export function SolicitacoesTrocaAdminPage() {
         ) : (
           <div className="mt-3 overflow-hidden rounded-lg border border-slate-200 bg-white">
             <table className="w-full text-left text-sm">
-              <thead className="border-b border-slate-200 bg-slate-50 text-slate-500">
+                            <thead className="border-b border-slate-200 bg-slate-50 text-slate-500">
                 <tr>
                   <th className="px-4 py-3 font-medium">Solicitante</th>
+                  <th className="px-4 py-3 font-medium">Turno oferecido</th>
                   <th className="px-4 py-3 font-medium">Colega</th>
+                  <th className="px-4 py-3 font-medium">Turno oferecido</th>
                   <th className="px-4 py-3 font-medium">Status</th>
                 </tr>
               </thead>
@@ -152,7 +154,26 @@ export function SolicitacoesTrocaAdminPage() {
                 {outras.map((s) => (
                   <tr key={s.id}>
                     <td className="px-4 py-3 text-tinta">{s.solicitanteNome}</td>
+                    <td className="px-4 py-3 text-slate-500">
+                      {s.escalaSolicitante ? (
+                        <>
+                          {formatarData(s.escalaSolicitante.data)} ·{' '}
+                          {s.escalaSolicitante.turno_nome_snapshot}
+                        </>
+                      ) : (
+                        '—'
+                      )}
+                    </td>
                     <td className="px-4 py-3 text-tinta">{s.colegaNome}</td>
+                    <td className="px-4 py-3 text-slate-500">
+                      {s.escalaColega ? (
+                        <>
+                          {formatarData(s.escalaColega.data)} · {s.escalaColega.turno_nome_snapshot}
+                        </>
+                      ) : (
+                        '—'
+                      )}
+                    </td>
                     <td className="px-4 py-3">
                       <span
                         className={`rounded-full px-2 py-0.5 text-xs font-medium ${corStatus[s.status]}`}

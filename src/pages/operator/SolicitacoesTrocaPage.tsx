@@ -273,7 +273,7 @@ export function SolicitacoesTrocaPage() {
           <p className="mt-2 text-sm text-slate-400">Nenhuma solicitação enviada.</p>
         ) : (
           <div className="mt-3 space-y-3">
-            {enviadas.map((s) => (
+                        {enviadas.map((s) => (
               <div key={s.id} className="rounded-lg border border-slate-200 bg-white p-4">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <p className="text-sm text-slate-600">
@@ -286,6 +286,35 @@ export function SolicitacoesTrocaPage() {
                     {rotuloStatus[s.status]}
                   </span>
                 </div>
+
+                <div className="mt-2 grid grid-cols-1 gap-2 text-xs text-slate-500 sm:grid-cols-2">
+                  <div>
+                    <p className="font-medium uppercase tracking-wide text-slate-400">
+                      Seu turno oferecido
+                    </p>
+                    {s.minhaEscala ? (
+                      <p className="mt-0.5 text-slate-700">
+                        {formatarData(s.minhaEscala.data)} · {s.minhaEscala.turno_nome_snapshot}
+                      </p>
+                    ) : (
+                      <p className="mt-0.5">—</p>
+                    )}
+                  </div>
+                  <div>
+                    <p className="font-medium uppercase tracking-wide text-slate-400">
+                      Turno de {s.outraPessoaNome}
+                    </p>
+                    {s.escalaOutraPessoa ? (
+                      <p className="mt-0.5 text-slate-700">
+                        {formatarData(s.escalaOutraPessoa.data)} ·{' '}
+                        {s.escalaOutraPessoa.turno_nome_snapshot}
+                      </p>
+                    ) : (
+                      <p className="mt-0.5 italic">Ainda não escolhido</p>
+                    )}
+                  </div>
+                </div>
+
                 {s.status === 'pendente' && (
                   <button
                     onClick={() => cancelarSolicitacao(s.id)}
