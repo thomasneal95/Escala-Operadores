@@ -189,24 +189,45 @@ export function SolicitacoesTrocaPage() {
               const cor = s.escalaOutraPessoa ? corTurno(s.escalaOutraPessoa.turno_nome_snapshot) : null;
 
               return (
-                <div key={s.id} className="rounded-lg border border-slate-200 bg-white p-4">
+                              <div key={s.id} className="rounded-lg border border-slate-200 bg-white p-4">
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <p className="text-sm text-slate-600">
                       <span className="font-medium text-tinta">{s.outraPessoaNome}</span> quer
-                      trocar{' '}
-                      {s.escalaOutraPessoa && cor && (
-                        <span className={`font-medium ${cor.text}`}>
-                          {formatarData(s.escalaOutraPessoa.data)} ·{' '}
-                          {s.escalaOutraPessoa.turno_nome_snapshot}
-                        </span>
-                      )}{' '}
-                      com um turno seu.
+                      trocar um turno com você.
                     </p>
                     <span
                       className={`rounded-full px-2 py-0.5 text-xs font-medium ${corStatus[s.status]}`}
                     >
                       {rotuloStatus[s.status]}
                     </span>
+                  </div>
+
+                  <div className="mt-2 grid grid-cols-1 gap-2 text-xs text-slate-500 sm:grid-cols-2">
+                    <div>
+                      <p className="font-medium uppercase tracking-wide text-slate-400">
+                        Turno de {s.outraPessoaNome}
+                      </p>
+                      {s.escalaOutraPessoa ? (
+                        <p className={`mt-0.5 font-medium ${cor?.text ?? 'text-slate-700'}`}>
+                          {formatarData(s.escalaOutraPessoa.data)} ·{' '}
+                          {s.escalaOutraPessoa.turno_nome_snapshot}
+                        </p>
+                      ) : (
+                        <p className="mt-0.5">—</p>
+                      )}
+                    </div>
+                    <div>
+                      <p className="font-medium uppercase tracking-wide text-slate-400">
+                        Seu turno (a oferecer)
+                      </p>
+                      {s.minhaEscala ? (
+                        <p className="mt-0.5 text-slate-700">
+                          {formatarData(s.minhaEscala.data)} · {s.minhaEscala.turno_nome_snapshot}
+                        </p>
+                      ) : (
+                        <p className="mt-0.5 italic">Você escolhe ao aceitar</p>
+                      )}
+                    </div>
                   </div>
 
                   {s.status === 'pendente' && (
