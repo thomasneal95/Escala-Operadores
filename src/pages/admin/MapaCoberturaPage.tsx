@@ -50,22 +50,35 @@ export function MapaCoberturaPage() {
         Cobertura de turnos ao longo do tempo
       </h1>
 
-      <div className="mt-5 max-w-xs">
-        <label className="block text-sm font-medium text-slate-700">Equipe</label>
-        <select
-          value={equipeId}
-          onChange={(e) => setEquipeId(e.target.value)}
-          className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-tinta focus:border-esmeralda focus:outline-none focus:ring-1 focus:ring-esmeralda"
-        >
-          <option value="">Todas as equipes</option>
+            <div className="mt-5">
+        <p className="text-sm font-medium text-slate-700">Equipe</p>
+        <div className="mt-2 flex flex-wrap gap-2">
+          <button
+            onClick={() => setEquipeId('')}
+            className={`rounded-full px-4 py-1.5 text-sm font-medium transition ${
+              equipeId === ''
+                ? 'bg-esmeralda text-white'
+                : 'border border-slate-300 text-slate-600 hover:bg-slate-50'
+            }`}
+          >
+            Todas as equipes
+          </button>
           {equipes
             .filter((e) => e.ativo)
             .map((e) => (
-              <option key={e.id} value={e.id}>
+              <button
+                key={e.id}
+                onClick={() => setEquipeId(e.id)}
+                className={`rounded-full px-4 py-1.5 text-sm font-medium transition ${
+                  equipeId === e.id
+                    ? 'bg-esmeralda text-white'
+                    : 'border border-slate-300 text-slate-600 hover:bg-slate-50'
+                }`}
+              >
                 {e.nome}
-              </option>
+              </button>
             ))}
-        </select>
+        </div>
       </div>
 
       {carregando ? (
