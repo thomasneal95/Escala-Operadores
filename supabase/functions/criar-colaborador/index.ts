@@ -9,6 +9,7 @@ interface CriarColaboradorBody {
   telefone: string | null;
   matricula: string | null;
   turno_semana_id: string | null;
+  data_admissao: string | null;
 }
 
 export default {
@@ -73,12 +74,13 @@ export default {
     }
 
     // 5. Cria o colaborador.
-    const { error: erroColaborador } = await ctx.supabaseAdmin.from("colaboradores").insert({
+        const { error: erroColaborador } = await ctx.supabaseAdmin.from("colaboradores").insert({
       perfil_id: novoUserId,
       equipe_id: body.equipe_id,
       telefone: body.telefone,
       matricula: body.matricula,
       turno_semana_id: body.turno_semana_id,
+      data_admissao: body.data_admissao,
     });
 
     if (erroColaborador) {

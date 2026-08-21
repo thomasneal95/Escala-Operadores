@@ -45,8 +45,8 @@ export function AssiduidadePage() {
                 <div key={c.id}>
                   <div className="flex items-center justify-between text-sm">
                     <span className="font-medium text-tinta">{c.nome_completo}</span>
-                    <span className="text-slate-500">
-                      {c.diasTrabalhados}/{diasPossiveis} dias ({Math.round(percentual * 100)}%)
+                                        <span className="text-slate-500">
+                      {c.diasTrabalhados}/{c.diasPossiveis} dias ({Math.round(percentual * 100)}%)
                     </span>
                   </div>
                   <div className="mt-1.5 h-3 w-full overflow-hidden rounded-full bg-slate-100">

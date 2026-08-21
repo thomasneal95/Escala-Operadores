@@ -9,6 +9,7 @@ interface DadosNovoColaborador {
   telefone: string | null;
   matricula: string | null;
   turno_semana_id: string | null;
+  data_admissao: string | null;
 }
 
 export function useCriarColaborador() {

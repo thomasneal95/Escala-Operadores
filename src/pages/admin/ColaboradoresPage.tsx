@@ -13,6 +13,7 @@ interface FormularioNovoColaborador {
   telefone: string;
   matricula: string;
   turno_semana_id: string;
+  data_admissao: string;
 }
 
 const formularioVazio: FormularioNovoColaborador = {
@@ -23,6 +24,7 @@ const formularioVazio: FormularioNovoColaborador = {
   telefone: '',
   matricula: '',
   turno_semana_id: '',
+  data_admissao: '',
 };
 
 interface DadosEdicao {
@@ -30,6 +32,13 @@ interface DadosEdicao {
   telefone: string;
   matricula: string;
   turno_semana_id: string;
+  data_admissao: string;
+}
+
+function formatarDataExibicao(data: string | null) {
+  if (!data) return '—';
+  const [ano, mes, dia] = data.split('-');
+  return `${dia}/${mes}/${ano}`;
 }
 
 export function ColaboradoresPage() {
@@ -57,9 +66,10 @@ export function ColaboradoresPage() {
     telefone: '',
     matricula: '',
     turno_semana_id: '',
+    data_admissao: '',
   });
 
-    const [erroLinha, setErroLinha] = useState<Record<string, string>>({});
+  const [erroLinha, setErroLinha] = useState<Record<string, string>>({});
   const [sucessoLinha, setSucessoLinha] = useState<Record<string, string>>({});
   const [busca, setBusca] = useState('');
 
@@ -85,6 +95,7 @@ export function ColaboradoresPage() {
       telefone: form.telefone || null,
       matricula: form.matricula || null,
       turno_semana_id: form.turno_semana_id || null,
+      data_admissao: form.data_admissao || null,
     });
 
     if (resultado.erro) {
@@ -97,12 +108,13 @@ export function ColaboradoresPage() {
     await recarregar();
   }
 
-    function iniciarEdicao(colaborador: {
+  function iniciarEdicao(colaborador: {
     id: string;
     nome_completo: string;
     telefone: string | null;
     matricula: string | null;
     turno_semana_id: string | null;
+    data_admissao: string | null;
   }) {
     setEditandoId(colaborador.id);
     setDadosEdicao({
@@ -110,6 +122,7 @@ export function ColaboradoresPage() {
       telefone: colaborador.telefone ?? '',
       matricula: colaborador.matricula ?? '',
       turno_semana_id: colaborador.turno_semana_id ?? '',
+      data_admissao: colaborador.data_admissao ?? '',
     });
   }
 
@@ -121,6 +134,7 @@ export function ColaboradoresPage() {
       telefone: dadosEdicao.telefone || null,
       matricula: dadosEdicao.matricula || null,
       turno_semana_id: dadosEdicao.turno_semana_id || null,
+      data_admissao: dadosEdicao.data_admissao || null,
     });
 
     if (resultado.erro) {
@@ -212,6 +226,21 @@ export function ColaboradoresPage() {
           </div>
 
           <div>
+            <label className="block text-sm font-medium text-slate-700">
+              Data de admissão (opcional)
+            </label>
+            <input
+              type="date"
+              value={form.data_admissao}
+              onChange={(e) => setForm({ ...form, data_admissao: e.target.value })}
+              className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-tinta focus:border-esmeralda focus:outline-none focus:ring-1 focus:ring-esmeralda"
+            />
+            <p className="mt-1 text-xs text-slate-400">
+              Usada para calcular a assiduidade corretamente a partir da contratação.
+            </p>
+          </div>
+
+          <div>
             <label className="block text-sm font-medium text-slate-700">Telefone (opcional)</label>
             <input
               type="text"
@@ -252,7 +281,7 @@ export function ColaboradoresPage() {
         )}
       </div>
 
-            <div className="mt-6">
+      <div className="mt-6">
         <input
           type="text"
           value={busca}
@@ -266,7 +295,7 @@ export function ColaboradoresPage() {
         {erro && (
           <p className="m-4 rounded-md bg-red-50 px-4 py-3 text-sm text-red-700">{erro}</p>
         )}
-                {carregando ? (
+        {carregando ? (
           <table className="w-full text-left text-sm">
             <thead className="border-b border-slate-200 bg-slate-50 text-slate-500">
               <tr>
@@ -291,13 +320,14 @@ export function ColaboradoresPage() {
                 <th className="px-4 py-3 font-medium">Nome</th>
                 <th className="px-4 py-3 font-medium">Equipe</th>
                 <th className="px-4 py-3 font-medium">Turno semana</th>
+                <th className="px-4 py-3 font-medium">Admissão</th>
                 <th className="px-4 py-3 font-medium">Telefone</th>
                 <th className="px-4 py-3 font-medium">Status</th>
                 <th className="px-4 py-3 font-medium">Ações</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-                                          {colaboradoresFiltrados.map((colaborador) => {
+              {colaboradoresFiltrados.map((colaborador) => {
                 const emEdicao = editandoId === colaborador.id;
 
                 return (
@@ -358,6 +388,20 @@ export function ColaboradoresPage() {
                     <td className="px-4 py-3 font-mono text-slate-500">
                       {emEdicao ? (
                         <input
+                          type="date"
+                          value={dadosEdicao.data_admissao}
+                          onChange={(e) =>
+                            setDadosEdicao({ ...dadosEdicao, data_admissao: e.target.value })
+                          }
+                          className="rounded-md border border-slate-300 px-2 py-1 font-sans text-sm"
+                        />
+                      ) : (
+                        formatarDataExibicao(colaborador.data_admissao)
+                      )}
+                    </td>
+                    <td className="px-4 py-3 font-mono text-slate-500">
+                      {emEdicao ? (
+                        <input
                           type="text"
                           value={dadosEdicao.telefone}
                           onChange={(e) =>
@@ -407,7 +451,7 @@ export function ColaboradoresPage() {
                             Cancelar
                           </button>
                         </div>
-                                            ) : (
+                      ) : (
                         <div className="flex flex-wrap gap-3">
                           <button
                             onClick={() => iniciarEdicao(colaborador)}
@@ -437,7 +481,7 @@ export function ColaboradoresPage() {
                   </tr>
                 );
               })}
-                        </tbody>
+            </tbody>
           </table>
         )}
         {!carregando && colaboradoresFiltrados.length === 0 && (

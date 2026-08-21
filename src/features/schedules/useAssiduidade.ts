@@ -5,6 +5,7 @@ interface AssiduidadeColaborador {
   id: string;
   nome_completo: string;
   diasTrabalhados: number;
+  diasPossiveis: number;
   percentual: number | null;
 }
 
@@ -35,9 +36,9 @@ export function useAssiduidade() {
       const totalDiasPossiveis = (periodosData ?? []).length * 2;
       setDiasPossiveis(totalDiasPossiveis);
 
-      const { data: colaboradoresData, error: erroColaboradores } = await supabase
+            const { data: colaboradoresData, error: erroColaboradores } = await supabase
         .from('colaboradores')
-        .select('id, perfis(nome_completo)')
+        .select('id, data_admissao, perfis(nome_completo)')
         .eq('ativo', true);
 
       if (erroColaboradores) {
@@ -59,7 +60,7 @@ export function useAssiduidade() {
         return;
       }
 
-      const resultado: AssiduidadeColaborador[] = (colaboradoresData ?? []).map((c) => {
+            const resultado: AssiduidadeColaborador[] = (colaboradoresData ?? []).map((c) => {
         const perfil = c.perfis as unknown as { nome_completo: string } | null;
 
         // Conta dias distintos (não turnos) em que a pessoa trabalhou.
@@ -67,11 +68,25 @@ export function useAssiduidade() {
           (escalasData ?? []).filter((e) => e.colaborador_id === c.id).map((e) => e.data)
         );
 
+        // Só considera, no total de dias possíveis, os que aconteceram
+        // depois (ou no mesmo dia) da admissão. Sem data de admissão
+        // cadastrada, considera todo o histórico (comportamento anterior).
+        const diasPossiveisParaEssaPessoa = c.data_admissao
+          ? (periodosData ?? []).reduce((soma, p) => {
+              let contagem = 0;
+              if (p.data_inicio >= c.data_admissao!) contagem += 1;
+              if (p.data_fim >= c.data_admissao!) contagem += 1;
+              return soma + contagem;
+            }, 0)
+          : totalDiasPossiveis;
+
         return {
           id: c.id,
           nome_completo: perfil?.nome_completo ?? '(sem nome)',
           diasTrabalhados: diasUnicos.size,
-          percentual: totalDiasPossiveis > 0 ? diasUnicos.size / totalDiasPossiveis : null,
+          diasPossiveis: diasPossiveisParaEssaPessoa,
+          percentual:
+            diasPossiveisParaEssaPessoa > 0 ? diasUnicos.size / diasPossiveisParaEssaPessoa : null,
         };
       });
 
