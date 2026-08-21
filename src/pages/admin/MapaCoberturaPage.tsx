@@ -1,107 +1,41 @@
-import { useMemo, useState } from 'react';
-import { useMapaCobertura } from '../../features/schedules/useMapaCobertura';
-import { usePreenchimentoDias } from '../../features/schedules/usePreenchimentoDias';
+import { useState } from 'react';
+import { useAnalises } from '../../features/schedules/useAnalises';
 import { useEquipes } from '../../features/teams/useEquipes';
 import { corTurno } from '../../lib/turnoColors';
 
 function formatarData(data: string) {
-  const [, mes, dia] = data.split('-');
-  return `${dia}/${mes}`;
+  const [ano, mes, dia] = data.split('-');
+  return `${dia}/${mes}/${ano}`;
 }
-
-// Escala de cor mais granular, do crítico ao excelente.
-function corDaBarraVertical(proporcao: number) {
-  if (proporcao >= 1) return { barra: 'bg-emerald-200', texto: 'text-emerald-800' };
-  if (proporcao >= 0.85) return { barra: 'bg-lime-200', texto: 'text-lime-800' };
-  if (proporcao >= 0.6) return { barra: 'bg-amber-200', texto: 'text-amber-800' };
-  if (proporcao >= 0.35) return { barra: 'bg-orange-200', texto: 'text-orange-800' };
-  return { barra: 'bg-rose-200', texto: 'text-rose-800' };
-}
-
 
 function formatarDataCurta(data: string) {
   const [, mes, dia] = data.split('-');
   return `${dia}/${mes}`;
 }
-function corDoPonto(proporcao: number) {
-  if (proporcao >= 1) return '#6ee7b7'; // emerald-300
-  if (proporcao >= 0.85) return '#bef264'; // lime-300
-  if (proporcao >= 0.6) return '#fcd34d'; // amber-300
-  if (proporcao >= 0.35) return '#fdba74'; // orange-300
-  return '#fda4af'; // rose-300
+
+// Escala de cor ÚNICA, usada nos três gráficos e na legenda única.
+function corPorProporcao(proporcao: number) {
+  if (proporcao >= 1) return { bg: 'bg-emerald-200', texto: 'text-emerald-800', hex: '#6ee7b7' };
+  if (proporcao >= 0.85) return { bg: 'bg-lime-200', texto: 'text-lime-800', hex: '#bef264' };
+  if (proporcao >= 0.6) return { bg: 'bg-amber-200', texto: 'text-amber-800', hex: '#fcd34d' };
+  if (proporcao >= 0.35) return { bg: 'bg-orange-200', texto: 'text-orange-800', hex: '#fdba74' };
+  return { bg: 'bg-rose-200', texto: 'text-rose-800', hex: '#fda4af' };
 }
-function corDaCelula(proporcao: number | null) {
-  if (proporcao === null) return { bg: 'bg-slate-100', texto: 'text-slate-400' };
-  if (proporcao >= 1) return { bg: 'bg-esmeralda', texto: 'text-white' };
-  if (proporcao >= 0.85) return { bg: 'bg-esmeralda-light', texto: 'text-esmeralda-dark' };
-  if (proporcao >= 0.65) return { bg: 'bg-lime-200', texto: 'text-lime-900' };
-  if (proporcao >= 0.45) return { bg: 'bg-amber-200', texto: 'text-amber-900' };
-  if (proporcao >= 0.25) return { bg: 'bg-orange-300', texto: 'text-orange-950' };
-  return { bg: 'bg-red-400', texto: 'text-white' };
-}
+
+const textoTendencia: Record<string, string> = {
+  melhorando: '📈 Melhorando',
+  piorando: '📉 Piorando',
+  estavel: '➡️ Estável',
+};
+
+type SubAba = 'turno' | 'dia' | 'tendencia';
 
 export function MapaCoberturaPage() {
   const [equipeId, setEquipeId] = useState<string>('');
   const { equipes } = useEquipes();
-  const { turnos, periodos, carregando, erro, celula } = useMapaCobertura(equipeId || null);
-  const { dias, carregando: carregandoDias } = usePreenchimentoDias(equipeId || null);
-  const evolucao = (() => {
-    const porPeriodo = new Map<string, { dataInicio: string; vagas: number; preenchidas: number }>();
-    for (const dia of dias) {
-      const atual = porPeriodo.get(dia.periodoId) ?? {
-        dataInicio: dia.ehSabado ? dia.data : dia.data,
-        vagas: 0,
-        preenchidas: 0,
-      };
-      atual.vagas += dia.vagasTotais;
-      atual.preenchidas += dia.preenchidas;
-      if (dia.ehSabado) atual.dataInicio = dia.data;
-      porPeriodo.set(dia.periodoId, atual);
-    }
-    return Array.from(porPeriodo.entries())
-      .map(([periodoId, v]) => ({
-        periodoId,
-        dataInicio: v.dataInicio,
-        percentual: v.vagas > 0 ? v.preenchidas / v.vagas : 0,
-      }))
-      .sort((a, b) => a.dataInicio.localeCompare(b.dataInicio));
-  })();
-
-  const mediasPorTurno = useMemo(() => {
-    const mapa = new Map<string, number | null>();
-    for (const turno of turnos) {
-      const proporcoes: number[] = [];
-      for (const p of periodos) {
-        const c = celula(p.id, turno.id);
-        if (c && c.vagas > 0) proporcoes.push(c.disponiveis / c.vagas);
-      }
-      mapa.set(
-        turno.id,
-        proporcoes.length > 0 ? proporcoes.reduce((a, b) => a + b, 0) / proporcoes.length : null
-      );
-    }
-    return mapa;
-  }, [turnos, periodos, celula]);
-
-  const turnoMaisFraco = useMemo(() => {
-    let pior: { nome: string; media: number } | null = null;
-    for (const turno of turnos) {
-      const media = mediasPorTurno.get(turno.id);
-      if (media === null || media === undefined) continue;
-      if (!pior || media < pior.media) pior = { nome: turno.nome, media };
-    }
-    return pior;
-  }, [turnos, mediasPorTurno]);
-
-  const turnoMaisForte = useMemo(() => {
-    let melhor: { nome: string; media: number } | null = null;
-    for (const turno of turnos) {
-      const media = mediasPorTurno.get(turno.id);
-      if (media === null || media === undefined) continue;
-      if (!melhor || media > melhor.media) melhor = { nome: turno.nome, media };
-    }
-    return melhor;
-  }, [turnos, mediasPorTurno]);
+  const { turnos, periodos, celula, dias, evolucao, resumo, carregando, erro } =
+    useAnalises(equipeId || null);
+  const [subAba, setSubAba] = useState<SubAba>('turno');
 
   return (
     <div>
@@ -110,10 +44,10 @@ export function MapaCoberturaPage() {
       )}
 
       <p className="font-mono text-xs font-medium uppercase tracking-widest text-ceruleo">
-        Mapa de cobertura
+        Análises
       </p>
       <h1 className="mt-1 font-display text-2xl font-semibold text-tinta">
-        Disponibilidade por turno ao longo do tempo
+        Cobertura de turnos ao longo do tempo
       </h1>
 
       <div className="mt-5 max-w-xs">
@@ -142,267 +76,276 @@ export function MapaCoberturaPage() {
         </div>
       ) : (
         <>
-          {/* Destaques rápidos */}
-          <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2">
-            {turnoMaisFraco && (
-              <div className="rounded-lg border border-red-200 bg-red-50 p-5">
-                <p className="text-xs font-medium uppercase tracking-wide text-red-600">
-                  🔴 Turno mais crítico
+          {/* Resumo automático */}
+          <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <div className="rounded-lg border border-slate-200 bg-white p-4">
+              <p className="text-xs font-medium uppercase tracking-wide text-slate-400">
+                Cobertura média geral
+              </p>
+              <p className="mt-1 font-display text-2xl font-semibold text-tinta">
+                {resumo.mediaGeral !== null ? `${Math.round(resumo.mediaGeral * 100)}%` : '—'}
+              </p>
+            </div>
+
+            <div className="rounded-lg border border-rose-200 bg-rose-50 p-4">
+              <p className="text-xs font-medium uppercase tracking-wide text-rose-600">
+                🔴 Turno mais crítico
+              </p>
+              <p className="mt-1 font-display text-lg font-semibold text-tinta">
+                {resumo.turnoMaisFraco?.nome ?? '—'}
+              </p>
+              {resumo.turnoMaisFraco && (
+                <p className="text-xs text-rose-700">
+                  {Math.round(resumo.turnoMaisFraco.media * 100)}% de média
                 </p>
-                <p className="mt-1 font-display text-xl font-semibold text-tinta">
-                  {turnoMaisFraco.nome}
+              )}
+            </div>
+
+            <div className="rounded-lg border border-esmeralda/30 bg-esmeralda-light p-4">
+              <p className="text-xs font-medium uppercase tracking-wide text-esmeralda-dark">
+                🟢 Turno mais forte
+              </p>
+              <p className="mt-1 font-display text-lg font-semibold text-tinta">
+                {resumo.turnoMaisForte?.nome ?? '—'}
+              </p>
+              {resumo.turnoMaisForte && (
+                <p className="text-xs text-esmeralda-dark">
+                  {Math.round(resumo.turnoMaisForte.media * 100)}% de média
                 </p>
-                <p className="mt-1 text-sm text-red-700">
-                  Média de {Math.round(turnoMaisFraco.media * 100)}% de cobertura
-                </p>
-              </div>
-            )}
-            {turnoMaisForte && (
-              <div className="rounded-lg border border-esmeralda/30 bg-esmeralda-light p-5">
-                <p className="text-xs font-medium uppercase tracking-wide text-esmeralda-dark">
-                  🟢 Turno mais forte
-                </p>
-                <p className="mt-1 font-display text-xl font-semibold text-tinta">
-                  {turnoMaisForte.nome}
-                </p>
-                <p className="mt-1 text-sm text-esmeralda-dark">
-                  Média de {Math.round(turnoMaisForte.media * 100)}% de cobertura
-                </p>
-              </div>
-            )}
+              )}
+            </div>
+
+            <div className="rounded-lg border border-slate-200 bg-white p-4">
+              <p className="text-xs font-medium uppercase tracking-wide text-slate-400">
+                Tendência recente
+              </p>
+              <p className="mt-1 font-display text-lg font-semibold text-tinta">
+                {resumo.tendencia ? textoTendencia[resumo.tendencia] : 'Poucos dados ainda'}
+              </p>
+            </div>
           </div>
 
-          {/* Mapa de calor */}
-          <div className="mt-6 overflow-x-auto rounded-lg border border-slate-200 bg-white p-5">
-            <div
-              className="grid gap-2"
-              style={{
-                gridTemplateColumns: `140px repeat(${periodos.length}, 90px) 100px`,
-              }}
-            >
-              {/* Cabeçalho */}
-              <div />
-              {periodos.map((p) => (
-                <div key={p.id} className="text-center">
-                  <p className="text-xs font-medium text-slate-400">
-                    {formatarData(p.data_inicio)}–{formatarData(p.data_fim)}
-                  </p>
-                </div>
-              ))}
-              <div className="text-center">
-                <p className="text-xs font-semibold text-tinta">Média</p>
-              </div>
+          {/* Sub-abas */}
+          <div className="mt-6 flex gap-1 border-b border-slate-200">
+            {(
+              [
+                { id: 'turno', rotulo: 'Por turno' },
+                { id: 'dia', rotulo: 'Por dia' },
+                { id: 'tendencia', rotulo: 'Tendência' },
+              ] as { id: SubAba; rotulo: string }[]
+            ).map((aba) => (
+              <button
+                key={aba.id}
+                onClick={() => setSubAba(aba.id)}
+                className={`border-b-2 px-4 py-2 text-sm font-medium transition ${
+                  subAba === aba.id
+                    ? 'border-esmeralda text-esmeralda-dark'
+                    : 'border-transparent text-slate-500 hover:text-tinta'
+                }`}
+              >
+                {aba.rotulo}
+              </button>
+            ))}
+          </div>
 
-              {/* Linhas por turno */}
-              {turnos.map((turno) => {
-                const cor = corTurno(turno.nome);
-                const media = mediasPorTurno.get(turno.id);
+          <div className="mt-4 rounded-lg border border-slate-200 bg-white p-5">
+            {/* ---- Por turno (mapa de calor) ---- */}
+            {subAba === 'turno' && (
+              <>
+                <p className="text-sm text-slate-500">
+                  Disponibilidade marcada em relação às vagas configuradas, por turno e por
+                  fim de semana.
+                </p>
+                <div className="mt-4 overflow-x-auto">
+                  <div
+                    className="grid gap-2"
+                    style={{ gridTemplateColumns: `140px repeat(${periodos.length}, 90px)` }}
+                  >
+                    <div />
+                    {periodos.map((p) => (
+                      <div key={p.id} className="text-center">
+                        <p className="whitespace-nowrap text-xs font-medium text-slate-400">
+                          {formatarDataCurta(p.data_inicio)}–{formatarDataCurta(p.data_fim)}
+                        </p>
+                      </div>
+                    ))}
 
-                return (
-                  <div key={turno.id} className="contents">
-                    <div className="flex items-center gap-2 py-1">
-                      <span className={`h-2.5 w-2.5 rounded-full ${cor.dot}`} />
-                      <span className="text-sm font-medium text-tinta">{turno.nome}</span>
-                    </div>
-
-                    {periodos.map((p) => {
-                      const c = celula(p.id, turno.id);
-                      const vagas = c?.vagas ?? 0;
-                      const disponiveis = c?.disponiveis ?? 0;
-                      const proporcao = vagas > 0 ? disponiveis / vagas : null;
-                      const { bg, texto } = corDaCelula(proporcao);
-
+                    {turnos.map((turno) => {
+                      const cor = corTurno(turno.nome);
                       return (
-                        <div
-                          key={p.id}
-                          className={`flex h-16 w-full flex-col items-center justify-center rounded-md ${bg} ${texto}`}
-                          title={`${disponiveis} disponíveis de ${vagas} vagas configuradas`}
-                        >
-                          <span className="text-base font-bold leading-none">
-                            {proporcao === null ? '—' : `${Math.round(proporcao * 100)}%`}
-                          </span>
-                          <span className="mt-1 text-[10px] font-medium leading-none opacity-80">
-                            {disponiveis}/{vagas}
-                          </span>
+                        <div key={turno.id} className="contents">
+                          <div className="flex items-center gap-2 py-1">
+                            <span className={`h-2.5 w-2.5 rounded-full ${cor.dot}`} />
+                            <span className="text-sm font-medium text-tinta">{turno.nome}</span>
+                          </div>
+                          {periodos.map((p) => {
+                            const c = celula(p.id, turno.id);
+                            const vagas = c?.vagas ?? 0;
+                            const disponiveis = c?.disponiveis ?? 0;
+                            const proporcao = vagas > 0 ? disponiveis / vagas : 0;
+                            const corCelula = corPorProporcao(proporcao);
+                            return (
+                              <div
+                                key={p.id}
+                                className={`flex h-14 w-full flex-col items-center justify-center rounded-md ${corCelula.bg} ${corCelula.texto}`}
+                                title={`${disponiveis} disponíveis de ${vagas} vagas`}
+                              >
+                                <span className="text-sm font-bold leading-none">
+                                  {vagas > 0 ? `${Math.round(proporcao * 100)}%` : '—'}
+                                </span>
+                                <span className="mt-1 text-[10px] font-medium leading-none opacity-80">
+                                  {disponiveis}/{vagas}
+                                </span>
+                              </div>
+                            );
+                          })}
                         </div>
                       );
                     })}
-
-                    <div className="flex h-16 flex-col items-center justify-center rounded-md border border-slate-200 bg-slate-50">
-                      <span className="text-base font-bold leading-none text-tinta">
-                        {media === null || media === undefined ? '—' : `${Math.round(media * 100)}%`}
-                      </span>
-                      <span className="mt-1 text-[10px] font-medium leading-none text-slate-400">
-                        média
-                      </span>
-                    </div>
                   </div>
-                );
-              })}
-            </div>
-
-                        {/* Legenda */}
-            <div className="mt-5 flex flex-wrap items-center gap-3 border-t border-slate-100 pt-4 text-xs text-slate-500">
-              <span className="flex items-center gap-1.5">
-                <span className="h-3 w-3 rounded bg-red-400" /> Crítico (&lt;25%)
-              </span>
-              <span className="flex items-center gap-1.5">
-                <span className="h-3 w-3 rounded bg-orange-300" /> Baixo (25–44%)
-              </span>
-              <span className="flex items-center gap-1.5">
-                <span className="h-3 w-3 rounded bg-amber-200" /> Atenção (45–64%)
-              </span>
-              <span className="flex items-center gap-1.5">
-                <span className="h-3 w-3 rounded bg-lime-200" /> Bom (65–84%)
-              </span>
-              <span className="flex items-center gap-1.5">
-                <span className="h-3 w-3 rounded bg-esmeralda-light" /> Ótimo (85–99%)
-              </span>
-              <span className="flex items-center gap-1.5">
-                <span className="h-3 w-3 rounded bg-esmeralda" /> Cheio (100%+)
-              </span>
-            </div>
-          </div>
-
-          {/* Preenchimento de vagas por dia */}
-          <div className="mt-6 rounded-lg border border-slate-200 bg-white p-5">
-            <p className="font-medium text-tinta">Preenchimento de vagas por dia</p>
-            <p className="mt-1 text-sm text-slate-500">
-              Quantas vagas foram efetivamente preenchidas em cada sábado e domingo,
-              em relação ao total de vagas configuradas.
-            </p>
-
-            {carregandoDias ? (
-              <p className="mt-4 text-sm text-slate-400">Carregando...</p>
-            ) : dias.length === 0 ? (
-              <p className="mt-4 text-sm text-slate-400">Sem dados suficientes ainda.</p>
-            ) : (
-                            <div className="mt-6 flex items-end gap-3 overflow-x-auto pb-2">
-                {dias.map((dia) => {
-                  const proporcao = dia.vagasTotais > 0 ? dia.preenchidas / dia.vagasTotais : 0;
-                  const alturaPercentual = Math.min(proporcao, 1) * 100;
-                  const cor = corDaBarraVertical(proporcao);
-
-                  return (
-                                                            <div
-                      key={`${dia.periodoId}-${dia.data}`}
-                      className="flex w-20 shrink-0 flex-col items-center"
-                    >
-                      <span className={`text-sm font-bold ${cor.texto}`}>
-                        {Math.round(proporcao * 100)}%
-                      </span>
-                      <div className="mt-1 flex h-32 w-full items-end rounded-md bg-slate-50">
-                        <div
-                          className={`w-full rounded-md transition-all ${cor.barra}`}
-                          style={{ height: `${Math.max(alturaPercentual, 4)}%` }}
-                          title={`${dia.preenchidas} de ${dia.vagasTotais} vagas preenchidas`}
-                        />
-                      </div>
-                                            <span className="mt-2 whitespace-nowrap text-xs font-medium text-tinta">
-                        {dia.ehSabado ? 'Sáb' : 'Dom'} {formatarDataCurta(dia.data)}
-                      </span>
-                                            <span className="mt-1 whitespace-nowrap rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-medium text-slate-500">
-                        {dia.preenchidas}/{dia.vagasTotais} vagas
-                      </span>
-                    </div>
-                  );
-                })}
-                            </div>
+                </div>
+              </>
             )}
 
-            <div className="mt-5 flex flex-wrap items-center gap-3 border-t border-slate-100 pt-4 text-xs text-slate-500">
-              <span className="flex items-center gap-1.5">
-                <span className="h-3 w-3 rounded bg-rose-200" /> Crítico
-              </span>
-              <span className="flex items-center gap-1.5">
-                <span className="h-3 w-3 rounded bg-orange-200" /> Baixo
-              </span>
-              <span className="flex items-center gap-1.5">
-                <span className="h-3 w-3 rounded bg-amber-200" /> Atenção
-              </span>
-              <span className="flex items-center gap-1.5">
-                <span className="h-3 w-3 rounded bg-lime-200" /> Bom
-              </span>
-              <span className="flex items-center gap-1.5">
-                <span className="h-3 w-3 rounded bg-emerald-200" /> Cheio ou acima
-              </span>
-            </div>
+            {/* ---- Por dia (barras) ---- */}
+            {subAba === 'dia' && (
+              <>
+                <p className="text-sm text-slate-500">
+                  Vagas efetivamente preenchidas em cada sábado e domingo, em relação ao
+                  total de vagas configuradas.
+                </p>
+                <div className="mt-6 flex items-end gap-3 overflow-x-auto pb-2">
+                  {dias.map((dia) => {
+                    const proporcao = dia.vagasTotais > 0 ? dia.preenchidas / dia.vagasTotais : 0;
+                    const alturaPercentual = Math.min(proporcao, 1) * 100;
+                    const cor = corPorProporcao(proporcao);
+                    return (
+                      <div
+                        key={`${dia.periodoId}-${dia.data}`}
+                        className="flex w-20 shrink-0 flex-col items-center"
+                      >
+                        <span className={`text-sm font-bold ${cor.texto}`}>
+                          {Math.round(proporcao * 100)}%
+                        </span>
+                        <div className="mt-1 flex h-32 w-full items-end rounded-md bg-slate-50">
+                          <div
+                            className={`w-full rounded-md transition-all ${cor.bg}`}
+                            style={{ height: `${Math.max(alturaPercentual, 4)}%` }}
+                            title={`${dia.preenchidas} de ${dia.vagasTotais} vagas preenchidas`}
+                          />
+                        </div>
+                        <span className="mt-2 whitespace-nowrap text-xs font-medium text-tinta">
+                          {dia.ehSabado ? 'Sáb' : 'Dom'} {formatarDataCurta(dia.data)}
+                        </span>
+                        <span className="mt-1 whitespace-nowrap rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-medium text-slate-500">
+                          {dia.preenchidas}/{dia.vagasTotais} vagas
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </>
+            )}
+
+            {/* ---- Tendência (linha) ---- */}
+            {subAba === 'tendencia' && (
+              <>
+                <p className="text-sm text-slate-500">
+                  Percentual geral de vagas preenchidas em cada fim de semana, para perceber
+                  se a cobertura está melhorando ou piorando com o tempo.
+                </p>
+                {evolucao.length < 2 ? (
+                  <p className="mt-4 text-sm text-slate-400">Ainda não há dados suficientes.</p>
+                ) : (
+                  (() => {
+                    const largura = Math.max(evolucao.length * 70, 280);
+                    const altura = 160;
+                    const margemBaixo = 24;
+                    const pontos = evolucao.map((e, i) => {
+                      const x =
+                        evolucao.length === 1
+                          ? largura / 2
+                          : (i / (evolucao.length - 1)) * (largura - 40) + 20;
+                      const y = altura - margemBaixo - e.percentual * (altura - margemBaixo - 10);
+                      return { ...e, x, y };
+                    });
+                    const linhaPath = pontos
+                      .map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x} ${p.y}`)
+                      .join(' ');
+
+                    return (
+                      <div className="mt-4 overflow-x-auto">
+                        <svg
+                          viewBox={`0 0 ${largura} ${altura}`}
+                          width={largura}
+                          height={altura}
+                          className="min-w-full"
+                        >
+                          {[0.25, 0.5, 0.75, 1].map((marca) => {
+                            const y = altura - margemBaixo - marca * (altura - margemBaixo - 10);
+                            return (
+                              <line
+                                key={marca}
+                                x1={0}
+                                x2={largura}
+                                y1={y}
+                                y2={y}
+                                stroke="#e2e8f0"
+                                strokeWidth={1}
+                              />
+                            );
+                          })}
+                          <path d={linhaPath} fill="none" stroke="#94a3b8" strokeWidth={2} />
+                          {pontos.map((p) => (
+                            <g key={p.periodoId}>
+                              <circle
+                                cx={p.x}
+                                cy={p.y}
+                                r={5}
+                                fill={corPorProporcao(p.percentual).hex}
+                                stroke="#475569"
+                                strokeWidth={1}
+                              >
+                                <title>{`${formatarData(p.dataInicio)}: ${Math.round(p.percentual * 100)}%`}</title>
+                              </circle>
+                              <text
+                                x={p.x}
+                                y={altura - 6}
+                                textAnchor="middle"
+                                fontSize="9"
+                                fill="#64748b"
+                              >
+                                {formatarDataCurta(p.dataInicio)}
+                              </text>
+                            </g>
+                          ))}
+                        </svg>
+                      </div>
+                    );
+                  })()
+                )}
+              </>
+            )}
           </div>
 
-          {/* Evolução ao longo do tempo */}
-          {evolucao.length >= 2 && (
-            <div className="mt-6 rounded-lg border border-slate-200 bg-white p-5">
-              <p className="font-medium text-tinta">Evolução da cobertura ao longo do tempo</p>
-              <p className="mt-1 text-sm text-slate-500">
-                Percentual geral de vagas preenchidas em cada fim de semana, para você
-                perceber se a cobertura está melhorando ou piorando com o tempo.
-              </p>
-
-              {(() => {
-                const largura = Math.max(evolucao.length * 70, 280);
-                const altura = 160;
-                const margemBaixo = 24;
-                const pontos = evolucao.map((e, i) => {
-                  const x =
-                    evolucao.length === 1
-                      ? largura / 2
-                      : (i / (evolucao.length - 1)) * (largura - 40) + 20;
-                  const y = (altura - margemBaixo) - e.percentual * (altura - margemBaixo - 10);
-                  return { ...e, x, y };
-                });
-
-                const linhaPath = pontos
-                  .map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x} ${p.y}`)
-                  .join(' ');
-
-                return (
-                  <div className="mt-4 overflow-x-auto">
-                    <svg
-                      viewBox={`0 0 ${largura} ${altura}`}
-                      width={largura}
-                      height={altura}
-                      className="min-w-full"
-                    >
-                      {/* Linhas guia horizontais (25/50/75/100%) */}
-                      {[0.25, 0.5, 0.75, 1].map((marca) => {
-                        const y = (altura - margemBaixo) - marca * (altura - margemBaixo - 10);
-                        return (
-                          <line
-                            key={marca}
-                            x1={0}
-                            x2={largura}
-                            y1={y}
-                            y2={y}
-                            stroke="#e2e8f0"
-                            strokeWidth={1}
-                          />
-                        );
-                      })}
-
-                      <path d={linhaPath} fill="none" stroke="#94a3b8" strokeWidth={2} />
-
-                      {pontos.map((p) => (
-                        <g key={p.periodoId}>
-                          <circle cx={p.x} cy={p.y} r={5} fill={corDoPonto(p.percentual)} stroke="#475569" strokeWidth={1}>
-                            <title>{`${formatarData(p.dataInicio)}: ${Math.round(p.percentual * 100)}%`}</title>
-                          </circle>
-                          <text
-                            x={p.x}
-                            y={altura - 6}
-                            textAnchor="middle"
-                            fontSize="9"
-                            fill="#64748b"
-                          >
-                            {formatarDataCurta(p.dataInicio)}
-                          </text>
-                        </g>
-                      ))}
-                    </svg>
-                  </div>
-                );
-              })()}
-            </div>
-          )}
+          {/* Legenda única */}
+          <div className="mt-4 flex flex-wrap items-center gap-3 text-xs text-slate-500">
+            <span className="flex items-center gap-1.5">
+              <span className="h-3 w-3 rounded bg-rose-200" /> Crítico (&lt;35%)
+            </span>
+            <span className="flex items-center gap-1.5">
+              <span className="h-3 w-3 rounded bg-orange-200" /> Baixo (35–59%)
+            </span>
+            <span className="flex items-center gap-1.5">
+              <span className="h-3 w-3 rounded bg-amber-200" /> Atenção (60–84%)
+            </span>
+            <span className="flex items-center gap-1.5">
+              <span className="h-3 w-3 rounded bg-lime-200" /> Bom (85–99%)
+            </span>
+            <span className="flex items-center gap-1.5">
+              <span className="h-3 w-3 rounded bg-emerald-200" /> Cheio ou acima
+            </span>
+          </div>
         </>
       )}
     </div>
