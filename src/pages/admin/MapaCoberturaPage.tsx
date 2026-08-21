@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useMapaCobertura } from '../../features/schedules/useMapaCobertura';
+import { usePreenchimentoDias } from '../../features/schedules/usePreenchimentoDias';
 import { useEquipes } from '../../features/teams/useEquipes';
 import { corTurno } from '../../lib/turnoColors';
 
@@ -9,6 +10,18 @@ function formatarData(data: string) {
 }
 
 // Escala de cor mais granular, do crítico ao excelente.
+function corDaBarraVertical(proporcao: number) {
+  if (proporcao >= 1) return 'bg-esmeralda';
+  if (proporcao >= 0.85) return 'bg-lime-400';
+  if (proporcao >= 0.6) return 'bg-amber-400';
+  if (proporcao >= 0.35) return 'bg-orange-400';
+  return 'bg-red-500';
+}
+
+function formatarDataCurta(data: string) {
+  const [, mes, dia] = data.split('-');
+  return `${dia}/${mes}`;
+}
 function corDaCelula(proporcao: number | null) {
   if (proporcao === null) return { bg: 'bg-slate-100', texto: 'text-slate-400' };
   if (proporcao >= 1) return { bg: 'bg-esmeralda', texto: 'text-white' };
@@ -23,6 +36,7 @@ export function MapaCoberturaPage() {
   const [equipeId, setEquipeId] = useState<string>('');
   const { equipes } = useEquipes();
   const { turnos, periodos, carregando, erro, celula } = useMapaCobertura(equipeId || null);
+  const { dias, carregando: carregandoDias } = usePreenchimentoDias(equipeId || null);
 
   const mediasPorTurno = useMemo(() => {
     const mapa = new Map<string, number | null>();
@@ -198,7 +212,7 @@ export function MapaCoberturaPage() {
               })}
             </div>
 
-            {/* Legenda */}
+                        {/* Legenda */}
             <div className="mt-5 flex flex-wrap items-center gap-3 border-t border-slate-100 pt-4 text-xs text-slate-500">
               <span className="flex items-center gap-1.5">
                 <span className="h-3 w-3 rounded bg-red-400" /> Crítico (&lt;25%)
@@ -219,6 +233,55 @@ export function MapaCoberturaPage() {
                 <span className="h-3 w-3 rounded bg-esmeralda" /> Cheio (100%+)
               </span>
             </div>
+          </div>
+
+          {/* Preenchimento de vagas por dia */}
+          <div className="mt-6 rounded-lg border border-slate-200 bg-white p-5">
+            <p className="font-medium text-tinta">Preenchimento de vagas por dia</p>
+            <p className="mt-1 text-sm text-slate-500">
+              Quantas vagas foram efetivamente preenchidas em cada sábado e domingo,
+              em relação ao total de vagas configuradas.
+            </p>
+
+            {carregandoDias ? (
+              <p className="mt-4 text-sm text-slate-400">Carregando...</p>
+            ) : dias.length === 0 ? (
+              <p className="mt-4 text-sm text-slate-400">Sem dados suficientes ainda.</p>
+            ) : (
+              <div className="mt-6 flex items-end gap-2 overflow-x-auto pb-2">
+                {dias.map((dia) => {
+                  const proporcao = dia.vagasTotais > 0 ? dia.preenchidas / dia.vagasTotais : 0;
+                  const alturaPercentual = Math.min(proporcao, 1) * 100;
+
+                  return (
+                    <div
+                      key={`${dia.periodoId}-${dia.data}`}
+                      className="flex w-16 shrink-0 flex-col items-center"
+                    >
+                      <span className="text-xs font-semibold text-tinta">
+                        {Math.round(proporcao * 100)}%
+                      </span>
+                      <div className="mt-1 flex h-32 w-full items-end rounded-md bg-slate-100">
+                        <div
+                          className={`w-full rounded-md transition-all ${corDaBarraVertical(proporcao)}`}
+                          style={{ height: `${Math.max(alturaPercentual, 4)}%` }}
+                          title={`${dia.preenchidas} de ${dia.vagasTotais} vagas preenchidas`}
+                        />
+                      </div>
+                      <span className="mt-1.5 text-[11px] font-medium text-slate-500">
+                        {dia.ehSabado ? 'Sáb' : 'Dom'}
+                      </span>
+                      <span className="text-[10px] text-slate-400">
+                        {formatarDataCurta(dia.data)}
+                      </span>
+                      <span className="text-[10px] text-slate-400">
+                        {dia.preenchidas}/{dia.vagasTotais}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
         </>
       )}
