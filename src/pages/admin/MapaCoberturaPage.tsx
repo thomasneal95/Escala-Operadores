@@ -11,12 +11,13 @@ function formatarData(data: string) {
 
 // Escala de cor mais granular, do crítico ao excelente.
 function corDaBarraVertical(proporcao: number) {
-  if (proporcao >= 1) return 'bg-esmeralda';
-  if (proporcao >= 0.85) return 'bg-lime-400';
-  if (proporcao >= 0.6) return 'bg-amber-400';
-  if (proporcao >= 0.35) return 'bg-orange-400';
-  return 'bg-red-500';
+  if (proporcao >= 1) return { barra: 'bg-emerald-200', texto: 'text-emerald-800' };
+  if (proporcao >= 0.85) return { barra: 'bg-lime-200', texto: 'text-lime-800' };
+  if (proporcao >= 0.6) return { barra: 'bg-amber-200', texto: 'text-amber-800' };
+  if (proporcao >= 0.35) return { barra: 'bg-orange-200', texto: 'text-orange-800' };
+  return { barra: 'bg-rose-200', texto: 'text-rose-800' };
 }
+
 
 function formatarDataCurta(data: string) {
   const [, mes, dia] = data.split('-');
@@ -248,40 +249,56 @@ export function MapaCoberturaPage() {
             ) : dias.length === 0 ? (
               <p className="mt-4 text-sm text-slate-400">Sem dados suficientes ainda.</p>
             ) : (
-              <div className="mt-6 flex items-end gap-2 overflow-x-auto pb-2">
+                            <div className="mt-6 flex items-end gap-3 overflow-x-auto pb-2">
                 {dias.map((dia) => {
                   const proporcao = dia.vagasTotais > 0 ? dia.preenchidas / dia.vagasTotais : 0;
                   const alturaPercentual = Math.min(proporcao, 1) * 100;
+                  const cor = corDaBarraVertical(proporcao);
 
                   return (
                     <div
                       key={`${dia.periodoId}-${dia.data}`}
                       className="flex w-16 shrink-0 flex-col items-center"
                     >
-                      <span className="text-xs font-semibold text-tinta">
+                      <span className={`text-sm font-bold ${cor.texto}`}>
                         {Math.round(proporcao * 100)}%
                       </span>
-                      <div className="mt-1 flex h-32 w-full items-end rounded-md bg-slate-100">
+                      <div className="mt-1 flex h-32 w-full items-end rounded-md bg-slate-50">
                         <div
-                          className={`w-full rounded-md transition-all ${corDaBarraVertical(proporcao)}`}
+                          className={`w-full rounded-md transition-all ${cor.barra}`}
                           style={{ height: `${Math.max(alturaPercentual, 4)}%` }}
                           title={`${dia.preenchidas} de ${dia.vagasTotais} vagas preenchidas`}
                         />
                       </div>
-                      <span className="mt-1.5 text-[11px] font-medium text-slate-500">
-                        {dia.ehSabado ? 'Sáb' : 'Dom'}
+                      <span className="mt-2 text-xs font-medium text-tinta">
+                        {dia.ehSabado ? 'Sáb' : 'Dom'} {formatarDataCurta(dia.data)}
                       </span>
-                      <span className="text-[10px] text-slate-400">
-                        {formatarDataCurta(dia.data)}
-                      </span>
-                      <span className="text-[10px] text-slate-400">
-                        {dia.preenchidas}/{dia.vagasTotais}
+                      <span className="mt-1 rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-medium text-slate-500">
+                        {dia.preenchidas}/{dia.vagasTotais} vagas
                       </span>
                     </div>
                   );
                 })}
               </div>
-            )}
+                        )}
+
+            <div className="mt-5 flex flex-wrap items-center gap-3 border-t border-slate-100 pt-4 text-xs text-slate-500">
+              <span className="flex items-center gap-1.5">
+                <span className="h-3 w-3 rounded bg-rose-200" /> Crítico
+              </span>
+              <span className="flex items-center gap-1.5">
+                <span className="h-3 w-3 rounded bg-orange-200" /> Baixo
+              </span>
+              <span className="flex items-center gap-1.5">
+                <span className="h-3 w-3 rounded bg-amber-200" /> Atenção
+              </span>
+              <span className="flex items-center gap-1.5">
+                <span className="h-3 w-3 rounded bg-lime-200" /> Bom
+              </span>
+              <span className="flex items-center gap-1.5">
+                <span className="h-3 w-3 rounded bg-emerald-200" /> Cheio ou acima
+              </span>
+            </div>
           </div>
         </>
       )}
