@@ -32,7 +32,7 @@ const abas: { id: Aba; rotulo: string }[] = [
   { id: 'turnos', rotulo: 'Turnos' },
   { id: 'colaboradores', rotulo: 'Colaboradores' },
   { id: 'trocas', rotulo: 'Trocas' },
-  { id: 'mapa', rotulo: 'Mapa' },
+    { id: 'mapa', rotulo: 'Análises' },
   { id: 'assiduidade', rotulo: 'Assiduidade' },
   { id: 'historico', rotulo: 'Histórico' },
   { id: 'acesso', rotulo: 'Acesso' },

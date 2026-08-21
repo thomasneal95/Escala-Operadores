@@ -23,6 +23,13 @@ function formatarDataCurta(data: string) {
   const [, mes, dia] = data.split('-');
   return `${dia}/${mes}`;
 }
+function corDoPonto(proporcao: number) {
+  if (proporcao >= 1) return '#6ee7b7'; // emerald-300
+  if (proporcao >= 0.85) return '#bef264'; // lime-300
+  if (proporcao >= 0.6) return '#fcd34d'; // amber-300
+  if (proporcao >= 0.35) return '#fdba74'; // orange-300
+  return '#fda4af'; // rose-300
+}
 function corDaCelula(proporcao: number | null) {
   if (proporcao === null) return { bg: 'bg-slate-100', texto: 'text-slate-400' };
   if (proporcao >= 1) return { bg: 'bg-esmeralda', texto: 'text-white' };
@@ -37,7 +44,27 @@ export function MapaCoberturaPage() {
   const [equipeId, setEquipeId] = useState<string>('');
   const { equipes } = useEquipes();
   const { turnos, periodos, carregando, erro, celula } = useMapaCobertura(equipeId || null);
-  const { dias, carregando: carregandoDias } = usePreenchimentoDias(equipeId || null);
+  const evolucao = (() => {
+    const porPeriodo = new Map<string, { dataInicio: string; vagas: number; preenchidas: number }>();
+    for (const dia of dias) {
+      const atual = porPeriodo.get(dia.periodoId) ?? {
+        dataInicio: dia.ehSabado ? dia.data : dia.data,
+        vagas: 0,
+        preenchidas: 0,
+      };
+      atual.vagas += dia.vagasTotais;
+      atual.preenchidas += dia.preenchidas;
+      if (dia.ehSabado) atual.dataInicio = dia.data;
+      porPeriodo.set(dia.periodoId, atual);
+    }
+    return Array.from(porPeriodo.entries())
+      .map(([periodoId, v]) => ({
+        periodoId,
+        dataInicio: v.dataInicio,
+        percentual: v.vagas > 0 ? v.preenchidas / v.vagas : 0,
+      }))
+      .sort((a, b) => a.dataInicio.localeCompare(b.dataInicio));
+  })();
 
   const mediasPorTurno = useMemo(() => {
     const mapa = new Map<string, number | null>();
@@ -279,8 +306,8 @@ export function MapaCoberturaPage() {
                     </div>
                   );
                 })}
-              </div>
-                        )}
+                            </div>
+            )}
 
             <div className="mt-5 flex flex-wrap items-center gap-3 border-t border-slate-100 pt-4 text-xs text-slate-500">
               <span className="flex items-center gap-1.5">
@@ -300,6 +327,81 @@ export function MapaCoberturaPage() {
               </span>
             </div>
           </div>
+
+          {/* Evolução ao longo do tempo */}
+          {evolucao.length >= 2 && (
+            <div className="mt-6 rounded-lg border border-slate-200 bg-white p-5">
+              <p className="font-medium text-tinta">Evolução da cobertura ao longo do tempo</p>
+              <p className="mt-1 text-sm text-slate-500">
+                Percentual geral de vagas preenchidas em cada fim de semana, para você
+                perceber se a cobertura está melhorando ou piorando com o tempo.
+              </p>
+
+              {(() => {
+                const largura = Math.max(evolucao.length * 70, 280);
+                const altura = 160;
+                const margemBaixo = 24;
+                const pontos = evolucao.map((e, i) => {
+                  const x =
+                    evolucao.length === 1
+                      ? largura / 2
+                      : (i / (evolucao.length - 1)) * (largura - 40) + 20;
+                  const y = (altura - margemBaixo) - e.percentual * (altura - margemBaixo - 10);
+                  return { ...e, x, y };
+                });
+
+                const linhaPath = pontos
+                  .map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x} ${p.y}`)
+                  .join(' ');
+
+                return (
+                  <div className="mt-4 overflow-x-auto">
+                    <svg
+                      viewBox={`0 0 ${largura} ${altura}`}
+                      width={largura}
+                      height={altura}
+                      className="min-w-full"
+                    >
+                      {/* Linhas guia horizontais (25/50/75/100%) */}
+                      {[0.25, 0.5, 0.75, 1].map((marca) => {
+                        const y = (altura - margemBaixo) - marca * (altura - margemBaixo - 10);
+                        return (
+                          <line
+                            key={marca}
+                            x1={0}
+                            x2={largura}
+                            y1={y}
+                            y2={y}
+                            stroke="#e2e8f0"
+                            strokeWidth={1}
+                          />
+                        );
+                      })}
+
+                      <path d={linhaPath} fill="none" stroke="#94a3b8" strokeWidth={2} />
+
+                      {pontos.map((p) => (
+                        <g key={p.periodoId}>
+                          <circle cx={p.x} cy={p.y} r={5} fill={corDoPonto(p.percentual)} stroke="#475569" strokeWidth={1}>
+                            <title>{`${formatarData(p.dataInicio)}: ${Math.round(p.percentual * 100)}%`}</title>
+                          </circle>
+                          <text
+                            x={p.x}
+                            y={altura - 6}
+                            textAnchor="middle"
+                            fontSize="9"
+                            fill="#64748b"
+                          >
+                            {formatarDataCurta(p.dataInicio)}
+                          </text>
+                        </g>
+                      ))}
+                    </svg>
+                  </div>
+                );
+              })()}
+            </div>
+          )}
         </>
       )}
     </div>
