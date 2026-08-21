@@ -44,6 +44,7 @@ export function MapaCoberturaPage() {
   const [equipeId, setEquipeId] = useState<string>('');
   const { equipes } = useEquipes();
   const { turnos, periodos, carregando, erro, celula } = useMapaCobertura(equipeId || null);
+  const { dias, carregando: carregandoDias } = usePreenchimentoDias(equipeId || null);
   const evolucao = (() => {
     const porPeriodo = new Map<string, { dataInicio: string; vagas: number; preenchidas: number }>();
     for (const dia of dias) {
