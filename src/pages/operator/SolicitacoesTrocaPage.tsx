@@ -189,7 +189,7 @@ export function SolicitacoesTrocaPage() {
               const cor = s.escalaOutraPessoa ? corTurno(s.escalaOutraPessoa.turno_nome_snapshot) : null;
 
               return (
-                              <div key={s.id} className="rounded-lg border border-slate-200 bg-white p-4">
+                                            <div key={s.id} className="rounded-lg border border-slate-200 bg-white p-4">
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <p className="text-sm text-slate-600">
                       <span className="font-medium text-tinta">{s.outraPessoaNome}</span> quer

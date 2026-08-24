@@ -197,71 +197,81 @@ export function HistoricoAdminPage() {
                                 <span className={`h-2 w-2 rounded-full ${cor.dot}`} />
                                 <p className="font-medium text-tinta">{nomeTurno}</p>
                               </div>
-                              <p className="font-mono text-xs text-slate-400">
+                                                           <p className="font-mono text-xs text-slate-400">
                                 {horario.turno_hora_inicio_snapshot.slice(0, 5)} –{' '}
                                 {horario.turno_hora_fim_snapshot.slice(0, 5)}
                               </p>
 
-                              <div className="mt-3 space-y-1">
-                                {escalasDoTurno
-                                  .slice()
-                                  .sort((a, b) =>
-                                    a.colaborador_nome.localeCompare(b.colaborador_nome)
-                                  )
-                                  .map((e) => {
-                                    const emEdicao =
-                                      editandoPresenca.has(e.id) || e.compareceu === null;
-
-                                    return (
-                                      <div
-                                        key={e.id}
-                                        className={`flex items-center justify-between rounded-md ${cor.bgLight} px-2 py-1 text-sm`}
-                                      >
-                                        <div className="flex flex-col leading-tight">
-                                          <span className="text-tinta">
-                                            {e.colaborador_nome}
-                                          </span>
-                                          <span className={`font-mono text-[11px] ${cor.text}`}>
-                                            {nomeDoDia(e.data, periodoSelecionado.data_inicio)}
-                                          </span>
-                                        </div>
-
-                                        {emEdicao ? (
-                                          <div className="flex items-center gap-1">
-                                            <button
-                                              onClick={() => handleMarcarPresenca(e.id, true)}
-                                              disabled={processando === e.id}
-                                              title="Confirmar que compareceu"
-                                              className="rounded bg-white/80 px-1.5 py-0.5 text-xs font-bold text-esmeralda-dark hover:bg-white"
-                                            >
-                                              ✓
-                                            </button>
-                                            <button
-                                              onClick={() => handleMarcarPresenca(e.id, false)}
-                                              disabled={processando === e.id}
-                                              title="Marcar que faltou"
-                                              className="rounded bg-white/80 px-1.5 py-0.5 text-xs font-bold text-red-600 hover:bg-white"
-                                            >
-                                              ×
-                                            </button>
-                                          </div>
-                                        ) : (
-                                          <button
-                                            onClick={() => alternarEdicao(e.id)}
-                                            title="Clique para corrigir"
-                                            className={`rounded-full px-2 py-0.5 text-xs font-bold ${
-                                              e.compareceu
-                                                ? 'bg-esmeralda text-white'
-                                                : 'bg-red-500 text-white'
-                                            }`}
-                                          >
-                                            {e.compareceu ? '✓' : '✗'}
-                                          </button>
-                                        )}
-                                      </div>
+                              {[periodoSelecionado.data_inicio, periodoSelecionado.data_fim].map(
+                                (dataDoDia) => {
+                                  const pessoasDesseDia = escalasDoTurno
+                                    .filter((e) => e.data === dataDoDia)
+                                    .slice()
+                                    .sort((a, b) =>
+                                      a.colaborador_nome.localeCompare(b.colaborador_nome)
                                     );
-                                  })}
-                              </div>
+
+                                  if (pessoasDesseDia.length === 0) return null;
+
+                                  return (
+                                    <div key={dataDoDia} className="mt-3">
+                                      <p
+                                        className={`text-[11px] font-semibold uppercase tracking-wide ${cor.text}`}
+                                      >
+                                        {nomeDoDia(dataDoDia, periodoSelecionado.data_inicio)}
+                                      </p>
+                                      <div className="mt-1.5 space-y-1">
+                                        {pessoasDesseDia.map((e) => {
+                                          const emEdicao =
+                                            editandoPresenca.has(e.id) || e.compareceu === null;
+                                          return (
+                                            <div
+                                              key={e.id}
+                                              className={`flex items-center justify-between rounded-md ${cor.bgLight} px-2 py-1 text-sm`}
+                                            >
+                                              <span className="text-tinta">
+                                                {e.colaborador_nome}
+                                              </span>
+                                              {emEdicao ? (
+                                                <div className="flex items-center gap-1">
+                                                  <button
+                                                    onClick={() => handleMarcarPresenca(e.id, true)}
+                                                    disabled={processando === e.id}
+                                                    title="Confirmar que compareceu"
+                                                    className="rounded bg-white/80 px-1.5 py-0.5 text-xs font-bold text-esmeralda-dark hover:bg-white"
+                                                  >
+                                                    ✓
+                                                  </button>
+                                                  <button
+                                                    onClick={() => handleMarcarPresenca(e.id, false)}
+                                                    disabled={processando === e.id}
+                                                    title="Marcar que faltou"
+                                                    className="rounded bg-white/80 px-1.5 py-0.5 text-xs font-bold text-red-600 hover:bg-white"
+                                                  >
+                                                    ×
+                                                  </button>
+                                                </div>
+                                              ) : (
+                                                <button
+                                                  onClick={() => alternarEdicao(e.id)}
+                                                  title="Clique para corrigir"
+                                                  className={`rounded-full px-2 py-0.5 text-xs font-bold ${
+                                                    e.compareceu
+                                                      ? 'bg-esmeralda text-white'
+                                                      : 'bg-red-500 text-white'
+                                                  }`}
+                                                >
+                                                  {e.compareceu ? '✓' : '✗'}
+                                                </button>
+                                              )}
+                                            </div>
+                                          );
+                                        })}
+                                      </div>
+                                    </div>
+                                  );
+                                }
+                              )}
                             </div>
                           );
                         })}
