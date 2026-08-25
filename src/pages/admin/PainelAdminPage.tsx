@@ -25,6 +25,24 @@ interface PainelAdminPageProps {
 }
 
 export function PainelAdminPage({ aoNavegar }: PainelAdminPageProps) {
+  async function testarComissionamento() {
+    const { supabase } = await import('../../lib/supabase/client');
+    const { data: sessionData } = await supabase.auth.getSession();
+    const resp = await fetch(
+      `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/calcular-comissionamento`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${sessionData.session?.access_token}`,
+        },
+        body: JSON.stringify({ inicio: '2026-08-15', fim: '2026-08-16' }),
+      }
+    );
+    const json = await resp.json();
+    console.log('RESULTADO COMISSIONAMENTO:', json);
+    alert(JSON.stringify(json, null, 2));
+  }
   const { dados, carregando, erro } = usePainelAdmin();
 
     if (carregando) {
@@ -58,8 +76,15 @@ export function PainelAdminPage({ aoNavegar }: PainelAdminPageProps) {
 
   const { periodoAtual } = dados;
 
-  return (
+    return (
     <div>
+      <button
+        onClick={testarComissionamento}
+        className="mb-4 rounded-md bg-purple-600 px-3 py-2 text-sm font-medium text-white"
+      >
+        🧪 Testar comissionamento (temporário)
+      </button>
+
       <p className="font-mono text-xs font-medium uppercase tracking-widest text-ceruleo">
         Painel
       </p>

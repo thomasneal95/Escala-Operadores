@@ -1,4 +1,5 @@
-const CHAVE = "int_518d903d07a471dca27c11b3f8d365a1bed7b831a51b686d2ed181971f60dce2";
+const CHAVE = "int_0b27e695b9e11e98cf31d29de58499ab390ef116d90ee0941f0f0692c5340906";
+const URL_BASE = "https://mypainel.site/api/integracao/apuracao/leads";
 
 interface Tentativa {
   descricao: string;
@@ -9,31 +10,35 @@ interface Tentativa {
 Deno.serve(async () => {
   const tentativas: Tentativa[] = [];
 
-  async function tentarPost(descricao: string, url: string) {
+  async function tentar(descricao: string, url: string) {
     try {
-      const resp = await fetch(url, {
-        method: "POST",
-        headers: {
-          "x-api-key": CHAVE,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          inicio: "2026-08-15",
-          fim: "2026-08-16",
-        }),
-      });
+      const resp = await fetch(url, { headers: { "x-api-key": CHAVE } });
       const texto = await resp.text();
-      tentativas.push({ descricao, status: resp.status, corpo: texto.slice(0, 800) });
+      tentativas.push({ descricao, status: resp.status, corpo: texto.slice(0, 1200) });
     } catch (e) {
       tentativas.push({ descricao, status: 0, corpo: `Erro de rede: ${e}` });
     }
   }
 
-  await tentarPost("POST admin/apuracao/leads", "https://mypainel.site/api/admin/apuracao/leads");
-  await tentarPost("POST admin/apuracao/vendedor", "https://mypainel.site/api/admin/apuracao/vendedor");
-  await tentarPost("POST admin/apuracao/operador", "https://mypainel.site/api/admin/apuracao/operador");
-  await tentarPost("POST admin/apuracao/atendente", "https://mypainel.site/api/admin/apuracao/atendente");
-  await tentarPost("POST admin/apuracao/conversoes", "https://mypainel.site/api/admin/apuracao/conversoes");
+  const inicio = "2026-08-15";
+  const fim = "2026-08-16";
+
+  await tentar(
+    "eixo=conversao",
+    `${URL_BASE}?inicio=${inicio}&fim=${fim}&eixo=conversao`
+  );
+  await tentar(
+    "eixo=data_conversao",
+    `${URL_BASE}?inicio=${inicio}&fim=${fim}&eixo=data_conversao`
+  );
+  await tentar(
+    "eixo=ftd",
+    `${URL_BASE}?inicio=${inicio}&fim=${fim}&eixo=ftd`
+  );
+  await tentar(
+    "so convertido=true",
+    `${URL_BASE}?inicio=${inicio}&fim=${fim}&convertido=true`
+  );
 
   return new Response(JSON.stringify(tentativas, null, 2), {
     headers: { "Content-Type": "application/json" },

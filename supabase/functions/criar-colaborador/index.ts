@@ -60,11 +60,12 @@ export default {
 
     const novoUserId = novoUsuario.user.id;
 
-    // 4. Cria o perfil.
+        // 4. Cria o perfil.
     const { error: erroPerfilNovo } = await ctx.supabaseAdmin.from("perfis").insert({
       id: novoUserId,
       papel: "colaborador",
       nome_completo: body.nome_completo,
+      email: body.email,
     });
 
     if (erroPerfilNovo) {
