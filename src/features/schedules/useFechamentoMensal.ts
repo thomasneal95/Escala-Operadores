@@ -30,6 +30,8 @@ interface RespostaFechamento {
     leadsSemColaboradorConhecido: LeadSemDono[];
     diasDeFimDeSemanaSemPresencaConfirmada: DiaSemPresenca[];
   };
+  origem: 'salvo' | 'recalculado';
+  calculadoEm: string | null;
 }
 
 export function useFechamentoMensal() {
@@ -38,10 +40,54 @@ export function useFechamentoMensal() {
   const [salvando, setSalvando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
 
-  async function calcular(mes: string) {
+  // Busca o que já está salvo no banco pra este mês (rápido, sem chamar a
+  // API externa). Usado ao abrir a tela ou trocar de mês.
+  async function carregarSalvo(mes: string) {
     setCarregando(true);
     setErro(null);
-    setDados(null);
+
+    const { data, error } = await supabase
+      .from('fechamentos_mensais')
+      .select(
+        'colaborador_id, nome_snapshot, auxilio, comissao_dia_semana, comissao_fim_semana, adiantamento, salario_total, total_leads_convertidos, calculado_em'
+      )
+      .eq('mes', mes)
+      .order('salario_total', { ascending: false });
+
+    setCarregando(false);
+
+    if (error) {
+      setErro('Não foi possível carregar o fechamento salvo.');
+      return;
+    }
+
+    if (!data || data.length === 0) {
+      setDados(null);
+      return;
+    }
+
+    setDados({
+      mes,
+      totalLeadsConvertidos: data[0]?.total_leads_convertidos ?? 0,
+      resultado: data.map((r) => ({
+        colaborador_id: r.colaborador_id,
+        nome: r.nome_snapshot,
+        auxilio: Number(r.auxilio),
+        comissaoDiaSemana: Number(r.comissao_dia_semana),
+        comissaoFimDeSemana: Number(r.comissao_fim_semana),
+        adiantamento: Number(r.adiantamento),
+        salarioTotal: Number(r.salario_total),
+      })),
+      avisos: { leadsSemColaboradorConhecido: [], diasDeFimDeSemanaSemPresencaConfirmada: [] },
+      origem: 'salvo',
+      calculadoEm: data[0]?.calculado_em ?? null,
+    });
+  }
+
+  // Recalcula de verdade, buscando os leads na API externa (mais lento).
+  async function recalcular(mes: string) {
+    setCarregando(true);
+    setErro(null);
 
     const { data, error } = await supabase.functions.invoke('calcular-fechamento-mensal', {
       body: { mes },
@@ -59,7 +105,7 @@ export function useFechamentoMensal() {
       return;
     }
 
-    setDados(data);
+    setDados({ ...data, origem: 'recalculado', calculadoEm: new Date().toISOString() });
   }
 
   async function salvarAdiantamento(colaboradorId: string, mes: string, valor: number) {
@@ -80,7 +126,16 @@ export function useFechamentoMensal() {
   async function salvarFechamento(
     mes: string,
     adminId: string,
-    itens: { colaboradorId: string; nome: string; auxilio: number; comissaoDiaSemana: number; comissaoFimDeSemana: number; adiantamento: number; salarioTotal: number }[]
+    totalLeadsConvertidos: number,
+    itens: {
+      colaboradorId: string;
+      nome: string;
+      auxilio: number;
+      comissaoDiaSemana: number;
+      comissaoFimDeSemana: number;
+      adiantamento: number;
+      salarioTotal: number;
+    }[]
   ) {
     setSalvando(true);
 
@@ -93,6 +148,7 @@ export function useFechamentoMensal() {
       comissao_fim_semana: item.comissaoFimDeSemana,
       adiantamento: item.adiantamento,
       salario_total: item.salarioTotal,
+      total_leads_convertidos: totalLeadsConvertidos,
       calculado_em: new Date().toISOString(),
       calculado_por: adminId,
     }));
@@ -107,5 +163,14 @@ export function useFechamentoMensal() {
     return { erro: null };
   }
 
-  return { dados, carregando, salvando, erro, calcular, salvarAdiantamento, salvarFechamento };
+  return {
+    dados,
+    carregando,
+    salvando,
+    erro,
+    carregarSalvo,
+    recalcular,
+    salvarAdiantamento,
+    salvarFechamento,
+  };
 }

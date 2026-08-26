@@ -158,13 +158,15 @@ export default {
       return colaboradorPorId.get(colaboradorId)?.equipe_id ?? null;
     }
 
-    // 4. Presenças confirmadas no mês (para dividir comissão de fim de semana).
+        // 4. Todas as escalas do mês (não só as confirmadas) — precisamos
+    // saber quem foi confirmado (compareceu=true), quem foi confirmado
+    // como falta (compareceu=false) e quem nunca teve presença
+    // confirmada (compareceu=null, comum em dados anteriores ao sistema).
     const { data: escalasData, error: erroEscalas } = await ctx.supabaseAdmin
       .from("escalas")
       .select("colaborador_id, data, compareceu")
       .gte("data", mesInicio)
-      .lte("data", mesFim)
-      .eq("compareceu", true);
+      .lte("data", mesFim);
 
     if (erroEscalas) {
       return Response.json({ erro: "Não foi possível carregar as presenças confirmadas." }, { status: 500 });
@@ -177,7 +179,7 @@ export default {
     const contagemDiaSemanaPorEquipeEDia = new Map<string, number>(); // "equipeId|data"
     const contagemFimDeSemanaPorEquipeEDia = new Map<string, number>();
     const primeiraConversaoNoMes = new Map<string, string>(); // colaborador_id -> data
-
+    const colaboradoresComLeadNoDia = new Map<string, Set<string>>(); // "data" -> Set(colaborador_id)
     for (const lead of leadsConvertidos) {
       const emailLead = lead.email_operador?.toLowerCase().trim();
       const colaborador = emailLead ? colaboradorPorEmail.get(emailLead) : undefined;
@@ -201,8 +203,11 @@ export default {
       const ehFimDeSemana = diaDaSemana === 0 || diaDaSemana === 6;
       const chave = `${equipeDoDia}|${dataFormatada}`;
 
-      if (ehFimDeSemana) {
+            if (ehFimDeSemana) {
         contagemFimDeSemanaPorEquipeEDia.set(chave, (contagemFimDeSemanaPorEquipeEDia.get(chave) ?? 0) + 1);
+        const conjuntoDoDia = colaboradoresComLeadNoDia.get(dataFormatada) ?? new Set<string>();
+        conjuntoDoDia.add(colaborador.id);
+        colaboradoresComLeadNoDia.set(dataFormatada, conjuntoDoDia);
       } else {
         contagemDiaSemanaPorEquipeEDia.set(chave, (contagemDiaSemanaPorEquipeEDia.get(chave) ?? 0) + 1);
       }
@@ -231,14 +236,41 @@ export default {
       for (const equipeId of equipesDoDia) {
         const chave = `${equipeId}|${dia}`;
 
-        if (ehFimDeSemana) {
+                if (ehFimDeSemana) {
           const quantidadeLeads = contagemFimDeSemanaPorEquipeEDia.get(chave);
           if (!quantidadeLeads) continue;
 
-          const presentes = colaboradores.filter((c) => {
+          // Prioridade 1: quem teve presença explicitamente confirmada.
+          let presentes = colaboradores.filter((c) => {
             if (equipeVigenteEm(c.id, dia) !== equipeId) return false;
-            return (escalasData ?? []).some((e) => e.colaborador_id === c.id && e.data === dia);
+            return (escalasData ?? []).some(
+              (e) => e.colaborador_id === c.id && e.data === dia && e.compareceu === true
+            );
           });
+
+                    // Prioridade 2 (só se ninguém tiver confirmação nenhuma): usa
+          // quem foi escalado sem confirmação (compareceu = null) como
+          // aproximação — útil para períodos anteriores ao sistema.
+          if (presentes.length === 0) {
+            presentes = colaboradores.filter((c) => {
+              if (equipeVigenteEm(c.id, dia) !== equipeId) return false;
+              return (escalasData ?? []).some(
+                (e) => e.colaborador_id === c.id && e.data === dia && e.compareceu === null
+              );
+            });
+          }
+
+          // Prioridade 3 (só se não existir NENHUM registro de escala pra
+          // esse dia): usa quem converteu pelo menos 1 lead nesse dia como
+          // prova de que trabalhou — necessário para dados anteriores ao
+          // sistema, quando nem a escala foi registrada.
+          if (presentes.length === 0) {
+            const comLeadNesseDia = colaboradoresComLeadNoDia.get(dia) ?? new Set<string>();
+            presentes = colaboradores.filter((c) => {
+              if (equipeVigenteEm(c.id, dia) !== equipeId) return false;
+              return comLeadNesseDia.has(c.id);
+            });
+          }
 
           if (presentes.length === 0) {
             diasDeFimDeSemanaSemPresencaConfirmada.push({ equipeId, data: dia, leads: quantidadeLeads });
