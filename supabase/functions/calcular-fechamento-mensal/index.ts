@@ -184,7 +184,8 @@ export default {
     const contagemFimDeSemanaPorEquipeEDia = new Map<string, number>();
     const primeiraConversaoNoMes = new Map<string, string>(); // colaborador_id -> data
     const colaboradoresComLeadNoDia = new Map<string, Set<string>>(); // "data" -> Set(colaborador_id)
-    const comissaoIndividualPorColaborador = new Map<string, number>(); // colaborador_id -> valor
+    const comissaoDiaSemanaIndividual = new Map<string, number>(); // colaborador_id -> valor
+    const comissaoFimDeSemanaIndividual = new Map<string, number>(); // colaborador_id -> valor
     const VALOR_INDIVIDUAL = 2;
     for (const lead of leadsConvertidos) {
       const emailLead = lead.email_operador?.toLowerCase().trim();
@@ -195,15 +196,16 @@ export default {
         continue;
       }
 
-            const { dataFormatada } = dataLocalEDiaDaSemana(lead.data_conversao);
+                  const { dataFormatada, diaDaSemana } = dataLocalEDiaDaSemana(lead.data_conversao);
 
-      // Comissionamento individual: valor fixo por lead, sem divisão e
-      // sem distinção de dia. Não entra em nenhuma lógica de equipe.
+      // Comissionamento individual: valor fixo por lead (mesmo valor em
+      // qualquer dia), sem dividir com ninguém e sem entrar na lógica de
+      // equipe — mas ainda soma nas colunas normais (dia de semana / fim
+      // de semana), conforme o dia em que o lead converteu.
       if (colaborador.comissionamentoIndividual) {
-        comissaoIndividualPorColaborador.set(
-          colaborador.id,
-          (comissaoIndividualPorColaborador.get(colaborador.id) ?? 0) + VALOR_INDIVIDUAL
-        );
+        const ehFimDeSemanaIndividual = diaDaSemana === 0 || diaDaSemana === 6;
+        const mapa = ehFimDeSemanaIndividual ? comissaoFimDeSemanaIndividual : comissaoDiaSemanaIndividual;
+        mapa.set(colaborador.id, (mapa.get(colaborador.id) ?? 0) + VALOR_INDIVIDUAL);
         continue;
       }
 
@@ -346,18 +348,22 @@ export default {
       (adiantamentosData ?? []).map((a) => [a.colaborador_id, Number(a.valor)])
     );
 
-        // 9. Monta o resultado final por colaborador.
+            // 9. Monta o resultado final por colaborador.
     const resultado = colaboradores
       .map((c) => {
         const auxilio = Math.round(auxilioProporcional(c) * 100) / 100;
-        const comissaoDiaSemana = Math.round((comissaoDiaSemanaPorColaborador.get(c.id) ?? 0) * 100) / 100;
-        const comissaoFimDeSemana = Math.round((comissaoFimDeSemanaPorColaborador.get(c.id) ?? 0) * 100) / 100;
-        const comissaoIndividual = Math.round((comissaoIndividualPorColaborador.get(c.id) ?? 0) * 100) / 100;
+        const comissaoDiaSemana =
+          Math.round(
+            ((comissaoDiaSemanaPorColaborador.get(c.id) ?? 0) + (comissaoDiaSemanaIndividual.get(c.id) ?? 0)) * 100
+          ) / 100;
+        const comissaoFimDeSemana =
+          Math.round(
+            ((comissaoFimDeSemanaPorColaborador.get(c.id) ?? 0) + (comissaoFimDeSemanaIndividual.get(c.id) ?? 0)) *
+              100
+          ) / 100;
         const adiantamento = adiantamentoPorColaborador.get(c.id) ?? 0;
         const salarioTotal =
-          Math.round(
-            (auxilio + comissaoDiaSemana + comissaoFimDeSemana + comissaoIndividual - adiantamento) * 100
-          ) / 100;
+          Math.round((auxilio + comissaoDiaSemana + comissaoFimDeSemana - adiantamento) * 100) / 100;
 
         return {
           colaborador_id: c.id,
@@ -365,14 +371,11 @@ export default {
           auxilio,
           comissaoDiaSemana,
           comissaoFimDeSemana,
-          comissaoIndividual,
           adiantamento,
           salarioTotal,
         };
       })
-      .filter(
-        (r) => r.auxilio > 0 || r.comissaoDiaSemana > 0 || r.comissaoFimDeSemana > 0 || r.comissaoIndividual > 0
-      )
+      .filter((r) => r.auxilio > 0 || r.comissaoDiaSemana > 0 || r.comissaoFimDeSemana > 0)
       .sort((a, b) => b.salarioTotal - a.salarioTotal);
 
     return Response.json({
