@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react';
+﻿import { useState, type FormEvent } from 'react';
 import { SkeletonLinhaTabela } from '../../components/Skeleton';
 import { useCriarColaborador } from '../../features/employees/useCriarColaborador';
 import { useColaboradores } from '../../features/employees/useColaboradores';
@@ -33,10 +33,11 @@ interface DadosEdicao {
   matricula: string;
   turno_semana_id: string;
   data_admissao: string;
+  auxilio_mensal: string;
 }
 
 function formatarDataExibicao(data: string | null) {
-  if (!data) return '—';
+  if (!data) return 'â€”';
   const [ano, mes, dia] = data.split('-');
   return `${dia}/${mes}/${ano}`;
 }
@@ -67,6 +68,7 @@ export function ColaboradoresPage() {
     matricula: '',
     turno_semana_id: '',
     data_admissao: '',
+    auxilio_mensal: '400',
   });
 
   const [erroLinha, setErroLinha] = useState<Record<string, string>>({});
@@ -78,8 +80,8 @@ export function ColaboradoresPage() {
   );
 
   function nomeTurnoPorId(turnoId: string | null) {
-    if (!turnoId) return '—';
-    return turnos.find((t) => t.id === turnoId)?.nome ?? '—';
+    if (!turnoId) return 'â€”';
+    return turnos.find((t) => t.id === turnoId)?.nome ?? 'â€”';
   }
 
   async function handleCriar(event: FormEvent) {
@@ -108,13 +110,14 @@ export function ColaboradoresPage() {
     await recarregar();
   }
 
-  function iniciarEdicao(colaborador: {
+    function iniciarEdicao(colaborador: {
     id: string;
     nome_completo: string;
     telefone: string | null;
     matricula: string | null;
     turno_semana_id: string | null;
     data_admissao: string | null;
+    auxilio_mensal: number;
   }) {
     setEditandoId(colaborador.id);
     setDadosEdicao({
@@ -123,18 +126,20 @@ export function ColaboradoresPage() {
       matricula: colaborador.matricula ?? '',
       turno_semana_id: colaborador.turno_semana_id ?? '',
       data_admissao: colaborador.data_admissao ?? '',
+      auxilio_mensal: String(colaborador.auxilio_mensal),
     });
   }
 
   async function salvarEdicao(colaboradorId: string, perfilId: string) {
     setErroLinha((atual) => ({ ...atual, [colaboradorId]: '' }));
 
-    const resultado = await atualizarCadastro(colaboradorId, perfilId, {
+        const resultado = await atualizarCadastro(colaboradorId, perfilId, {
       nome_completo: dadosEdicao.nome_completo,
       telefone: dadosEdicao.telefone || null,
       matricula: dadosEdicao.matricula || null,
       turno_semana_id: dadosEdicao.turno_semana_id || null,
       data_admissao: dadosEdicao.data_admissao || null,
+      auxilio_mensal: Number(dadosEdicao.auxilio_mensal) || 0,
     });
 
     if (resultado.erro) {
@@ -182,7 +187,7 @@ export function ColaboradoresPage() {
               value={form.senha}
               onChange={(e) => setForm({ ...form, senha: e.target.value })}
               className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-tinta focus:border-esmeralda focus:outline-none focus:ring-1 focus:ring-esmeralda"
-              placeholder="mín. 6 caracteres"
+              placeholder="mÃ­n. 6 caracteres"
             />
           </div>
 
@@ -213,7 +218,7 @@ export function ColaboradoresPage() {
               onChange={(e) => setForm({ ...form, turno_semana_id: e.target.value })}
               className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-tinta focus:border-esmeralda focus:outline-none focus:ring-1 focus:ring-esmeralda"
             >
-              <option value="">Não informado</option>
+              <option value="">NÃ£o informado</option>
               {turnos.map((t) => (
                 <option key={t.id} value={t.id}>
                   {t.nome}
@@ -221,13 +226,13 @@ export function ColaboradoresPage() {
               ))}
             </select>
             <p className="mt-1 text-xs text-slate-400">
-              Turno que a pessoa trabalha durante a semana (usado na escala automática).
+              Turno que a pessoa trabalha durante a semana (usado na escala automÃ¡tica).
             </p>
           </div>
 
           <div>
             <label className="block text-sm font-medium text-slate-700">
-              Data de admissão (opcional)
+              Data de admissÃ£o (opcional)
             </label>
             <input
               type="date"
@@ -236,7 +241,7 @@ export function ColaboradoresPage() {
               className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-tinta focus:border-esmeralda focus:outline-none focus:ring-1 focus:ring-esmeralda"
             />
             <p className="mt-1 text-xs text-slate-400">
-              Usada para calcular a assiduidade corretamente a partir da contratação.
+              Usada para calcular a assiduidade corretamente a partir da contrataÃ§Ã£o.
             </p>
           </div>
 
@@ -251,7 +256,7 @@ export function ColaboradoresPage() {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-slate-700">Matrícula (opcional)</label>
+            <label className="block text-sm font-medium text-slate-700">MatrÃ­cula (opcional)</label>
             <input
               type="text"
               value={form.matricula}
@@ -304,12 +309,12 @@ export function ColaboradoresPage() {
                 <th className="px-4 py-3 font-medium">Turno semana</th>
                 <th className="px-4 py-3 font-medium">Telefone</th>
                 <th className="px-4 py-3 font-medium">Status</th>
-                <th className="px-4 py-3 font-medium">Ações</th>
+                <th className="px-4 py-3 font-medium">AÃ§Ãµes</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
               {[0, 1, 2, 3, 4].map((i) => (
-                <SkeletonLinhaTabela key={i} colunas={6} />
+                                <SkeletonLinhaTabela key={i} colunas={7} />
               ))}
             </tbody>
           </table>
@@ -320,10 +325,11 @@ export function ColaboradoresPage() {
                 <th className="px-4 py-3 font-medium">Nome</th>
                 <th className="px-4 py-3 font-medium">Equipe</th>
                 <th className="px-4 py-3 font-medium">Turno semana</th>
-                <th className="px-4 py-3 font-medium">Admissão</th>
+                <th className="px-4 py-3 font-medium">AdmissÃ£o</th>
+                <th className="px-4 py-3 font-medium">AuxÃ­lio</th>
                 <th className="px-4 py-3 font-medium">Telefone</th>
                 <th className="px-4 py-3 font-medium">Status</th>
-                <th className="px-4 py-3 font-medium">Ações</th>
+                <th className="px-4 py-3 font-medium">AÃ§Ãµes</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -372,7 +378,7 @@ export function ColaboradoresPage() {
                           }
                           className="rounded-md border border-slate-300 px-2 py-1 text-sm"
                         >
-                          <option value="">Não informado</option>
+                          <option value="">NÃ£o informado</option>
                           {turnos.map((t) => (
                             <option key={t.id} value={t.id}>
                               {t.nome}
@@ -395,8 +401,23 @@ export function ColaboradoresPage() {
                           }
                           className="rounded-md border border-slate-300 px-2 py-1 font-sans text-sm"
                         />
-                      ) : (
+                                            ) : (
                         formatarDataExibicao(colaborador.data_admissao)
+                      )}
+                    </td>
+                    <td className="px-4 py-3 font-mono text-slate-500">
+                      {emEdicao ? (
+                        <input
+                          type="number"
+                          step="0.01"
+                          value={dadosEdicao.auxilio_mensal}
+                          onChange={(e) =>
+                            setDadosEdicao({ ...dadosEdicao, auxilio_mensal: e.target.value })
+                          }
+                          className="w-24 rounded-md border border-slate-300 px-2 py-1 font-sans text-sm"
+                        />
+                      ) : (
+                        `US$ ${colaborador.auxilio_mensal.toFixed(2)}`
                       )}
                     </td>
                     <td className="px-4 py-3 font-mono text-slate-500">
@@ -411,7 +432,7 @@ export function ColaboradoresPage() {
                           placeholder="Telefone"
                         />
                       ) : (
-                        colaborador.telefone ?? '—'
+                        colaborador.telefone ?? 'â€”'
                       )}
                     </td>
                     <td className="px-4 py-3">
@@ -435,7 +456,7 @@ export function ColaboradoresPage() {
                               setDadosEdicao({ ...dadosEdicao, matricula: e.target.value })
                             }
                             className="w-28 rounded-md border border-slate-300 px-2 py-1 text-sm"
-                            placeholder="Matrícula"
+                            placeholder="MatrÃ­cula"
                           />
                           <button
                             onClick={() => salvarEdicao(colaborador.id, colaborador.perfil_id)}
@@ -491,3 +512,5 @@ export function ColaboradoresPage() {
     </div>
   );
 }
+
+

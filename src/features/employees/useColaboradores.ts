@@ -11,6 +11,7 @@ interface ColaboradorLista {
   telefone: string | null;
   matricula: string | null;
   data_admissao: string | null;
+  auxilio_mensal: number;
   ativo: boolean;
 }
 
@@ -20,6 +21,7 @@ interface DadosCadastro {
   matricula: string | null;
   turno_semana_id: string | null;
   data_admissao: string | null;
+  auxilio_mensal: number;
 }
 
 export function useColaboradores() {
@@ -32,10 +34,10 @@ export function useColaboradores() {
     setCarregando(true);
     setErro(null);
 
-            const { data, error } = await supabase
+                    const { data, error } = await supabase
       .from('colaboradores')
       .select(
-        'id, perfil_id, equipe_id, turno_semana_id, telefone, matricula, data_admissao, ativo, perfis(nome_completo, papel), equipes(nome)'
+        'id, perfil_id, equipe_id, turno_semana_id, telefone, matricula, data_admissao, auxilio_mensal, ativo, perfis(nome_completo, papel), equipes(nome)'
       );
 
     if (error) {
@@ -50,7 +52,7 @@ export function useColaboradores() {
       return perfil?.papel !== 'administrador';
     });
 
-        const formatados: ColaboradorLista[] = semAdmin.map((c) => {
+            const formatados: ColaboradorLista[] = semAdmin.map((c) => {
       const perfil = c.perfis as unknown as { nome_completo: string } | null;
       const equipe = c.equipes as unknown as { nome: string } | null;
       return {
@@ -63,6 +65,7 @@ export function useColaboradores() {
         telefone: c.telefone,
         matricula: c.matricula,
         data_admissao: c.data_admissao,
+        auxilio_mensal: c.auxilio_mensal,
         ativo: c.ativo,
       };
     });
@@ -76,8 +79,28 @@ export function useColaboradores() {
     carregar();
   }, [carregar]);
 
-  async function atualizarEquipe(id: string, equipeId: string | null) {
+    async function atualizarEquipe(id: string, equipeId: string | null) {
     setProcessando(true);
+
+    const hoje = new Date().toISOString().slice(0, 10);
+
+    // Fecha o registro de vigência de equipe atual (se houver um em aberto).
+    await supabase
+      .from('historico_equipe')
+      .update({ valido_ate: hoje })
+      .eq('colaborador_id', id)
+      .is('valido_ate', null);
+
+    // Abre um novo registro de vigência, se uma equipe foi escolhida.
+    if (equipeId) {
+      await supabase.from('historico_equipe').insert({
+        colaborador_id: id,
+        equipe_id: equipeId,
+        valido_de: hoje,
+        valido_ate: null,
+      });
+    }
+
     const { error } = await supabase
       .from('colaboradores')
       .update({ equipe_id: equipeId })
@@ -117,13 +140,14 @@ export function useColaboradores() {
       return { erro: 'Não foi possível atualizar o nome.' };
     }
 
-       const { error: erroColaborador } = await supabase
+           const { error: erroColaborador } = await supabase
       .from('colaboradores')
       .update({
         telefone: dados.telefone,
         matricula: dados.matricula,
         turno_semana_id: dados.turno_semana_id,
         data_admissao: dados.data_admissao,
+        auxilio_mensal: dados.auxilio_mensal,
       })
       .eq('id', colaboradorId);
 
