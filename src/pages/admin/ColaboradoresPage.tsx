@@ -37,7 +37,7 @@ interface DadosEdicao {
 }
 
 function formatarDataExibicao(data: string | null) {
-  if (!data) return '�?"';
+  if (!data) return '—';
   const [ano, mes, dia] = data.split('-');
   return `${dia}/${mes}/${ano}`;
 }
@@ -80,7 +80,7 @@ export function ColaboradoresPage() {
   );
 
   function nomeTurnoPorId(turnoId: string | null) {
-    if (!turnoId) return '�?"';
+    if (!turnoId) return '—';
     return turnos.find((t) => t.id === turnoId)?.nome ?? '�?"';
   }
 
@@ -391,7 +391,7 @@ export function ColaboradoresPage() {
                         </span>
                       )}
                     </td>
-                    <td className="px-4 py-3 font-mono text-slate-500">
+                                        <td className="whitespace-nowrap px-4 py-3 font-mono text-slate-500">
                       {emEdicao ? (
                         <input
                           type="date"
@@ -401,11 +401,11 @@ export function ColaboradoresPage() {
                           }
                           className="rounded-md border border-slate-300 px-2 py-1 font-sans text-sm"
                         />
-                                            ) : (
+                      ) : (
                         formatarDataExibicao(colaborador.data_admissao)
                       )}
                     </td>
-                    <td className="px-4 py-3 font-mono text-slate-500">
+                    <td className="whitespace-nowrap px-4 py-3 font-mono text-slate-500">
                       {emEdicao ? (
                         <input
                           type="number"
@@ -420,7 +420,7 @@ export function ColaboradoresPage() {
                         `US$ ${colaborador.auxilio_mensal.toFixed(2)}`
                       )}
                     </td>
-                    <td className="px-4 py-3 font-mono text-slate-500">
+                                        <td className="whitespace-nowrap px-4 py-3 font-mono text-slate-500">
                       {emEdicao ? (
                         <input
                           type="text"
@@ -428,11 +428,11 @@ export function ColaboradoresPage() {
                           onChange={(e) =>
                             setDadosEdicao({ ...dadosEdicao, telefone: e.target.value })
                           }
-                          className="w-full rounded-md border border-slate-300 px-2 py-1 font-sans"
+                          className="w-32 rounded-md border border-slate-300 px-2 py-1 font-sans"
                           placeholder="Telefone"
                         />
                       ) : (
-                        colaborador.telefone ?? '�?"'
+                        colaborador.telefone ?? '—'
                       )}
                     </td>
                     <td className="px-4 py-3">
@@ -512,6 +512,9 @@ export function ColaboradoresPage() {
     </div>
   );
 }
+
+
+
 
 
 
