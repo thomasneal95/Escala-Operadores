@@ -37,7 +37,7 @@ interface DadosEdicao {
 }
 
 function formatarDataExibicao(data: string | null) {
-  if (!data) return 'â€”';
+  if (!data) return '�?"';
   const [ano, mes, dia] = data.split('-');
   return `${dia}/${mes}/${ano}`;
 }
@@ -80,8 +80,8 @@ export function ColaboradoresPage() {
   );
 
   function nomeTurnoPorId(turnoId: string | null) {
-    if (!turnoId) return 'â€”';
-    return turnos.find((t) => t.id === turnoId)?.nome ?? 'â€”';
+    if (!turnoId) return '�?"';
+    return turnos.find((t) => t.id === turnoId)?.nome ?? '�?"';
   }
 
   async function handleCriar(event: FormEvent) {
@@ -187,7 +187,7 @@ export function ColaboradoresPage() {
               value={form.senha}
               onChange={(e) => setForm({ ...form, senha: e.target.value })}
               className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-tinta focus:border-esmeralda focus:outline-none focus:ring-1 focus:ring-esmeralda"
-              placeholder="mÃ­n. 6 caracteres"
+              placeholder="mín. 6 caracteres"
             />
           </div>
 
@@ -218,7 +218,7 @@ export function ColaboradoresPage() {
               onChange={(e) => setForm({ ...form, turno_semana_id: e.target.value })}
               className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-tinta focus:border-esmeralda focus:outline-none focus:ring-1 focus:ring-esmeralda"
             >
-              <option value="">NÃ£o informado</option>
+              <option value="">Não informado</option>
               {turnos.map((t) => (
                 <option key={t.id} value={t.id}>
                   {t.nome}
@@ -226,13 +226,13 @@ export function ColaboradoresPage() {
               ))}
             </select>
             <p className="mt-1 text-xs text-slate-400">
-              Turno que a pessoa trabalha durante a semana (usado na escala automÃ¡tica).
+              Turno que a pessoa trabalha durante a semana (usado na escala automática).
             </p>
           </div>
 
           <div>
             <label className="block text-sm font-medium text-slate-700">
-              Data de admissÃ£o (opcional)
+              Data de admissão (opcional)
             </label>
             <input
               type="date"
@@ -241,7 +241,7 @@ export function ColaboradoresPage() {
               className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-tinta focus:border-esmeralda focus:outline-none focus:ring-1 focus:ring-esmeralda"
             />
             <p className="mt-1 text-xs text-slate-400">
-              Usada para calcular a assiduidade corretamente a partir da contrataÃ§Ã£o.
+              Usada para calcular a assiduidade corretamente a partir da contratação.
             </p>
           </div>
 
@@ -256,7 +256,7 @@ export function ColaboradoresPage() {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-slate-700">MatrÃ­cula (opcional)</label>
+            <label className="block text-sm font-medium text-slate-700">Matrícula (opcional)</label>
             <input
               type="text"
               value={form.matricula}
@@ -309,7 +309,7 @@ export function ColaboradoresPage() {
                 <th className="px-4 py-3 font-medium">Turno semana</th>
                 <th className="px-4 py-3 font-medium">Telefone</th>
                 <th className="px-4 py-3 font-medium">Status</th>
-                <th className="px-4 py-3 font-medium">AÃ§Ãµes</th>
+                <th className="px-4 py-3 font-medium">Ações</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -325,11 +325,11 @@ export function ColaboradoresPage() {
                 <th className="px-4 py-3 font-medium">Nome</th>
                 <th className="px-4 py-3 font-medium">Equipe</th>
                 <th className="px-4 py-3 font-medium">Turno semana</th>
-                <th className="px-4 py-3 font-medium">AdmissÃ£o</th>
-                <th className="px-4 py-3 font-medium">AuxÃ­lio</th>
+                <th className="px-4 py-3 font-medium">Admissão</th>
+                <th className="px-4 py-3 font-medium">Auxílio</th>
                 <th className="px-4 py-3 font-medium">Telefone</th>
                 <th className="px-4 py-3 font-medium">Status</th>
-                <th className="px-4 py-3 font-medium">AÃ§Ãµes</th>
+                <th className="px-4 py-3 font-medium">Ações</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -378,7 +378,7 @@ export function ColaboradoresPage() {
                           }
                           className="rounded-md border border-slate-300 px-2 py-1 text-sm"
                         >
-                          <option value="">NÃ£o informado</option>
+                          <option value="">Não informado</option>
                           {turnos.map((t) => (
                             <option key={t.id} value={t.id}>
                               {t.nome}
@@ -432,7 +432,7 @@ export function ColaboradoresPage() {
                           placeholder="Telefone"
                         />
                       ) : (
-                        colaborador.telefone ?? 'â€”'
+                        colaborador.telefone ?? '�?"'
                       )}
                     </td>
                     <td className="px-4 py-3">
@@ -456,7 +456,7 @@ export function ColaboradoresPage() {
                               setDadosEdicao({ ...dadosEdicao, matricula: e.target.value })
                             }
                             className="w-28 rounded-md border border-slate-300 px-2 py-1 text-sm"
-                            placeholder="MatrÃ­cula"
+                            placeholder="Matrícula"
                           />
                           <button
                             onClick={() => salvarEdicao(colaborador.id, colaborador.perfil_id)}
@@ -512,5 +512,6 @@ export function ColaboradoresPage() {
     </div>
   );
 }
+
 
 
