@@ -14,7 +14,7 @@ Deno.serve(async () => {
     try {
       const resp = await fetch(url, { headers: { "x-api-key": CHAVE } });
       const texto = await resp.text();
-      tentativas.push({ descricao, status: resp.status, corpo: texto.slice(0, 1200) });
+      tentativas.push({ descricao, status: resp.status, corpo: texto.slice(0, 800) });
     } catch (e) {
       tentativas.push({ descricao, status: 0, corpo: `Erro de rede: ${e}` });
     }
@@ -23,22 +23,7 @@ Deno.serve(async () => {
   const inicio = "2026-08-15";
   const fim = "2026-08-16";
 
-  await tentar(
-    "eixo=conversao",
-    `${URL_BASE}?inicio=${inicio}&fim=${fim}&eixo=conversao`
-  );
-  await tentar(
-    "eixo=data_conversao",
-    `${URL_BASE}?inicio=${inicio}&fim=${fim}&eixo=data_conversao`
-  );
-  await tentar(
-    "eixo=ftd",
-    `${URL_BASE}?inicio=${inicio}&fim=${fim}&eixo=ftd`
-  );
-  await tentar(
-    "so convertido=true",
-    `${URL_BASE}?inicio=${inicio}&fim=${fim}&convertido=true`
-  );
+  await tentar("eixo=conversao", `${URL_BASE}?inicio=${inicio}&fim=${fim}&eixo=conversao`);
 
   return new Response(JSON.stringify(tentativas, null, 2), {
     headers: { "Content-Type": "application/json" },

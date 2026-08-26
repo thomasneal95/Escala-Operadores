@@ -12,6 +12,7 @@ import { GestaoAcessoPage } from './GestaoAcessoPage';
 import { SolicitacoesTrocaAdminPage } from './SolicitacoesTrocaAdminPage';
 import { MapaCoberturaPage } from './MapaCoberturaPage';
 import { AssiduidadePage } from './AssiduidadePage';
+import { ComissionamentoPage } from './ComissionamentoPage';
 
 type Aba =
   | 'painel'
@@ -22,6 +23,7 @@ type Aba =
   | 'trocas'
   | 'mapa'
   | 'assiduidade'
+  | 'comissionamento'
   | 'configuracoes'
   | 'historico'
   | 'acesso';
@@ -35,6 +37,7 @@ const abas: { id: Aba; rotulo: string }[] = [
   { id: 'trocas', rotulo: 'Trocas' },
   { id: 'mapa', rotulo: 'Análises' },
   { id: 'assiduidade', rotulo: 'Assiduidade' },
+  { id: 'comissionamento', rotulo: 'Comissionamento' },
   { id: 'historico', rotulo: 'Histórico' },
   { id: 'acesso', rotulo: 'Acesso' },
   { id: 'configuracoes', rotulo: 'Configurações' },
@@ -98,6 +101,12 @@ const iconesPorAba: Record<Aba, ReactElement> = {
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8}>
       <path d="M3 17l5-5 4 4 8-9" strokeLinecap="round" strokeLinejoin="round" />
       <path d="M15 7h5v5" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  ),
+    comissionamento: (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8}>
+      <circle cx="12" cy="12" r="8.5" />
+      <path d="M12 7v10M9.5 9.5c0-1.4 1.1-2.5 2.5-2.5s2.5 1 2.5 2.2c0 2.8-5 1.6-5 4.4 0 1.2 1.1 2.2 2.5 2.2s2.5-1.1 2.5-2.5" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
   ),
   historico: (
@@ -224,6 +233,7 @@ export function AdminApp() {
           {abaAtiva === 'trocas' && <SolicitacoesTrocaAdminPage />}
           {abaAtiva === 'mapa' && <MapaCoberturaPage />}
           {abaAtiva === 'assiduidade' && <AssiduidadePage />}
+          {abaAtiva === 'comissionamento' && <ComissionamentoPage />}
           {abaAtiva === 'historico' && <HistoricoAdminPage />}
           {abaAtiva === 'acesso' && <GestaoAcessoPage />}
           {abaAtiva === 'configuracoes' && <ConfiguracoesPage />}

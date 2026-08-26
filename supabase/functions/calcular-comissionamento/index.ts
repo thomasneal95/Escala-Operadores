@@ -4,6 +4,7 @@ import { withSupabase } from "@supabase/server";
 interface LeadExterno {
   id: number;
   data_hora: string;
+  data_conversao: string;
   email_operador: string;
   nome_operador: string;
   convertido: boolean;
@@ -65,7 +66,7 @@ export default {
     // CRIAÇÃO do lead). Assim que o desenvolvedor corrigir o bug do
     // parâmetro "eixo=conversao", trocar a linha abaixo para incluir
     // "&eixo=conversao" na URL, para filtrar pela data de CONVERSÃO.
-    const urlLeads = `${urlBase}?inicio=${inicio}&fim=${fim}`;
+        const urlLeads = `${urlBase}?inicio=${inicio}&fim=${fim}&eixo=conversao`;
 
     const respostaApi = await fetch(urlLeads, {
       headers: { "x-api-key": chaveApi },
@@ -160,7 +161,7 @@ export default {
         continue;
       }
 
-      const { dataFormatada, diaDaSemana } = dataLocalEDiaDaSemana(lead.data_hora);
+            const { dataFormatada, diaDaSemana } = dataLocalEDiaDaSemana(lead.data_conversao);
       const ehFimDeSemana = diaDaSemana === 0 || diaDaSemana === 6;
 
       if (ehFimDeSemana) {
