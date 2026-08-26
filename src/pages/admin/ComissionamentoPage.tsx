@@ -159,6 +159,7 @@ export function ComissionamentoPage() {
                   <th className="whitespace-nowrap px-4 py-3 font-medium">Auxílio</th>
                   <th className="whitespace-nowrap px-4 py-3 font-medium">Com. dia semana</th>
                   <th className="whitespace-nowrap px-4 py-3 font-medium">Com. fim de semana</th>
+                  <th className="whitespace-nowrap px-4 py-3 font-medium">Com. individual</th>
                   <th className="whitespace-nowrap px-4 py-3 font-medium">Adiantamento</th>
                   <th className="whitespace-nowrap px-4 py-3 font-medium">Salário total</th>
                 </tr>
@@ -166,7 +167,7 @@ export function ComissionamentoPage() {
               <tbody className="divide-y divide-slate-100">
                 {dados.resultado.length === 0 ? (
                   <tr>
-                    <td colSpan={6} className="px-4 py-6 text-center text-slate-400">
+                                        <td colSpan={7} className="px-4 py-6 text-center text-slate-400">
                       Nenhum valor calculado para este mês.
                     </td>
                   </tr>
@@ -184,6 +185,9 @@ export function ComissionamentoPage() {
                       </td>
                       <td className="whitespace-nowrap px-4 py-3 text-tinta">
                         {formatarMoeda(r.comissaoFimDeSemana)}
+                      </td>
+                      <td className="whitespace-nowrap px-4 py-3 text-tinta">
+                        {formatarMoeda(r.comissaoIndividual)}
                       </td>
                       <td className="whitespace-nowrap px-4 py-3">
                         <input

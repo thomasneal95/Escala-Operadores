@@ -7,6 +7,7 @@ interface ResultadoColaborador {
   auxilio: number;
   comissaoDiaSemana: number;
   comissaoFimDeSemana: number;
+  comissaoIndividual: number;
   adiantamento: number;
   salarioTotal: number;
 }
@@ -40,10 +41,10 @@ export function useFechamentoMensal() {
   const [erro, setErro] = useState<string | null>(null);
 
   async function buscarSalvo(mes: string): Promise<RespostaFechamento | null> {
-    const { data, error } = await supabase
+        const { data, error } = await supabase
       .from('fechamentos_mensais')
       .select(
-        'colaborador_id, nome_snapshot, auxilio, comissao_dia_semana, comissao_fim_semana, adiantamento, salario_total, total_leads_convertidos, calculado_em'
+        'colaborador_id, nome_snapshot, auxilio, comissao_dia_semana, comissao_fim_semana, comissao_individual, adiantamento, salario_total, total_leads_convertidos, calculado_em'
       )
       .eq('mes', mes)
       .order('salario_total', { ascending: false });
@@ -53,12 +54,13 @@ export function useFechamentoMensal() {
     return {
       mes,
       totalLeadsConvertidos: data[0]?.total_leads_convertidos ?? 0,
-      resultado: data.map((r) => ({
+            resultado: data.map((r) => ({
         colaborador_id: r.colaborador_id,
         nome: r.nome_snapshot,
         auxilio: Number(r.auxilio),
         comissaoDiaSemana: Number(r.comissao_dia_semana),
         comissaoFimDeSemana: Number(r.comissao_fim_semana),
+        comissaoIndividual: Number(r.comissao_individual ?? 0),
         adiantamento: Number(r.adiantamento),
         salarioTotal: Number(r.salario_total),
       })),
@@ -85,13 +87,14 @@ export function useFechamentoMensal() {
     itens: ResultadoColaborador[]
   ) {
     const agora = new Date().toISOString();
-    const linhas = itens.map((item) => ({
+        const linhas = itens.map((item) => ({
       mes,
       colaborador_id: item.colaborador_id,
       nome_snapshot: item.nome,
       auxilio: item.auxilio,
       comissao_dia_semana: item.comissaoDiaSemana,
       comissao_fim_semana: item.comissaoFimDeSemana,
+      comissao_individual: item.comissaoIndividual,
       adiantamento: item.adiantamento,
       salario_total: item.salarioTotal,
       total_leads_convertidos: totalLeadsConvertidos,
@@ -160,13 +163,15 @@ export function useFechamentoMensal() {
   async function editarAdiantamento(mes: string, adminId: string, colaboradorId: string, novoValor: number) {
     if (!dados) return;
 
-    const novoResultado = dados.resultado.map((r) =>
+        const novoResultado = dados.resultado.map((r) =>
       r.colaborador_id === colaboradorId
         ? {
             ...r,
             adiantamento: novoValor,
             salarioTotal:
-              Math.round((r.auxilio + r.comissaoDiaSemana + r.comissaoFimDeSemana - novoValor) * 100) / 100,
+              Math.round(
+                (r.auxilio + r.comissaoDiaSemana + r.comissaoFimDeSemana + r.comissaoIndividual - novoValor) * 100
+              ) / 100,
           }
         : r
     );

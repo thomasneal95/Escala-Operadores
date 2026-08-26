@@ -104,22 +104,25 @@ export default {
     const leadsConvertidos = todosOsLeads.filter((l) => l.convertido);
 
     // 2. Colaboradores ativos (com e-mail, auxílio, admissão).
-    const { data: colaboradoresData, error: erroColaboradores } = await ctx.supabaseAdmin
+        const { data: colaboradoresData, error: erroColaboradores } = await ctx.supabaseAdmin
       .from("colaboradores")
-      .select("id, equipe_id, data_admissao, auxilio_mensal, ativo, perfis(email, nome_completo)")
+      .select(
+        "id, equipe_id, data_admissao, auxilio_mensal, comissionamento_individual, ativo, perfis(email, nome_completo)"
+      )
       .eq("ativo", true);
 
     if (erroColaboradores) {
       return Response.json({ erro: "Não foi possível carregar os colaboradores." }, { status: 500 });
     }
 
-    interface ColaboradorInfo {
+        interface ColaboradorInfo {
       id: string;
       equipe_id: string | null;
       data_admissao: string | null;
       auxilio_mensal: number;
       email: string | null;
       nome: string;
+      comissionamentoIndividual: boolean;
     }
 
     const colaboradores: ColaboradorInfo[] = (colaboradoresData ?? []).map((c: any) => ({
@@ -129,6 +132,7 @@ export default {
       auxilio_mensal: Number(c.auxilio_mensal) || 0,
       email: c.perfis?.email?.toLowerCase().trim() ?? null,
       nome: c.perfis?.nome_completo ?? "(sem nome)",
+      comissionamentoIndividual: !!c.comissionamento_individual,
     }));
 
     const colaboradorPorEmail = new Map<string, ColaboradorInfo>();
@@ -180,6 +184,8 @@ export default {
     const contagemFimDeSemanaPorEquipeEDia = new Map<string, number>();
     const primeiraConversaoNoMes = new Map<string, string>(); // colaborador_id -> data
     const colaboradoresComLeadNoDia = new Map<string, Set<string>>(); // "data" -> Set(colaborador_id)
+    const comissaoIndividualPorColaborador = new Map<string, number>(); // colaborador_id -> valor
+    const VALOR_INDIVIDUAL = 2;
     for (const lead of leadsConvertidos) {
       const emailLead = lead.email_operador?.toLowerCase().trim();
       const colaborador = emailLead ? colaboradorPorEmail.get(emailLead) : undefined;
@@ -189,7 +195,17 @@ export default {
         continue;
       }
 
-      const { dataFormatada } = dataLocalEDiaDaSemana(lead.data_conversao);
+            const { dataFormatada } = dataLocalEDiaDaSemana(lead.data_conversao);
+
+      // Comissionamento individual: valor fixo por lead, sem divisão e
+      // sem distinção de dia. Não entra em nenhuma lógica de equipe.
+      if (colaborador.comissionamentoIndividual) {
+        comissaoIndividualPorColaborador.set(
+          colaborador.id,
+          (comissaoIndividualPorColaborador.get(colaborador.id) ?? 0) + VALOR_INDIVIDUAL
+        );
+        continue;
+      }
 
       const atual = primeiraConversaoNoMes.get(colaborador.id);
       if (!atual || dataFormatada < atual) {
@@ -330,15 +346,18 @@ export default {
       (adiantamentosData ?? []).map((a) => [a.colaborador_id, Number(a.valor)])
     );
 
-    // 9. Monta o resultado final por colaborador.
+        // 9. Monta o resultado final por colaborador.
     const resultado = colaboradores
       .map((c) => {
         const auxilio = Math.round(auxilioProporcional(c) * 100) / 100;
         const comissaoDiaSemana = Math.round((comissaoDiaSemanaPorColaborador.get(c.id) ?? 0) * 100) / 100;
         const comissaoFimDeSemana = Math.round((comissaoFimDeSemanaPorColaborador.get(c.id) ?? 0) * 100) / 100;
+        const comissaoIndividual = Math.round((comissaoIndividualPorColaborador.get(c.id) ?? 0) * 100) / 100;
         const adiantamento = adiantamentoPorColaborador.get(c.id) ?? 0;
         const salarioTotal =
-          Math.round((auxilio + comissaoDiaSemana + comissaoFimDeSemana - adiantamento) * 100) / 100;
+          Math.round(
+            (auxilio + comissaoDiaSemana + comissaoFimDeSemana + comissaoIndividual - adiantamento) * 100
+          ) / 100;
 
         return {
           colaborador_id: c.id,
@@ -346,11 +365,14 @@ export default {
           auxilio,
           comissaoDiaSemana,
           comissaoFimDeSemana,
+          comissaoIndividual,
           adiantamento,
           salarioTotal,
         };
       })
-      .filter((r) => r.auxilio > 0 || r.comissaoDiaSemana > 0 || r.comissaoFimDeSemana > 0)
+      .filter(
+        (r) => r.auxilio > 0 || r.comissaoDiaSemana > 0 || r.comissaoFimDeSemana > 0 || r.comissaoIndividual > 0
+      )
       .sort((a, b) => b.salarioTotal - a.salarioTotal);
 
     return Response.json({
