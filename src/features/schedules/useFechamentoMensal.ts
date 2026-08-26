@@ -30,22 +30,16 @@ interface RespostaFechamento {
     leadsSemColaboradorConhecido: LeadSemDono[];
     diasDeFimDeSemanaSemPresencaConfirmada: DiaSemPresenca[];
   };
-  origem: 'salvo' | 'recalculado';
   calculadoEm: string | null;
 }
 
 export function useFechamentoMensal() {
   const [dados, setDados] = useState<RespostaFechamento | null>(null);
   const [carregando, setCarregando] = useState(false);
-  const [salvando, setSalvando] = useState(false);
+  const [atualizando, setAtualizando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
 
-  // Busca o que já está salvo no banco pra este mês (rápido, sem chamar a
-  // API externa). Usado ao abrir a tela ou trocar de mês.
-  async function carregarSalvo(mes: string) {
-    setCarregando(true);
-    setErro(null);
-
+  async function buscarSalvo(mes: string): Promise<RespostaFechamento | null> {
     const { data, error } = await supabase
       .from('fechamentos_mensais')
       .select(
@@ -54,19 +48,9 @@ export function useFechamentoMensal() {
       .eq('mes', mes)
       .order('salario_total', { ascending: false });
 
-    setCarregando(false);
+    if (error || !data || data.length === 0) return null;
 
-    if (error) {
-      setErro('Não foi possível carregar o fechamento salvo.');
-      return;
-    }
-
-    if (!data || data.length === 0) {
-      setDados(null);
-      return;
-    }
-
-    setDados({
+    return {
       mes,
       totalLeadsConvertidos: data[0]?.total_leads_convertidos ?? 0,
       resultado: data.map((r) => ({
@@ -79,69 +63,31 @@ export function useFechamentoMensal() {
         salarioTotal: Number(r.salario_total),
       })),
       avisos: { leadsSemColaboradorConhecido: [], diasDeFimDeSemanaSemPresencaConfirmada: [] },
-      origem: 'salvo',
       calculadoEm: data[0]?.calculado_em ?? null,
-    });
+    };
   }
 
-  // Recalcula de verdade, buscando os leads na API externa (mais lento).
-  async function recalcular(mes: string) {
-    setCarregando(true);
-    setErro(null);
-
+  async function buscarAoVivo(mes: string): Promise<{ dados?: RespostaFechamento; erro?: string }> {
     const { data, error } = await supabase.functions.invoke('calcular-fechamento-mensal', {
       body: { mes },
     });
 
-    setCarregando(false);
+    if (error) return { erro: 'Não foi possível calcular o fechamento. Tente novamente.' };
+    if (data?.erro) return { erro: data.erro };
 
-    if (error) {
-      setErro('Não foi possível calcular o fechamento. Tente novamente.');
-      return;
-    }
-
-    if (data?.erro) {
-      setErro(data.erro);
-      return;
-    }
-
-    setDados({ ...data, origem: 'recalculado', calculadoEm: new Date().toISOString() });
+    return { dados: { ...data, calculadoEm: new Date().toISOString() } };
   }
 
-  async function salvarAdiantamento(colaboradorId: string, mes: string, valor: number) {
-    const { error } = await supabase.from('adiantamentos_mensais').upsert(
-      {
-        colaborador_id: colaboradorId,
-        mes,
-        valor,
-        atualizado_em: new Date().toISOString(),
-      },
-      { onConflict: 'colaborador_id,mes' }
-    );
-
-    if (error) return { erro: 'Não foi possível salvar o adiantamento.' };
-    return { erro: null };
-  }
-
-  async function salvarFechamento(
+  async function persistir(
     mes: string,
     adminId: string,
     totalLeadsConvertidos: number,
-    itens: {
-      colaboradorId: string;
-      nome: string;
-      auxilio: number;
-      comissaoDiaSemana: number;
-      comissaoFimDeSemana: number;
-      adiantamento: number;
-      salarioTotal: number;
-    }[]
+    itens: ResultadoColaborador[]
   ) {
-    setSalvando(true);
-
+    const agora = new Date().toISOString();
     const linhas = itens.map((item) => ({
       mes,
-      colaborador_id: item.colaboradorId,
+      colaborador_id: item.colaborador_id,
       nome_snapshot: item.nome,
       auxilio: item.auxilio,
       comissao_dia_semana: item.comissaoDiaSemana,
@@ -149,7 +95,7 @@ export function useFechamentoMensal() {
       adiantamento: item.adiantamento,
       salario_total: item.salarioTotal,
       total_leads_convertidos: totalLeadsConvertidos,
-      calculado_em: new Date().toISOString(),
+      calculado_em: agora,
       calculado_por: adminId,
     }));
 
@@ -157,20 +103,84 @@ export function useFechamentoMensal() {
       .from('fechamentos_mensais')
       .upsert(linhas, { onConflict: 'mes,colaborador_id' });
 
-    setSalvando(false);
-
-    if (error) return { erro: 'Não foi possível salvar o fechamento.' };
-    return { erro: null };
+    return { erro: error ? 'Não foi possível salvar automaticamente.' : null, calculadoEm: agora };
   }
 
-  return {
-    dados,
-    carregando,
-    salvando,
-    erro,
-    carregarSalvo,
-    recalcular,
-    salvarAdiantamento,
-    salvarFechamento,
-  };
+  // Carrega a tela: tenta o que já está salvo; se não existir nada ainda
+  // pra esse mês, calcula ao vivo e já salva sozinho, sem pedir confirmação.
+  async function carregarOuCalcular(mes: string, adminId: string) {
+    setCarregando(true);
+    setErro(null);
+
+    const salvo = await buscarSalvo(mes);
+    if (salvo) {
+      setDados(salvo);
+      setCarregando(false);
+      return;
+    }
+
+    const resultado = await buscarAoVivo(mes);
+    if (resultado.erro || !resultado.dados) {
+      setErro(resultado.erro ?? 'Não foi possível calcular o fechamento.');
+      setCarregando(false);
+      return;
+    }
+
+    const persistencia = await persistir(mes, adminId, resultado.dados.totalLeadsConvertidos, resultado.dados.resultado);
+
+    setDados({
+      ...resultado.dados,
+      calculadoEm: persistencia.calculadoEm,
+    });
+    setCarregando(false);
+  }
+
+  // Botão "Atualizar": busca de novo na API e salva sozinho.
+  async function atualizar(mes: string, adminId: string) {
+    setAtualizando(true);
+    setErro(null);
+
+    const resultado = await buscarAoVivo(mes);
+    if (resultado.erro || !resultado.dados) {
+      setErro(resultado.erro ?? 'Não foi possível atualizar o fechamento.');
+      setAtualizando(false);
+      return;
+    }
+
+    const persistencia = await persistir(mes, adminId, resultado.dados.totalLeadsConvertidos, resultado.dados.resultado);
+
+    setDados({
+      ...resultado.dados,
+      calculadoEm: persistencia.calculadoEm,
+    });
+    setAtualizando(false);
+  }
+
+  // Edita o adiantamento de UMA pessoa e já salva sozinho (linha inteira).
+  async function editarAdiantamento(mes: string, adminId: string, colaboradorId: string, novoValor: number) {
+    if (!dados) return;
+
+    const novoResultado = dados.resultado.map((r) =>
+      r.colaborador_id === colaboradorId
+        ? {
+            ...r,
+            adiantamento: novoValor,
+            salarioTotal:
+              Math.round((r.auxilio + r.comissaoDiaSemana + r.comissaoFimDeSemana - novoValor) * 100) / 100,
+          }
+        : r
+    );
+
+    setDados({ ...dados, resultado: novoResultado });
+
+    await supabase.from('adiantamentos_mensais').upsert(
+      { colaborador_id: colaboradorId, mes, valor: novoValor, atualizado_em: new Date().toISOString() },
+      { onConflict: 'colaborador_id,mes' }
+    );
+
+    const persistencia = await persistir(mes, adminId, dados.totalLeadsConvertidos, novoResultado);
+    setDados((atual) => (atual ? { ...atual, calculadoEm: persistencia.calculadoEm } : atual));
+  }
+
+  return { dados, carregando, atualizando, erro, carregarOuCalcular, atualizar, editarAdiantamento };
 }

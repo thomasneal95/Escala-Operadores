@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useAuth } from '../../features/auth/AuthContext';
 import { useFechamentoMensal } from '../../features/schedules/useFechamentoMensal';
-import { useToast, useConfirm } from '../../components/FeedbackProvider';
 
 function mesAtualFormatoInput() {
   const hoje = new Date();
@@ -15,107 +14,42 @@ function formatarMoeda(valor: number) {
 }
 
 function formatarDataHora(iso: string) {
-  return new Date(iso).toLocaleString('pt-BR');
+  return new Date(iso).toLocaleString('pt-BR', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
 }
 
 export function ComissionamentoPage() {
   const { session } = useAuth();
   const [mesInput, setMesInput] = useState(mesAtualFormatoInput()); // "YYYY-MM"
-  const {
-    dados,
-    carregando,
-    salvando,
-    erro,
-    carregarSalvo,
-    recalcular,
-    salvarAdiantamento,
-    salvarFechamento,
-  } = useFechamentoMensal();
-  const toast = useToast();
-  const confirmar = useConfirm();
-
-  const [adiantamentosLocais, setAdiantamentosLocais] = useState<Record<string, string>>({});
+  const { dados, carregando, atualizando, erro, carregarOuCalcular, atualizar, editarAdiantamento } =
+    useFechamentoMensal();
 
   const mes = `${mesInput}-01`;
 
-  // Carrega automaticamente o que já está salvo, assim que a tela abre ou
-  // o mês selecionado muda — sem precisar clicar em nada.
   useEffect(() => {
-    setAdiantamentosLocais({});
-    carregarSalvo(mes);
+    if (session?.user) {
+      carregarOuCalcular(mes, session.user.id);
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mes]);
+  }, [mes, session?.user?.id]);
 
-  // Sincroniza o estado local de adiantamento sempre que novos dados chegam.
-  useEffect(() => {
-    if (dados && dados.resultado.length > 0) {
-      const inicial: Record<string, string> = {};
-      for (const r of dados.resultado) {
-        inicial[r.colaborador_id] = String(r.adiantamento);
-      }
-      setAdiantamentosLocais(inicial);
-    }
-  }, [dados]);
-
-  async function handleRecalcular() {
-    if (dados) {
-      const confirmou = await confirmar({
-        titulo: 'Atualizar cálculo?',
-        mensagem:
-          'Isso busca os leads mais recentes na API e recalcula tudo. Os valores de adiantamento digitados agora serão preservados, mas qualquer coisa não salva será substituída.',
-        textoConfirmar: 'Sim, atualizar',
-      });
-      if (!confirmou) return;
-    }
-    await recalcular(mes);
+  async function handleAtualizar() {
+    if (!session?.user) return;
+    await atualizar(mes, session.user.id);
   }
 
-  function salarioTotalLocal(
-    colaboradorId: string,
-    auxilio: number,
-    comissaoDiaSemana: number,
-    comissaoFimDeSemana: number
-  ) {
-    const adiantamento = Number(adiantamentosLocais[colaboradorId] ?? 0) || 0;
-    return Math.round((auxilio + comissaoDiaSemana + comissaoFimDeSemana - adiantamento) * 100) / 100;
+  function handleAdiantamentoBlur(colaboradorId: string, valor: string) {
+    if (!session?.user) return;
+    const numero = Number(valor) || 0;
+    editarAdiantamento(mes, session.user.id, colaboradorId, numero);
   }
 
-  async function handleSalvarFechamento() {
-    if (!dados || !session?.user) return;
-
-    const itens = dados.resultado.map((r) => {
-      const adiantamento = Number(adiantamentosLocais[r.colaborador_id] ?? 0) || 0;
-      return {
-        colaboradorId: r.colaborador_id,
-        nome: r.nome,
-        auxilio: r.auxilio,
-        comissaoDiaSemana: r.comissaoDiaSemana,
-        comissaoFimDeSemana: r.comissaoFimDeSemana,
-        adiantamento,
-        salarioTotal: salarioTotalLocal(r.colaborador_id, r.auxilio, r.comissaoDiaSemana, r.comissaoFimDeSemana),
-      };
-    });
-
-    for (const item of itens) {
-      await salvarAdiantamento(item.colaboradorId, mes, item.adiantamento);
-    }
-
-    const resultado = await salvarFechamento(mes, session.user.id, dados.totalLeadsConvertidos, itens);
-
-    if (resultado.erro) {
-      toast(resultado.erro, 'erro');
-      return;
-    }
-
-    toast('Fechamento salvo com sucesso!');
-    await carregarSalvo(mes);
-  }
-
-  const totalGeral =
-    dados?.resultado.reduce(
-      (soma, r) => soma + salarioTotalLocal(r.colaborador_id, r.auxilio, r.comissaoDiaSemana, r.comissaoFimDeSemana),
-      0
-    ) ?? 0;
+  const totalGeral = dados?.resultado.reduce((soma, r) => soma + r.salarioTotal, 0) ?? 0;
 
   return (
     <div>
@@ -143,16 +77,16 @@ export function ComissionamentoPage() {
         </div>
 
         <button
-          onClick={handleRecalcular}
-          disabled={carregando}
+          onClick={handleAtualizar}
+          disabled={atualizando || carregando}
           className="rounded-md bg-esmeralda px-4 py-2 font-medium text-white transition hover:bg-esmeralda-dark disabled:cursor-not-allowed disabled:opacity-60"
         >
-          {carregando ? 'Calculando...' : dados ? 'Atualizar cálculo' : 'Calcular fechamento'}
+          {atualizando ? 'Atualizando...' : '🔄 Atualizar'}
         </button>
 
         {dados?.calculadoEm && (
           <p className="text-xs text-slate-400">
-            {dados.origem === 'salvo' ? 'Salvo em' : 'Calculado em'} {formatarDataHora(dados.calculadoEm)}
+            Última atualização: {formatarDataHora(dados.calculadoEm)}
           </p>
         )}
       </div>
@@ -161,16 +95,14 @@ export function ComissionamentoPage() {
         <p className="mt-4 rounded-md bg-red-50 px-4 py-3 text-sm text-red-700">{erro}</p>
       )}
 
-      {!dados && !carregando && !erro && (
-        <div className="mt-6 rounded-lg border border-slate-200 bg-white p-8 text-center">
-          <p className="text-slate-600">Ainda não há fechamento salvo para este mês.</p>
-          <p className="mt-1 text-sm text-slate-400">
-            Clique em "Calcular fechamento" para buscar os dados pela primeira vez.
-          </p>
-        </div>
+      {carregando && (
+        <p className="mt-6 text-sm text-slate-400">
+          Carregando... (na primeira vez de cada mês, isso pode levar alguns segundos, pois
+          busca os dados na API externa)
+        </p>
       )}
 
-      {dados && (
+      {!carregando && dados && (
         <>
           <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-3">
             <div className="rounded-lg border border-slate-200 bg-white p-4">
@@ -219,13 +151,6 @@ export function ComissionamentoPage() {
             </div>
           )}
 
-          {dados.origem === 'salvo' && (
-            <p className="mt-4 text-sm text-slate-500">
-              Mostrando os valores já salvos anteriormente. Clique em "Atualizar cálculo" se
-              quiser buscar dados mais recentes da API.
-            </p>
-          )}
-
           <div className="mt-4 overflow-x-auto rounded-lg border border-slate-200 bg-white">
             <table className="w-full text-left text-sm">
               <thead className="border-b border-slate-200 bg-slate-50 text-slate-500">
@@ -254,7 +179,7 @@ export function ComissionamentoPage() {
                       <td className="whitespace-nowrap px-4 py-3 text-tinta">
                         {formatarMoeda(r.auxilio)}
                       </td>
-                                            <td className="whitespace-nowrap px-4 py-3 text-tinta">
+                      <td className="whitespace-nowrap px-4 py-3 text-tinta">
                         {formatarMoeda(r.comissaoDiaSemana)}
                       </td>
                       <td className="whitespace-nowrap px-4 py-3 text-tinta">
@@ -264,20 +189,14 @@ export function ComissionamentoPage() {
                         <input
                           type="number"
                           step="0.01"
-                          value={adiantamentosLocais[r.colaborador_id] ?? '0'}
-                          onChange={(e) =>
-                            setAdiantamentosLocais((atual) => ({
-                              ...atual,
-                              [r.colaborador_id]: e.target.value,
-                            }))
-                          }
+                          defaultValue={r.adiantamento}
+                          key={`${r.colaborador_id}-${r.adiantamento}`}
+                          onBlur={(e) => handleAdiantamentoBlur(r.colaborador_id, e.target.value)}
                           className="w-24 rounded-md border border-slate-300 px-2 py-1 text-sm"
                         />
                       </td>
                       <td className="whitespace-nowrap px-4 py-3 font-semibold text-tinta">
-                        {formatarMoeda(
-                          salarioTotalLocal(r.colaborador_id, r.auxilio, r.comissaoDiaSemana, r.comissaoFimDeSemana)
-                        )}
+                        {formatarMoeda(r.salarioTotal)}
                       </td>
                     </tr>
                   ))
@@ -286,17 +205,9 @@ export function ComissionamentoPage() {
             </table>
           </div>
 
-          {dados.resultado.length > 0 && (
-            <div className="mt-4 flex justify-end">
-              <button
-                onClick={handleSalvarFechamento}
-                disabled={salvando}
-                className="rounded-md bg-tinta px-4 py-2 font-medium text-white transition hover:bg-tinta/90 disabled:cursor-not-allowed disabled:opacity-60"
-              >
-                {salvando ? 'Salvando...' : 'Salvar fechamento deste mês'}
-              </button>
-            </div>
-          )}
+          <p className="mt-3 text-xs text-slate-400">
+            Os valores de adiantamento são salvos automaticamente assim que você sai do campo.
+          </p>
         </>
       )}
     </div>
