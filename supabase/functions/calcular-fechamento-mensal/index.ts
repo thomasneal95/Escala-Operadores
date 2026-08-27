@@ -21,7 +21,15 @@ const VALOR_FIM_DE_SEMANA = 3;
 
 function dataLocalEDiaDaSemana(dataHoraUtc: string) {
   const dataUtc = new Date(dataHoraUtc);
-  const dataLocal = new Date(dataUtc.getTime() - 3 * 60 * 60 * 1000);
+  let dataLocal = new Date(dataUtc.getTime() - 3 * 60 * 60 * 1000);
+
+  // Corte de dia às 6h da manhã (horário local), não à meia-noite: o turno
+  // da noite passa da virada do dia, então um lead às 2h ou 4h da manhã
+  // ainda conta como parte do dia ANTERIOR.
+  if (dataLocal.getUTCHours() < 6) {
+    dataLocal = new Date(dataLocal.getTime() - 24 * 60 * 60 * 1000);
+  }
+
   const diaDaSemana = dataLocal.getUTCDay();
   const dataFormatada = dataLocal.toISOString().slice(0, 10);
   return { dataFormatada, diaDaSemana };
@@ -214,10 +222,9 @@ export default {
         primeiraConversaoNoMes.set(colaborador.id, dataFormatada);
       }
 
-      const equipeDoDia = equipeVigenteEm(colaborador.id, dataFormatada);
+            const equipeDoDia = equipeVigenteEm(colaborador.id, dataFormatada);
       if (!equipeDoDia) continue; // sem equipe nesse dia, não entra em rateio de equipe
 
-      const diaDaSemana = diaDaSemanaDeString(dataFormatada);
       const ehFimDeSemana = diaDaSemana === 0 || diaDaSemana === 6;
       const chave = `${equipeDoDia}|${dataFormatada}`;
 

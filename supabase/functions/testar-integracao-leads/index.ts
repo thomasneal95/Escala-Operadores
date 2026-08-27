@@ -1,31 +1,50 @@
 const CHAVE = "int_0b27e695b9e11e98cf31d29de58499ab390ef116d90ee0941f0f0692c5340906";
 const URL_BASE = "https://mypainel.site/api/integracao/apuracao/leads";
 
-interface Tentativa {
-  descricao: string;
-  status: number;
-  corpo: string;
+function diaRealComCorte(dataHoraUtc: string): string {
+  const dataUtc = new Date(dataHoraUtc);
+  let dataLocal = new Date(dataUtc.getTime() - 3 * 60 * 60 * 1000);
+  if (dataLocal.getUTCHours() < 6) {
+    dataLocal = new Date(dataLocal.getTime() - 24 * 60 * 60 * 1000);
+  }
+  return dataLocal.toISOString().slice(0, 10);
 }
 
 Deno.serve(async () => {
-  const tentativas: Tentativa[] = [];
+  // Janela bem mais larga que agosto, pra pegar tudo que pode "vazar" pra
+  // dentro ou pra fora do mês quando aplicamos o corte às 6h.
+  const inicio = "2026-07-28";
+  const fim = "2026-08-27";
 
-  async function tentar(descricao: string, url: string) {
-    try {
-      const resp = await fetch(url, { headers: { "x-api-key": CHAVE } });
-      const texto = await resp.text();
-      tentativas.push({ descricao, status: resp.status, corpo: texto.slice(0, 800) });
-    } catch (e) {
-      tentativas.push({ descricao, status: 0, corpo: `Erro de rede: ${e}` });
-    }
+  const todosOsLeads: any[] = [];
+  let pagina = 1;
+  let temMais = true;
+
+  while (temMais && pagina <= 20) {
+    const url = `${URL_BASE}?inicio=${inicio}&fim=${fim}&eixo=conversao&pagina=${pagina}`;
+    const resp = await fetch(url, { headers: { "x-api-key": CHAVE } });
+    const dados = await resp.json();
+    todosOsLeads.push(...(dados.leads ?? []));
+    temMais = dados.tem_mais;
+    pagina++;
   }
 
-  const inicio = "2026-08-15";
-  const fim = "2026-08-16";
+  const convertidos = todosOsLeads.filter((l) => l.convertido);
 
-  await tentar("eixo=conversao", `${URL_BASE}?inicio=${inicio}&fim=${fim}&eixo=conversao`);
-
-  return new Response(JSON.stringify(tentativas, null, 2), {
-    headers: { "Content-Type": "application/json" },
+  const contandoComDiaReal = convertidos.filter((l) => {
+    const diaReal = diaRealComCorte(l.data_conversao);
+    return diaReal >= "2026-08-01" && diaReal <= "2026-08-31";
   });
+
+  return new Response(
+    JSON.stringify(
+      {
+        totalConvertidosNaJanelaLarga: convertidos.length,
+        totalContandoComDiaRealDentroDeAgosto: contandoComDiaReal.length,
+      },
+      null,
+      2
+    ),
+    { headers: { "Content-Type": "application/json" } }
+  );
 });

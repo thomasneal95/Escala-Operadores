@@ -89,12 +89,23 @@ export function useAnalises(equipeIdFiltro: string | null) {
         return;
       }
 
-      const periodosOrdenados = (periodosData ?? []).slice().reverse();
+            const periodosOrdenados = (periodosData ?? []).slice().reverse();
       const idsPeriodos = periodosOrdenados.map((p) => p.id);
 
       let vagasQuery = supabase.from('vagas_equipe_turno').select('equipe_id, turno_id, vagas');
       if (equipeIdFiltro) vagasQuery = vagasQuery.eq('equipe_id', equipeIdFiltro);
       const { data: vagasData } = await vagasQuery;
+
+      // Administradores nunca entram nas análises, mesmo que tenham um
+      // cadastro de colaborador antigo.
+      const { data: colaboradoresAdmin } = await supabase
+        .from('colaboradores')
+        .select('id, perfis(papel)');
+      const idsAdmin = new Set(
+        (colaboradoresAdmin ?? [])
+          .filter((c: any) => c.perfis?.papel === 'administrador')
+          .map((c) => c.id)
+      );
 
       let idsColaboradoresFiltro: string[] | null = null;
       if (equipeIdFiltro) {
@@ -102,7 +113,14 @@ export function useAnalises(equipeIdFiltro: string | null) {
           .from('colaboradores')
           .select('id')
           .eq('equipe_id', equipeIdFiltro);
-        idsColaboradoresFiltro = (colaboradoresDaEquipe ?? []).map((c) => c.id);
+        idsColaboradoresFiltro = (colaboradoresDaEquipe ?? [])
+          .map((c) => c.id)
+          .filter((id) => !idsAdmin.has(id));
+      } else if (idsAdmin.size > 0) {
+        const { data: todosColaboradores } = await supabase.from('colaboradores').select('id');
+        idsColaboradoresFiltro = (todosColaboradores ?? [])
+          .map((c) => c.id)
+          .filter((id) => !idsAdmin.has(id));
       }
 
       const idsSeguro =
