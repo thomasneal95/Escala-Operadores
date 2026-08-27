@@ -78,14 +78,19 @@ export function useFechamentoMensal() {
     return { dados: { ...data, calculadoEm: new Date().toISOString() } };
   }
 
-  async function persistir(
+    async function persistir(
     mes: string,
     adminId: string,
     totalLeadsConvertidos: number,
     itens: ResultadoColaborador[]
   ) {
+    // Apaga tudo desse mês antes de salvar de novo, pra garantir que
+    // ninguém que não deveria mais aparecer (ex.: alguém que virou admin,
+    // ou foi desativado) fique "preso" de uma vez anterior.
+    await supabase.from('fechamentos_mensais').delete().eq('mes', mes);
+
     const agora = new Date().toISOString();
-            const linhas = itens.map((item) => ({
+    const linhas = itens.map((item) => ({
       mes,
       colaborador_id: item.colaborador_id,
       nome_snapshot: item.nome,
