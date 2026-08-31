@@ -3,6 +3,7 @@ import { Skeleton } from '../../components/Skeleton';
 import { useDisponibilidade } from '../../features/availability/useDisponibilidade';
 import { usePrazoDisponibilidade } from '../../features/availability/usePrazoDisponibilidade';
 import { useToast, useConfirm } from '../../components/FeedbackProvider';
+import { DisponibilidadeEquipeModal } from '../../components/DisponibilidadeEquipeModal';
 import { corTurno } from '../../lib/turnoColors';
 
 function formatarData(data: string) {
@@ -37,6 +38,7 @@ export function DisponibilidadePage() {
 
   // Controla qual bolinha de contagem está com o detalhe aberto no momento.
   const [detalheAberto, setDetalheAberto] = useState<string | null>(null);
+  const [modalEquipeAberto, setModalEquipeAberto] = useState(false);
 
     if (carregando) {
     return (
@@ -129,12 +131,19 @@ export function DisponibilidadePage() {
         </p>
       )}
 
-      <div className="mt-3">
+      <div className="mt-3 flex flex-wrap items-center gap-x-5 gap-y-2">
         <button
           onClick={handleRepetirAnterior}
           className="text-sm font-medium text-ceruleo hover:text-ceruleo/80"
         >
           Usar a mesma disponibilidade de antes
+        </button>
+
+        <button
+          onClick={() => setModalEquipeAberto(true)}
+          className="text-sm font-medium text-ceruleo hover:text-ceruleo/80"
+        >
+          Ver disponibilidade da equipe
         </button>
       </div>
 
@@ -251,6 +260,14 @@ export function DisponibilidadePage() {
           {enviando ? 'Enviando...' : 'Enviar disponibilidade'}
         </button>
       </div>
+
+      <DisponibilidadeEquipeModal
+        periodoId={periodo.id}
+        dataInicio={periodo.data_inicio}
+        dataFim={periodo.data_fim}
+        aberto={modalEquipeAberto}
+        onFechar={() => setModalEquipeAberto(false)}
+      />
     </div>
   );
 }
