@@ -131,19 +131,27 @@ export function DisponibilidadePage() {
         </p>
       )}
 
-      <div className="mt-3 flex flex-wrap items-center gap-x-5 gap-y-2">
+      <div className="mt-4 flex flex-wrap items-center gap-3">
+        <button
+          onClick={() => setModalEquipeAberto(true)}
+          className="inline-flex items-center gap-2 rounded-md border border-ceruleo bg-ceruleo px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-ceruleo/90"
+        >
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            viewBox="0 0 20 20"
+            fill="currentColor"
+            className="h-4 w-4"
+          >
+            <path d="M10 9a3 3 0 100-6 3 3 0 000 6zM6 8a2 2 0 10-.001-4.001A2 2 0 006 8zM1.5 14.25c0-1.657 1.79-3 4-3 .68 0 1.32.13 1.878.359C6.548 12.29 6 13.36 6 14.5v.5H1.5v-.75zM18.5 15h-11v-.5c0-1.795 2.015-3.25 4.5-3.25s4.5 1.455 4.5 3.25V15zM14 8a2 2 0 10-.001-4.001A2 2 0 0014 8z" />
+          </svg>
+          Ver disponibilidade da equipe
+        </button>
+
         <button
           onClick={handleRepetirAnterior}
           className="text-sm font-medium text-ceruleo hover:text-ceruleo/80"
         >
           Usar a mesma disponibilidade de antes
-        </button>
-
-        <button
-          onClick={() => setModalEquipeAberto(true)}
-          className="text-sm font-medium text-ceruleo hover:text-ceruleo/80"
-        >
-          Ver disponibilidade da equipe
         </button>
       </div>
 
