@@ -1,5 +1,6 @@
 import { corTurno } from '../lib/turnoColors';
 import { useDisponibilidadeEquipe } from '../features/availability/useDisponibilidadeEquipe';
+import { useModalAcessivel } from '../hooks/useModalAcessivel';
 
 interface DisponibilidadeEquipeModalProps {
   periodoId: string;
@@ -25,6 +26,7 @@ export function DisponibilidadeEquipeModal({
     periodoId,
     aberto
   );
+  const ref = useModalAcessivel(aberto, onFechar);
 
   if (!aberto) return null;
 
@@ -38,13 +40,22 @@ export function DisponibilidadeEquipeModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
-      <div className="flex max-h-[90vh] w-full max-w-3xl flex-col rounded-lg bg-white shadow-xl">
+      <div
+        ref={ref}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="titulo-disponibilidade-equipe"
+        className="flex max-h-[90vh] w-full max-w-3xl flex-col rounded-lg bg-white shadow-xl"
+      >
         <div className="flex items-start justify-between border-b border-slate-200 p-5">
           <div>
             <p className="font-mono text-xs font-medium uppercase tracking-widest text-ceruleo">
               Disponibilidade da equipe
             </p>
-            <h3 className="mt-1 font-display text-lg font-semibold text-tinta">
+            <h3
+              id="titulo-disponibilidade-equipe"
+              className="mt-1 font-display text-lg font-semibold text-tinta"
+            >
               {equipeNome ?? 'Sem equipe'}
             </h3>
           </div>
