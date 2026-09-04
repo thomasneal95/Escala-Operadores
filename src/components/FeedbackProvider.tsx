@@ -1,4 +1,5 @@
 import { createContext, useCallback, useContext, useRef, useState } from 'react';
+import { useModalAcessivel } from '../hooks/useModalAcessivel';
 
 // ============================================================================
 // Toast — notificações discretas no canto da tela, substituindo window.alert
@@ -81,6 +82,8 @@ export function FeedbackProvider({ children }: { children: React.ReactNode }) {
     setDialogo(null);
   }
 
+  const refDialogo = useModalAcessivel(!!dialogo, () => responder(false));
+
   return (
     <ToastContext.Provider value={{ mostrarToast }}>
       <ConfirmContext.Provider value={{ confirmar }}>
@@ -111,6 +114,10 @@ export function FeedbackProvider({ children }: { children: React.ReactNode }) {
             onClick={() => responder(false)}
           >
             <div
+              ref={refDialogo}
+              role="alertdialog"
+              aria-modal="true"
+              aria-describedby="mensagem-confirmacao"
               className="w-full max-w-sm rounded-lg bg-white p-6 shadow-xl"
               onClick={(e) => e.stopPropagation()}
             >
@@ -119,7 +126,9 @@ export function FeedbackProvider({ children }: { children: React.ReactNode }) {
                   {dialogo.opcoes.titulo}
                 </h3>
               )}
-              <p className="mt-2 text-sm text-slate-600">{dialogo.opcoes.mensagem}</p>
+              <p id="mensagem-confirmacao" className="mt-2 text-sm text-slate-600">
+                {dialogo.opcoes.mensagem}
+              </p>
               <div className="mt-5 flex justify-end gap-3">
                 <button
                   onClick={() => responder(false)}
