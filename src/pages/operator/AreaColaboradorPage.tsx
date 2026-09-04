@@ -1,8 +1,6 @@
-﻿import type { ReactNode } from 'react';
-import { useAreaColaborador } from '../../features/schedules/useAreaColaborador';
+﻿import { useAreaColaborador } from '../../features/schedules/useAreaColaborador';
 import { useCalendarioToken } from '../../features/schedules/useCalendarioToken';
 import { TermoAceiteModal } from '../../components/TermoAceiteModal';
-import { ResumoOperador } from '../../components/ResumoOperador';
 import { useToast } from '../../components/FeedbackProvider';
 import { DisponibilidadePage } from './DisponibilidadePage';
 import { MinhaEscalaPage } from './MinhaEscalaPage';
@@ -54,36 +52,37 @@ export function AreaColaboradorPage() {
     return <p className="rounded-md bg-red-50 px-4 py-3 text-sm text-red-700">{erro}</p>;
   }
 
-  let conteudo: ReactNode;
-
-  if (periodo && (periodo.status === 'confirmado' || periodo.status === 'encerrado') && colaboradorId) {
-    conteudo = (
-      <>
+    if (periodo && (periodo.status === 'confirmado' || periodo.status === 'encerrado') && colaboradorId) {
+    return (
+      <div>
         <TermoAceiteModal
           periodoId={periodo.id}
           dataInicio={periodo.data_inicio}
           dataFim={periodo.data_fim}
         />
         <MinhaEscalaPage colaboradorId={colaboradorId} periodo={periodo} />
-      </>
-    );
-  } else if (periodo && periodo.status === 'em_organizacao') {
-    conteudo = (
-      <div className="rounded-lg border border-slate-200 bg-white p-8 text-center">
-        <p className="text-slate-600">O recebimento de disponibilidade foi encerrado.</p>
-        <p className="mt-1 text-sm text-slate-400">
-          A escala esta sendo organizada. Volte em breve para consultar seus turnos.
-        </p>
+        <SecaoCalendario />
       </div>
     );
-  } else {
-    conteudo = <DisponibilidadePage />;
+  }
+
+  if (periodo && periodo.status === 'em_organizacao') {
+    return (
+      <div>
+        <div className="rounded-lg border border-slate-200 bg-white p-8 text-center">
+          <p className="text-slate-600">O recebimento de disponibilidade foi encerrado.</p>
+          <p className="mt-1 text-sm text-slate-400">
+            A escala esta sendo organizada. Volte em breve para consultar seus turnos.
+          </p>
+        </div>
+        <SecaoCalendario />
+      </div>
+    );
   }
 
   return (
     <div>
-      {colaboradorId && periodo && <ResumoOperador colaboradorId={colaboradorId} periodo={periodo} />}
-      {conteudo}
+      <DisponibilidadePage />
       <SecaoCalendario />
     </div>
   );

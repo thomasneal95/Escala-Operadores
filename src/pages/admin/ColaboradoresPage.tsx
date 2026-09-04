@@ -1,6 +1,5 @@
 ﻿import { useState, type FormEvent } from 'react';
 import { SkeletonLinhaTabela } from '../../components/Skeleton';
-import { SecaoRecolhivel } from '../../components/SecaoRecolhivel';
 import { useCriarColaborador } from '../../features/employees/useCriarColaborador';
 import { useColaboradores } from '../../features/employees/useColaboradores';
 import { useEquipes } from '../../features/teams/useEquipes';
@@ -154,12 +153,9 @@ export function ColaboradoresPage() {
 
   return (
     <div>
-      <SecaoRecolhivel
-        titulo="Novo colaborador"
-        padraoAberta={false}
-        descricao="Cadastrar uma nova pessoa na equipe."
-      >
-        <form onSubmit={handleCriar} className="mt-1 grid grid-cols-1 gap-4 sm:grid-cols-2">
+      <div className="rounded-lg border border-slate-200 bg-white p-6">
+        <h2 className="font-display font-semibold text-tinta">Novo colaborador</h2>
+        <form onSubmit={handleCriar} className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div>
             <label className="block text-sm font-medium text-slate-700">Nome completo</label>
             <input
@@ -288,7 +284,7 @@ export function ColaboradoresPage() {
             {sucesso}
           </p>
         )}
-      </SecaoRecolhivel>
+      </div>
 
       <div className="mt-6">
         <input

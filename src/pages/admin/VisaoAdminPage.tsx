@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react';
 import { Skeleton } from '../../components/Skeleton';
-import { SecaoRecolhivel } from '../../components/SecaoRecolhivel';
 import { useVisaoAdmin } from '../../features/schedules/useVisaoAdmin';
 import { useAuth } from '../../features/auth/AuthContext';
 import { useEscala } from '../../features/schedules/useEscala';
@@ -340,10 +339,11 @@ export function VisaoAdminPage() {
           </div>
 
           {/* Tabela de disponibilidades */}
-          <div className="mt-6">
-            <SecaoRecolhivel titulo="Disponibilidade informada">
-              <div className="-mx-5 -mb-5 overflow-x-auto rounded-b-lg">
-                <table className="w-full min-w-[720px] text-left text-sm">
+          <p className="mt-6 font-mono text-xs font-medium uppercase tracking-widest text-slate-400">
+            Disponibilidade informada
+          </p>
+          <div className="mt-3 overflow-x-auto rounded-lg border border-slate-200 bg-white">
+            <table className="w-full min-w-[720px] text-left text-sm">
               <thead className="border-b border-slate-200 bg-slate-50 text-slate-500">
                 <tr>
                   <th className="px-4 py-3 font-medium">Colaborador</th>
@@ -421,9 +421,7 @@ export function VisaoAdminPage() {
                   </tr>
                 ))}
               </tbody>
-              </table>
-              </div>
-            </SecaoRecolhivel>
+            </table>
           </div>
 
           {/* Montagem da escala */}
@@ -625,35 +623,31 @@ export function VisaoAdminPage() {
           )}
 
           {/* Zona de risco */}
-          <div className="mt-10">
-            <SecaoRecolhivel
-              titulo="Zona de risco"
-              tom="perigo"
-              padraoAberta={false}
-              descricao="Ações que apagam dados permanentemente."
-            >
-              <p className="text-sm text-red-700">
-                Estas ações apagam dados permanentemente e não podem ser desfeitas.
-                Use apenas se precisar corrigir um erro de teste ou reiniciar o
-                processo deste período.
-              </p>
-              <div className="mt-4 flex flex-wrap gap-3">
-                <button
-                  onClick={handleResetarComDisponibilidades}
-                  disabled={atualizandoStatus}
-                  className="rounded-md border border-red-300 bg-white px-3 py-1.5 text-sm font-medium text-red-700 hover:bg-red-100 disabled:opacity-60"
-                >
-                  Excluir escala e disponibilidades
-                </button>
-                <button
-                  onClick={handleResetarSoEscala}
-                  disabled={atualizandoStatus}
-                  className="rounded-md border border-red-300 bg-white px-3 py-1.5 text-sm font-medium text-red-700 hover:bg-red-100 disabled:opacity-60"
-                >
-                  Excluir apenas a escala
-                </button>
-              </div>
-            </SecaoRecolhivel>
+          <div className="mt-10 rounded-lg border border-red-200 bg-red-50 p-5">
+            <p className="font-mono text-xs font-medium uppercase tracking-widest text-red-600">
+              Zona de risco
+            </p>
+            <p className="mt-1 text-sm text-red-700">
+              Estas ações apagam dados permanentemente e não podem ser desfeitas.
+              Use apenas se precisar corrigir um erro de teste ou reiniciar o
+              processo deste período.
+            </p>
+            <div className="mt-4 flex flex-wrap gap-3">
+              <button
+                onClick={handleResetarComDisponibilidades}
+                disabled={atualizandoStatus}
+                className="rounded-md border border-red-300 bg-white px-3 py-1.5 text-sm font-medium text-red-700 hover:bg-red-100 disabled:opacity-60"
+              >
+                Excluir escala e disponibilidades
+              </button>
+              <button
+                onClick={handleResetarSoEscala}
+                disabled={atualizandoStatus}
+                className="rounded-md border border-red-300 bg-white px-3 py-1.5 text-sm font-medium text-red-700 hover:bg-red-100 disabled:opacity-60"
+              >
+                Excluir apenas a escala
+              </button>
+            </div>
           </div>
         </div>
       )}

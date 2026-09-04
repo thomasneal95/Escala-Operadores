@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react';
 import { useAuth } from '../features/auth/AuthContext';
-import { useModalAcessivel } from '../hooks/useModalAcessivel';
 
 interface PassoTour {
   titulo: string;
@@ -59,8 +58,6 @@ export function TourOperador() {
     setAberto(false);
   }
 
-  const ref = useModalAcessivel(aberto, fechar);
-
   if (!aberto) return null;
 
   const ehUltimo = passoAtual === passos.length - 1;
@@ -68,16 +65,8 @@ export function TourOperador() {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-      <div
-        ref={ref}
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="titulo-tour"
-        className="w-full max-w-sm rounded-lg bg-white p-6 shadow-xl"
-      >
-        <h3 id="titulo-tour" className="font-display text-lg font-semibold text-tinta">
-          {passo.titulo}
-        </h3>
+      <div className="w-full max-w-sm rounded-lg bg-white p-6 shadow-xl">
+        <h3 className="font-display text-lg font-semibold text-tinta">{passo.titulo}</h3>
         <p className="mt-2 text-sm text-slate-600">{passo.descricao}</p>
 
         <div className="mt-5 flex items-center justify-center gap-1.5">
