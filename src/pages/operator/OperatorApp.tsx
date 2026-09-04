@@ -6,6 +6,8 @@ import { ColegasEquipePage } from './ColegasEquipePage';
 import { HistoricoEscalasPage } from './HistoricoEscalasPage';
 import { SolicitacoesTrocaPage } from './SolicitacoesTrocaPage';
 import { TourOperador } from '../../components/TourOperador';
+import { ErrorBoundary } from '../../components/ErrorBoundary';
+import { FallbackErroTela } from '../../components/FallbackErroTela';
 
 type Aba = 'minha-area' | 'equipe' | 'trocas' | 'historico';
 
@@ -146,10 +148,12 @@ export function OperatorApp() {
       {/* Conteúdo principal */}
       <main className="px-6 py-10 sm:ml-64">
         <div className="mx-auto max-w-2xl">
-          {abaAtiva === 'minha-area' && <AreaColaboradorPage />}
-          {abaAtiva === 'equipe' && <ColegasEquipePage />}
-          {abaAtiva === 'trocas' && <SolicitacoesTrocaPage />}
-          {abaAtiva === 'historico' && <HistoricoEscalasPage />}
+          <ErrorBoundary key={abaAtiva} fallback={<FallbackErroTela />}>
+            {abaAtiva === 'minha-area' && <AreaColaboradorPage />}
+            {abaAtiva === 'equipe' && <ColegasEquipePage />}
+            {abaAtiva === 'trocas' && <SolicitacoesTrocaPage />}
+            {abaAtiva === 'historico' && <HistoricoEscalasPage />}
+          </ErrorBoundary>
         </div>
       </main>
 

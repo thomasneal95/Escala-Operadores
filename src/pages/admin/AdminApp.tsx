@@ -13,6 +13,8 @@ import { SolicitacoesTrocaAdminPage } from './SolicitacoesTrocaAdminPage';
 import { MapaCoberturaPage } from './MapaCoberturaPage';
 import { AssiduidadePage } from './AssiduidadePage';
 import { ComissionamentoPage } from './ComissionamentoPage';
+import { ErrorBoundary } from '../../components/ErrorBoundary';
+import { FallbackErroTela } from '../../components/FallbackErroTela';
 
 type Aba =
   | 'painel'
@@ -225,18 +227,20 @@ export function AdminApp() {
       {/* Conteúdo principal */}
       <main className="px-6 py-10 sm:ml-64">
         <div className="mx-auto max-w-5xl">
-          {abaAtiva === 'painel' && <PainelAdminPage aoNavegar={setAbaAtiva} />}
-          {abaAtiva === 'escala' && <VisaoAdminPage />}
-          {abaAtiva === 'equipes' && <EquipesPage />}
-          {abaAtiva === 'turnos' && <TurnosPage />}
-          {abaAtiva === 'colaboradores' && <ColaboradoresPage />}
-          {abaAtiva === 'trocas' && <SolicitacoesTrocaAdminPage />}
-          {abaAtiva === 'mapa' && <MapaCoberturaPage />}
-          {abaAtiva === 'assiduidade' && <AssiduidadePage />}
-          {abaAtiva === 'comissionamento' && <ComissionamentoPage />}
-          {abaAtiva === 'historico' && <HistoricoAdminPage />}
-          {abaAtiva === 'acesso' && <GestaoAcessoPage />}
-          {abaAtiva === 'configuracoes' && <ConfiguracoesPage />}
+          <ErrorBoundary key={abaAtiva} fallback={<FallbackErroTela />}>
+            {abaAtiva === 'painel' && <PainelAdminPage aoNavegar={setAbaAtiva} />}
+            {abaAtiva === 'escala' && <VisaoAdminPage />}
+            {abaAtiva === 'equipes' && <EquipesPage />}
+            {abaAtiva === 'turnos' && <TurnosPage />}
+            {abaAtiva === 'colaboradores' && <ColaboradoresPage />}
+            {abaAtiva === 'trocas' && <SolicitacoesTrocaAdminPage />}
+            {abaAtiva === 'mapa' && <MapaCoberturaPage />}
+            {abaAtiva === 'assiduidade' && <AssiduidadePage />}
+            {abaAtiva === 'comissionamento' && <ComissionamentoPage />}
+            {abaAtiva === 'historico' && <HistoricoAdminPage />}
+            {abaAtiva === 'acesso' && <GestaoAcessoPage />}
+            {abaAtiva === 'configuracoes' && <ConfiguracoesPage />}
+          </ErrorBoundary>
         </div>
       </main>
 

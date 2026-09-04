@@ -3,6 +3,8 @@ import { useAreaColaborador } from '../../features/schedules/useAreaColaborador'
 import { useCalendarioToken } from '../../features/schedules/useCalendarioToken';
 import { TermoAceiteModal } from '../../components/TermoAceiteModal';
 import { ResumoOperador } from '../../components/ResumoOperador';
+import { ErrorBoundary } from '../../components/ErrorBoundary';
+import { FallbackErroTela } from '../../components/FallbackErroTela';
 import { useToast } from '../../components/FeedbackProvider';
 import { DisponibilidadePage } from './DisponibilidadePage';
 import { MinhaEscalaPage } from './MinhaEscalaPage';
@@ -82,8 +84,14 @@ export function AreaColaboradorPage() {
 
   return (
     <div>
-      {colaboradorId && periodo && <ResumoOperador colaboradorId={colaboradorId} periodo={periodo} />}
-      {conteudo}
+      {colaboradorId && periodo && (
+        <ErrorBoundary fallback={null}>
+          <ResumoOperador colaboradorId={colaboradorId} periodo={periodo} />
+        </ErrorBoundary>
+      )}
+      <ErrorBoundary key={periodo?.status ?? 'sem-periodo'} fallback={<FallbackErroTela />}>
+        {conteudo}
+      </ErrorBoundary>
       <SecaoCalendario />
     </div>
   );
