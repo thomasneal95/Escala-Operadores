@@ -550,66 +550,71 @@ export function VisaoAdminPage() {
                     ) : equipes.length === 0 ? (
                       <p className="mt-3 text-sm text-slate-400">Ninguém escalado neste dia.</p>
                     ) : (
-                      <div className="mt-4 overflow-x-auto rounded-md border border-slate-200">
-                        <table className="w-full min-w-[560px] text-left text-sm">
-                          <thead className="border-b border-slate-200 bg-slate-50">
-                            <tr>
-                              <th className="px-4 py-3 align-bottom font-medium text-slate-500">
-                                Equipe
-                              </th>
-                              {turnosDisponiveisNesseDia.map((turno) => (
-                                <th
-                                  key={turno.id}
-                                  className="border-l border-slate-200 px-4 py-3 font-medium text-slate-500"
-                                >
-                                  <div className="flex items-center gap-1.5">
-                                    <span className={`h-2 w-2 rounded-full ${corTurno(turno.nome).dot}`} />
-                                    {turno.nome}
-                                  </div>
-                                  <span className="font-mono text-xs font-normal text-slate-400">
-                                    {turno.hora_inicio.slice(0, 5)}–{turno.hora_fim.slice(0, 5)}
-                                  </span>
-                                </th>
-                              ))}
-                            </tr>
-                          </thead>
-                          <tbody className="divide-y divide-slate-100">
-                            {equipes.map((nomeEquipe) => (
-                              <tr key={nomeEquipe}>
-                                <td className="whitespace-nowrap px-4 py-3 align-top font-medium text-tinta">
+                      <div className="mt-4 space-y-3">
+                        {equipes.map((nomeEquipe) => {
+                          const totalEquipe = turnosDisponiveisNesseDia.reduce(
+                            (soma, turno) =>
+                              soma + (porEquipeETurno.get(nomeEquipe)?.get(turno.id)?.length ?? 0),
+                            0
+                          );
+
+                          return (
+                            <div
+                              key={nomeEquipe}
+                              className="rounded-lg border border-slate-200 bg-slate-50/60 p-4"
+                            >
+                              <div className="flex items-center justify-between">
+                                <p className="font-display font-semibold text-tinta">
                                   {nomeEquipe}
-                                </td>
+                                </p>
+                                <span className="rounded-full bg-white px-2 py-0.5 text-xs font-medium text-slate-500 ring-1 ring-slate-200">
+                                  {totalEquipe} escalado{totalEquipe !== 1 ? 's' : ''}
+                                </span>
+                              </div>
+
+                              <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-3">
                                 {turnosDisponiveisNesseDia.map((turno) => {
                                   const membros =
                                     porEquipeETurno.get(nomeEquipe)?.get(turno.id) ?? [];
                                   const cor = corTurno(turno.nome);
 
                                   return (
-                                    <td
+                                    <div
                                       key={turno.id}
-                                      className="border-l border-slate-100 px-4 py-3 align-top"
+                                      className="rounded-md border border-slate-200 bg-white p-3"
                                     >
-                                      {membros.length === 0 ? (
-                                        <span className="text-slate-300">—</span>
-                                      ) : (
-                                        <div className="space-y-1">
-                                          {membros.map((m) => (
+                                      <div className="flex items-center gap-1.5">
+                                        <span className={`h-2 w-2 rounded-full ${cor.dot}`} />
+                                        <p className="text-sm font-medium text-tinta">
+                                          {turno.nome}
+                                        </p>
+                                      </div>
+                                      <p className="font-mono text-xs text-slate-400">
+                                        {turno.hora_inicio.slice(0, 5)}–
+                                        {turno.hora_fim.slice(0, 5)}
+                                      </p>
+
+                                      <div className="mt-2 space-y-1">
+                                        {membros.length === 0 ? (
+                                          <p className="text-xs text-slate-300">Ninguém</p>
+                                        ) : (
+                                          membros.map((m) => (
                                             <p
                                               key={m.colaboradorId}
-                                              className={`rounded px-2 py-0.5 text-xs font-medium ${cor.bgLight} ${cor.text}`}
+                                              className={`truncate rounded px-2 py-1 text-xs font-medium ${cor.bgLight} ${cor.text}`}
                                             >
                                               {m.nome}
                                             </p>
-                                          ))}
-                                        </div>
-                                      )}
-                                    </td>
+                                          ))
+                                        )}
+                                      </div>
+                                    </div>
                                   );
                                 })}
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
+                              </div>
+                            </div>
+                          );
+                        })}
                       </div>
                     )}
                   </div>
