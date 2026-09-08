@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useId, useState } from 'react';
 import { supabase } from '../../lib/supabase/client';
 
 interface EscalaDoColaborador {
@@ -10,6 +10,12 @@ interface EscalaDoColaborador {
 }
 
 export function useMinhaEscala(colaboradorId: string | null, periodoId: string | null) {
+  // Identifica esta instância do hook de forma única — dois componentes
+  // podem chamar useMinhaEscala com o mesmo colaborador/período ao mesmo
+  // tempo (ex.: resumo + tela de escala), e o cliente do Supabase reaproveita
+  // o canal quando o nome (topic) é igual, o que faz o segundo `.on()` lançar
+  // erro ("cannot add callbacks... after subscribe()") por já estar inscrito.
+  const idInstancia = useId();
   const [escalas, setEscalas] = useState<EscalaDoColaborador[]>([]);
   const [carregando, setCarregando] = useState(true);
   const [erro, setErro] = useState<string | null>(null);
@@ -50,7 +56,7 @@ export function useMinhaEscala(colaboradorId: string | null, periodoId: string |
     if (!colaboradorId || !periodoId) return;
 
     const canal = supabase
-      .channel(`minha-escala-${colaboradorId}-${periodoId}`)
+      .channel(`minha-escala-${colaboradorId}-${periodoId}-${idInstancia}`)
       .on(
         'postgres_changes',
         {
@@ -68,7 +74,7 @@ export function useMinhaEscala(colaboradorId: string | null, periodoId: string |
     return () => {
       supabase.removeChannel(canal);
     };
-  }, [colaboradorId, periodoId, carregar]);
+  }, [colaboradorId, periodoId, carregar, idInstancia]);
 
   return { escalas, carregando, erro };
 }

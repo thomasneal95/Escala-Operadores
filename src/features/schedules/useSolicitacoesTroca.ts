@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useId, useState } from 'react';
 import { supabase } from '../../lib/supabase/client';
 import { useAuth } from '../auth/AuthContext';
 
@@ -46,6 +46,11 @@ function formatarEscala(row: unknown): EscalaResumo | null {
 }
 
 export function useSolicitacoesTroca() {
+  // Identifica esta instância do hook de forma única — se dois componentes
+  // chamarem useSolicitacoesTroca ao mesmo tempo para o mesmo colaborador,
+  // o Supabase reaproveita o canal (mesmo topic) e o segundo `.on()` lança
+  // erro por já estar inscrito. Ver mesmo problema em useMinhaEscala.
+  const idInstancia = useId();
   const { session } = useAuth();
   const [colaboradorId, setColaboradorId] = useState<string | null>(null);
   const [solicitacoes, setSolicitacoes] = useState<SolicitacaoTroca[]>([]);
@@ -130,7 +135,7 @@ export function useSolicitacoesTroca() {
     if (!colaboradorId) return;
 
     const canal = supabase
-      .channel(`solicitacoes-troca-${colaboradorId}`)
+      .channel(`solicitacoes-troca-${colaboradorId}-${idInstancia}`)
       .on(
         'postgres_changes',
         {
@@ -156,7 +161,7 @@ export function useSolicitacoesTroca() {
     return () => {
       supabase.removeChannel(canal);
     };
-  }, [colaboradorId, carregar]);
+  }, [colaboradorId, carregar, idInstancia]);
 
   async function criarSolicitacao(periodoId: string, escalaSolicitanteId: string, colegaId: string) {
     if (!colaboradorId) return { erro: 'Não foi possível identificar seus dados.' };
