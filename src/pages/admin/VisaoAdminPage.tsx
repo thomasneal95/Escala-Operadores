@@ -73,6 +73,7 @@ export function VisaoAdminPage() {
   const [edicaoHabilitada, setEdicaoHabilitada] = useState(false);
   const [erroLinha, setErroLinha] = useState<Record<string, string>>({});
   const [mensagemGeracao, setMensagemGeracao] = useState<string | null>(null);
+  const [visualizacaoEscala, setVisualizacaoEscala] = useState<'turno' | 'equipe'>('turno');
 
   useEffect(() => {
     setEdicaoHabilitada(false);
@@ -90,6 +91,45 @@ export function VisaoAdminPage() {
 
   function equipeNomePorId(colaboradorId: string) {
     return colaboradores.find((c) => c.id === colaboradorId)?.equipe_nome ?? 'Sem equipe';
+  }
+
+  interface MembroEscaladoNoDia {
+    colaboradorId: string;
+    nome: string;
+    turnoNome: string;
+    horaInicio: string;
+    horaFim: string;
+  }
+
+  function escaladosPorEquipeNoDia(data: string) {
+    const porEquipe = new Map<string, MembroEscaladoNoDia[]>();
+
+    for (const turno of turnosDoDia(data)) {
+      for (const e of escaladosEm(data, turno.id)) {
+        const nomeEquipe = equipeNomePorId(e.colaborador_id);
+        const lista = porEquipe.get(nomeEquipe) ?? [];
+        lista.push({
+          colaboradorId: e.colaborador_id,
+          nome: nomePorId(e.colaborador_id),
+          turnoNome: turno.nome,
+          horaInicio: turno.hora_inicio,
+          horaFim: turno.hora_fim,
+        });
+        porEquipe.set(nomeEquipe, lista);
+      }
+    }
+
+    for (const membros of porEquipe.values()) {
+      membros.sort(
+        (a, b) => a.horaInicio.localeCompare(b.horaInicio) || a.nome.localeCompare(b.nome)
+      );
+    }
+
+    return [...porEquipe.entries()].sort(([equipeA], [equipeB]) => {
+      if (equipeA === 'Sem equipe') return 1;
+      if (equipeB === 'Sem equipe') return -1;
+      return equipeA.localeCompare(equipeB);
+    });
   }
 
   async function handleAdicionar(colaboradorId: string, data: string, turnoId: string) {
@@ -431,15 +471,41 @@ export function VisaoAdminPage() {
             <p className="font-mono text-xs font-medium uppercase tracking-widest text-slate-400">
               Escala
             </p>
-            {periodo.status === 'em_organizacao' && (
-              <button
-                onClick={handleGerarAutomatico}
-                disabled={gerando}
-                className="rounded-md bg-profundo px-3 py-1.5 text-sm font-medium text-white hover:bg-profundo/90 disabled:opacity-60"
-              >
-                {gerando ? 'Gerando...' : 'Gerar escala automaticamente'}
-              </button>
-            )}
+
+            <div className="flex flex-wrap items-center gap-3">
+              <div className="inline-flex rounded-md border border-slate-200 bg-slate-50 p-0.5 text-sm">
+                <button
+                  onClick={() => setVisualizacaoEscala('turno')}
+                  className={`rounded px-3 py-1 font-medium transition ${
+                    visualizacaoEscala === 'turno'
+                      ? 'bg-white text-tinta shadow-sm'
+                      : 'text-slate-500 hover:text-tinta'
+                  }`}
+                >
+                  Por turno
+                </button>
+                <button
+                  onClick={() => setVisualizacaoEscala('equipe')}
+                  className={`rounded px-3 py-1 font-medium transition ${
+                    visualizacaoEscala === 'equipe'
+                      ? 'bg-white text-tinta shadow-sm'
+                      : 'text-slate-500 hover:text-tinta'
+                  }`}
+                >
+                  Por equipe
+                </button>
+              </div>
+
+              {periodo.status === 'em_organizacao' && (
+                <button
+                  onClick={handleGerarAutomatico}
+                  disabled={gerando}
+                  className="rounded-md bg-profundo px-3 py-1.5 text-sm font-medium text-white hover:bg-profundo/90 disabled:opacity-60"
+                >
+                  {gerando ? 'Gerando...' : 'Gerar escala automaticamente'}
+                </button>
+              )}
+            </div>
           </div>
 
           {mensagemGeracao && (
@@ -465,6 +531,58 @@ export function VisaoAdminPage() {
                   </div>
                 </div>
               ))}
+            </div>
+          ) : visualizacaoEscala === 'equipe' ? (
+            <div className="mt-3 space-y-6">
+              {[periodo.data_inicio, periodo.data_fim].map((data) => {
+                const grupos = escaladosPorEquipeNoDia(data);
+
+                return (
+                  <div key={data} className="rounded-lg border border-slate-200 bg-white p-5">
+                    <h2 className="font-display font-semibold text-tinta">
+                      {nomeDoDia(data, periodo.data_inicio)}
+                      <span className="ml-2 font-mono text-sm font-normal text-slate-400">
+                        {formatarData(data)}
+                      </span>
+                    </h2>
+
+                    {grupos.length === 0 ? (
+                      <p className="mt-3 text-sm text-slate-400">Ninguém escalado neste dia.</p>
+                    ) : (
+                      <div className="mt-4 space-y-4">
+                        {grupos.map(([nomeEquipe, membros]) => (
+                          <div key={nomeEquipe}>
+                            <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+                              {nomeEquipe}{' '}
+                              <span className="font-normal normal-case text-slate-300">
+                                · {membros.length}
+                              </span>
+                            </p>
+                            <div className="mt-2 flex flex-wrap gap-2">
+                              {membros.map((m) => {
+                                const cor = corTurno(m.turnoNome);
+                                return (
+                                  <span
+                                    key={`${m.colaboradorId}-${m.turnoNome}-${m.horaInicio}`}
+                                    className={`inline-flex items-center gap-1.5 rounded-full ${cor.bgLight} px-3 py-1 text-sm ${cor.text}`}
+                                  >
+                                    <span className={`h-1.5 w-1.5 rounded-full ${cor.dot}`} />
+                                    {m.nome}
+                                    <span className="font-mono text-xs opacity-70">
+                                      {m.turnoNome} {m.horaInicio.slice(0, 5)}–
+                                      {m.horaFim.slice(0, 5)}
+                                    </span>
+                                  </span>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           ) : (
             <div className="mt-3 space-y-6">
