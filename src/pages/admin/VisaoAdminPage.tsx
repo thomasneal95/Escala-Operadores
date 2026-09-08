@@ -93,43 +93,41 @@ export function VisaoAdminPage() {
     return colaboradores.find((c) => c.id === colaboradorId)?.equipe_nome ?? 'Sem equipe';
   }
 
-  interface MembroEscaladoNoDia {
+  interface MembroEscalado {
     colaboradorId: string;
     nome: string;
-    turnoNome: string;
-    horaInicio: string;
-    horaFim: string;
   }
 
-  function escaladosPorEquipeNoDia(data: string) {
-    const porEquipe = new Map<string, MembroEscaladoNoDia[]>();
+  // Matriz equipe × turno para um dia: uma linha por equipe, uma coluna por
+  // turno — deixa claro, lado a lado, quem de cada equipe trabalha em cada
+  // período, em vez de misturar tudo numa lista só.
+  function matrizEquipePorDia(data: string) {
+    const porEquipeETurno = new Map<string, Map<string, MembroEscalado[]>>();
 
     for (const turno of turnosDoDia(data)) {
       for (const e of escaladosEm(data, turno.id)) {
         const nomeEquipe = equipeNomePorId(e.colaborador_id);
-        const lista = porEquipe.get(nomeEquipe) ?? [];
-        lista.push({
-          colaboradorId: e.colaborador_id,
-          nome: nomePorId(e.colaborador_id),
-          turnoNome: turno.nome,
-          horaInicio: turno.hora_inicio,
-          horaFim: turno.hora_fim,
-        });
-        porEquipe.set(nomeEquipe, lista);
+        const porTurno = porEquipeETurno.get(nomeEquipe) ?? new Map<string, MembroEscalado[]>();
+        const lista = porTurno.get(turno.id) ?? [];
+        lista.push({ colaboradorId: e.colaborador_id, nome: nomePorId(e.colaborador_id) });
+        porTurno.set(turno.id, lista);
+        porEquipeETurno.set(nomeEquipe, porTurno);
       }
     }
 
-    for (const membros of porEquipe.values()) {
-      membros.sort(
-        (a, b) => a.horaInicio.localeCompare(b.horaInicio) || a.nome.localeCompare(b.nome)
-      );
+    for (const porTurno of porEquipeETurno.values()) {
+      for (const lista of porTurno.values()) {
+        lista.sort((a, b) => a.nome.localeCompare(b.nome));
+      }
     }
 
-    return [...porEquipe.entries()].sort(([equipeA], [equipeB]) => {
+    const equipes = [...porEquipeETurno.keys()].sort((equipeA, equipeB) => {
       if (equipeA === 'Sem equipe') return 1;
       if (equipeB === 'Sem equipe') return -1;
       return equipeA.localeCompare(equipeB);
     });
+
+    return { equipes, porEquipeETurno };
   }
 
   async function handleAdicionar(colaboradorId: string, data: string, turnoId: string) {
@@ -535,7 +533,8 @@ export function VisaoAdminPage() {
           ) : visualizacaoEscala === 'equipe' ? (
             <div className="mt-3 space-y-6">
               {[periodo.data_inicio, periodo.data_fim].map((data) => {
-                const grupos = escaladosPorEquipeNoDia(data);
+                const turnosDisponiveisNesseDia = turnosDoDia(data);
+                const { equipes, porEquipeETurno } = matrizEquipePorDia(data);
 
                 return (
                   <div key={data} className="rounded-lg border border-slate-200 bg-white p-5">
@@ -546,38 +545,71 @@ export function VisaoAdminPage() {
                       </span>
                     </h2>
 
-                    {grupos.length === 0 ? (
+                    {turnosDisponiveisNesseDia.length === 0 ? (
+                      <p className="mt-3 text-sm text-slate-400">Não há operação neste dia.</p>
+                    ) : equipes.length === 0 ? (
                       <p className="mt-3 text-sm text-slate-400">Ninguém escalado neste dia.</p>
                     ) : (
-                      <div className="mt-4 space-y-4">
-                        {grupos.map(([nomeEquipe, membros]) => (
-                          <div key={nomeEquipe}>
-                            <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
-                              {nomeEquipe}{' '}
-                              <span className="font-normal normal-case text-slate-300">
-                                · {membros.length}
-                              </span>
-                            </p>
-                            <div className="mt-2 flex flex-wrap gap-2">
-                              {membros.map((m) => {
-                                const cor = corTurno(m.turnoNome);
-                                return (
-                                  <span
-                                    key={`${m.colaboradorId}-${m.turnoNome}-${m.horaInicio}`}
-                                    className={`inline-flex items-center gap-1.5 rounded-full ${cor.bgLight} px-3 py-1 text-sm ${cor.text}`}
-                                  >
-                                    <span className={`h-1.5 w-1.5 rounded-full ${cor.dot}`} />
-                                    {m.nome}
-                                    <span className="font-mono text-xs opacity-70">
-                                      {m.turnoNome} {m.horaInicio.slice(0, 5)}–
-                                      {m.horaFim.slice(0, 5)}
-                                    </span>
+                      <div className="mt-4 overflow-x-auto rounded-md border border-slate-200">
+                        <table className="w-full min-w-[560px] text-left text-sm">
+                          <thead className="border-b border-slate-200 bg-slate-50">
+                            <tr>
+                              <th className="px-4 py-3 align-bottom font-medium text-slate-500">
+                                Equipe
+                              </th>
+                              {turnosDisponiveisNesseDia.map((turno) => (
+                                <th
+                                  key={turno.id}
+                                  className="border-l border-slate-200 px-4 py-3 font-medium text-slate-500"
+                                >
+                                  <div className="flex items-center gap-1.5">
+                                    <span className={`h-2 w-2 rounded-full ${corTurno(turno.nome).dot}`} />
+                                    {turno.nome}
+                                  </div>
+                                  <span className="font-mono text-xs font-normal text-slate-400">
+                                    {turno.hora_inicio.slice(0, 5)}–{turno.hora_fim.slice(0, 5)}
                                   </span>
-                                );
-                              })}
-                            </div>
-                          </div>
-                        ))}
+                                </th>
+                              ))}
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-slate-100">
+                            {equipes.map((nomeEquipe) => (
+                              <tr key={nomeEquipe}>
+                                <td className="whitespace-nowrap px-4 py-3 align-top font-medium text-tinta">
+                                  {nomeEquipe}
+                                </td>
+                                {turnosDisponiveisNesseDia.map((turno) => {
+                                  const membros =
+                                    porEquipeETurno.get(nomeEquipe)?.get(turno.id) ?? [];
+                                  const cor = corTurno(turno.nome);
+
+                                  return (
+                                    <td
+                                      key={turno.id}
+                                      className="border-l border-slate-100 px-4 py-3 align-top"
+                                    >
+                                      {membros.length === 0 ? (
+                                        <span className="text-slate-300">—</span>
+                                      ) : (
+                                        <div className="space-y-1">
+                                          {membros.map((m) => (
+                                            <p
+                                              key={m.colaboradorId}
+                                              className={`rounded px-2 py-0.5 text-xs font-medium ${cor.bgLight} ${cor.text}`}
+                                            >
+                                              {m.nome}
+                                            </p>
+                                          ))}
+                                        </div>
+                                      )}
+                                    </td>
+                                  );
+                                })}
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
                       </div>
                     )}
                   </div>
