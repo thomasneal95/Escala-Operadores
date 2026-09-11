@@ -1,6 +1,8 @@
+import { useState } from 'react';
 import { useMinhaEscala } from '../../features/schedules/useMinhaEscala';
 import { useVisualizacaoEscala } from '../../features/schedules/useVisualizacaoEscala';
 import { corTurno } from '../../lib/turnoColors';
+import { EscalaEquipeModal } from '../../components/EscalaEquipeModal';
 import type { PeriodoOperacao } from '../../types/database';
 
 function formatarData(data: string) {
@@ -22,6 +24,7 @@ export function MinhaEscalaPage({ colaboradorId, periodo }: MinhaEscalaPageProps
   const { processando, marcarComoVisto, foiVisualizada } = useVisualizacaoEscala(
     escalas.map((e) => e.id)
   );
+  const [modalEquipeAberto, setModalEquipeAberto] = useState(false);
 
   if (carregando) {
     return <p className="text-sm text-slate-400">Carregando...</p>;
@@ -43,6 +46,23 @@ export function MinhaEscalaPage({ colaboradorId, periodo }: MinhaEscalaPageProps
       <h1 className="mt-1 font-display text-2xl font-semibold text-tinta">
         {formatarData(periodo.data_inicio)} – {formatarData(periodo.data_fim)}
       </h1>
+
+      <div className="mt-4">
+        <button
+          onClick={() => setModalEquipeAberto(true)}
+          className="inline-flex items-center gap-2 rounded-md border border-ceruleo bg-ceruleo px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-ceruleo/90"
+        >
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            viewBox="0 0 20 20"
+            fill="currentColor"
+            className="h-4 w-4"
+          >
+            <path d="M10 9a3 3 0 100-6 3 3 0 000 6zM6 8a2 2 0 10-.001-4.001A2 2 0 006 8zM1.5 14.25c0-1.657 1.79-3 4-3 .68 0 1.32.13 1.878.359C6.548 12.29 6 13.36 6 14.5v.5H1.5v-.75zM18.5 15h-11v-.5c0-1.795 2.015-3.25 4.5-3.25s4.5 1.455 4.5 3.25V15zM14 8a2 2 0 10-.001-4.001A2 2 0 0014 8z" />
+          </svg>
+          Ver escala da equipe
+        </button>
+      </div>
 
       <div className="mt-8 space-y-4">
         {[periodo.data_inicio, periodo.data_fim].map((data) => {
@@ -106,6 +126,14 @@ export function MinhaEscalaPage({ colaboradorId, periodo }: MinhaEscalaPageProps
           );
         })}
       </div>
+
+      <EscalaEquipeModal
+        periodoId={periodo.id}
+        dataInicio={periodo.data_inicio}
+        dataFim={periodo.data_fim}
+        aberto={modalEquipeAberto}
+        onFechar={() => setModalEquipeAberto(false)}
+      />
     </div>
   );
 }
