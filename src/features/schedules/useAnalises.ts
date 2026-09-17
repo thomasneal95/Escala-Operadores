@@ -96,14 +96,15 @@ export function useAnalises(equipeIdFiltro: string | null) {
       if (equipeIdFiltro) vagasQuery = vagasQuery.eq('equipe_id', equipeIdFiltro);
       const { data: vagasData } = await vagasQuery;
 
-      // Administradores nunca entram nas análises, mesmo que tenham um
-      // cadastro de colaborador antigo.
+      // Administradores e colaboradores de comissionamento individual (sem
+      // equipe) nunca entram nas análises, mesmo que tenham um cadastro de
+      // colaborador antigo.
       const { data: colaboradoresAdmin } = await supabase
         .from('colaboradores')
-        .select('id, perfis(papel)');
-      const idsAdmin = new Set(
+        .select('id, comissionamento_individual, perfis(papel)');
+      const idsExcluidos = new Set(
         (colaboradoresAdmin ?? [])
-          .filter((c: any) => c.perfis?.papel === 'administrador')
+          .filter((c: any) => c.perfis?.papel === 'administrador' || c.comissionamento_individual)
           .map((c) => c.id)
       );
 
@@ -115,12 +116,12 @@ export function useAnalises(equipeIdFiltro: string | null) {
           .eq('equipe_id', equipeIdFiltro);
         idsColaboradoresFiltro = (colaboradoresDaEquipe ?? [])
           .map((c) => c.id)
-          .filter((id) => !idsAdmin.has(id));
-      } else if (idsAdmin.size > 0) {
+          .filter((id) => !idsExcluidos.has(id));
+      } else if (idsExcluidos.size > 0) {
         const { data: todosColaboradores } = await supabase.from('colaboradores').select('id');
         idsColaboradoresFiltro = (todosColaboradores ?? [])
           .map((c) => c.id)
-          .filter((id) => !idsAdmin.has(id));
+          .filter((id) => !idsExcluidos.has(id));
       }
 
       const idsSeguro =

@@ -77,7 +77,8 @@ export function useSolicitacoesMultaAdmin() {
         supabase
           .from('colaboradores')
           .select('id, perfis(nome_completo)')
-          .eq('ativo', true),
+          .eq('ativo', true)
+          .eq('comissionamento_individual', false),
         supabase
           .from('turnos')
           .select('id, nome, hora_inicio, hora_fim, ordem_exibicao, ativo_sabado, ativo_domingo')

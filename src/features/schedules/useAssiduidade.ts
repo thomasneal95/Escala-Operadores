@@ -38,7 +38,7 @@ export function useAssiduidade() {
 
                   const { data: colaboradoresData, error: erroColaboradores } = await supabase
         .from('colaboradores')
-        .select('id, data_admissao, perfis(nome_completo, papel)')
+        .select('id, data_admissao, comissionamento_individual, perfis(nome_completo, papel)')
         .eq('ativo', true);
 
       if (erroColaboradores) {
@@ -62,7 +62,7 @@ export function useAssiduidade() {
 
                   const semAdmin = (colaboradoresData ?? []).filter((c) => {
         const perfil = c.perfis as unknown as { papel: string } | null;
-        return perfil?.papel !== 'administrador';
+        return perfil?.papel !== 'administrador' && !c.comissionamento_individual;
       });
 
       const resultado: AssiduidadeColaborador[] = semAdmin.map((c) => {

@@ -37,7 +37,7 @@ export function useColaboradores() {
                     const { data, error } = await supabase
       .from('colaboradores')
       .select(
-        'id, perfil_id, equipe_id, turno_semana_id, telefone, matricula, data_admissao, auxilio_mensal, ativo, perfis(nome_completo, papel), equipes(nome)'
+        'id, perfil_id, equipe_id, turno_semana_id, telefone, matricula, data_admissao, auxilio_mensal, ativo, comissionamento_individual, perfis(nome_completo, papel), equipes(nome)'
       );
 
     if (error) {
@@ -46,10 +46,11 @@ export function useColaboradores() {
       return;
     }
 
-    // Administradores não aparecem na lista de colaboradores.
+    // Administradores e colaboradores de comissionamento individual (sem
+    // equipe, só usados na aba Comissionamento) não aparecem aqui.
     const semAdmin = (data ?? []).filter((c) => {
       const perfil = c.perfis as unknown as { papel: string } | null;
-      return perfil?.papel !== 'administrador';
+      return perfil?.papel !== 'administrador' && !c.comissionamento_individual;
     });
 
             const formatados: ColaboradorLista[] = semAdmin.map((c) => {

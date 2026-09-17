@@ -64,7 +64,9 @@ export function useVisaoAdmin() {
 
         const { data: colaboradoresData, error: erroColaboradores } = await supabase
       .from('colaboradores')
-      .select('id, equipe_id, turno_semana_id, perfis(nome_completo, papel), equipes(nome)')
+      .select(
+        'id, equipe_id, turno_semana_id, comissionamento_individual, perfis(nome_completo, papel), equipes(nome)'
+      )
       .eq('ativo', true);
 
     if (erroColaboradores) {
@@ -73,10 +75,11 @@ export function useVisaoAdmin() {
       return;
     }
 
-    // Administradores não aparecem na tela de escala.
+    // Administradores e colaboradores de comissionamento individual (sem
+    // equipe) não aparecem na tela de escala.
     const colaboradoresSemAdmin = (colaboradoresData ?? []).filter((c) => {
       const perfil = c.perfis as unknown as { papel: string } | null;
-      return perfil?.papel !== 'administrador';
+      return perfil?.papel !== 'administrador' && !c.comissionamento_individual;
     });
 
     const colaboradoresFormatados: ColaboradorComPerfil[] = colaboradoresSemAdmin.map((c) => {
