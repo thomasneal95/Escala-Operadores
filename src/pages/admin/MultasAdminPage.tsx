@@ -159,6 +159,7 @@ export function MultasAdminPage() {
     erro,
     decidir,
     excluir,
+    excluirVarias,
     obterUrlImagem,
   } = useSolicitacoesMultaAdmin();
   const toast = useToast();
@@ -167,6 +168,19 @@ export function MultasAdminPage() {
   const [filtroTurnoId, setFiltroTurnoId] = useState('');
   const [filtroColaboradorId, setFiltroColaboradorId] = useState('');
   const [editandoId, setEditandoId] = useState<string | null>(null);
+  const [selecionadas, setSelecionadas] = useState<Set<string>>(new Set());
+
+  function alternarSelecao(id: string) {
+    setSelecionadas((atual) => {
+      const proximo = new Set(atual);
+      if (proximo.has(id)) {
+        proximo.delete(id);
+      } else {
+        proximo.add(id);
+      }
+      return proximo;
+    });
+  }
 
   async function handleVerImagem(caminho: string) {
     const url = await obterUrlImagem(caminho);
@@ -219,6 +233,28 @@ export function MultasAdminPage() {
       return;
     }
     toast('Solicitação excluída.');
+  }
+
+  async function handleExcluirSelecionadas() {
+    const ids = [...selecionadas];
+    if (ids.length === 0) return;
+
+    const confirmou = await confirmar({
+      titulo: `Excluir ${ids.length} solicitaç${ids.length > 1 ? 'ões' : 'ão'}?`,
+      mensagem:
+        'Isso apaga permanentemente todas as solicitações selecionadas, incluindo as imagens de comprovação. Esta ação não pode ser desfeita.',
+      textoConfirmar: 'Excluir selecionadas',
+      perigoso: true,
+    });
+    if (!confirmou) return;
+
+    const resultado = await excluirVarias(ids);
+    if (resultado.erro) {
+      toast(resultado.erro, 'erro');
+      return;
+    }
+    setSelecionadas(new Set());
+    toast(`${ids.length} solicitaç${ids.length > 1 ? 'ões excluídas' : 'ão excluída'}.`);
   }
 
   if (carregando) {
@@ -276,6 +312,39 @@ export function MultasAdminPage() {
         </div>
       </div>
 
+      {filtradas.length > 0 && (
+        <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-slate-200 bg-white p-3">
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={() =>
+                setSelecionadas(
+                  selecionadas.size === filtradas.length
+                    ? new Set()
+                    : new Set(filtradas.map((s) => s.id))
+                )
+              }
+              className="text-sm font-medium text-ceruleo hover:text-ceruleo/80"
+            >
+              {selecionadas.size === filtradas.length ? 'Limpar seleção' : 'Selecionar todas visíveis'}
+            </button>
+            {selecionadas.size > 0 && (
+              <span className="text-sm text-slate-500">{selecionadas.size} selecionada(s)</span>
+            )}
+          </div>
+          {selecionadas.size > 0 && (
+            <button
+              type="button"
+              onClick={handleExcluirSelecionadas}
+              disabled={processando === 'varias'}
+              className="rounded-md bg-red-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-60"
+            >
+              {processando === 'varias' ? 'Excluindo...' : 'Excluir selecionadas'}
+            </button>
+          )}
+        </div>
+      )}
+
       <p className="mt-6 font-mono text-xs font-medium uppercase tracking-widest text-slate-400">
         Pendentes · {pendentes.length}
       </p>
@@ -289,10 +358,19 @@ export function MultasAdminPage() {
           {pendentes.map((s) => (
             <div key={s.id} className="rounded-lg border border-slate-200 bg-white p-4">
               <div className="flex flex-wrap items-start justify-between gap-2">
-                <p className="font-medium text-tinta">
-                  {s.colaboradorApontadoNome ?? 'Não sabe informar'}
-                  <span className="ml-2 font-normal text-slate-400">· {s.turnoNome}</span>
-                </p>
+                <div className="flex items-start gap-2">
+                  <input
+                    type="checkbox"
+                    checked={selecionadas.has(s.id)}
+                    onChange={() => alternarSelecao(s.id)}
+                    className="mt-1 h-4 w-4 rounded border-slate-300 text-esmeralda focus:ring-esmeralda"
+                    aria-label="Selecionar solicitação"
+                  />
+                  <p className="font-medium text-tinta">
+                    {s.colaboradorApontadoNome ?? 'Não sabe informar'}
+                    <span className="ml-2 font-normal text-slate-400">· {s.turnoNome}</span>
+                  </p>
+                </div>
                 <div className="flex shrink-0 items-center gap-2">
                   <span className={`rounded-full px-3 py-1 text-xs font-medium ${corStatus[s.status]}`}>
                     {rotuloStatus[s.status]}
@@ -337,10 +415,19 @@ export function MultasAdminPage() {
           {decididas.map((s) => (
             <div key={s.id} className="rounded-lg border border-slate-200 bg-white p-4">
               <div className="flex flex-wrap items-start justify-between gap-2">
-                <p className="font-medium text-tinta">
-                  {s.colaboradorFinalNome ?? s.colaboradorApontadoNome ?? '(não definido)'}
-                  <span className="ml-2 font-normal text-slate-400">· {s.turnoNome}</span>
-                </p>
+                <div className="flex items-start gap-2">
+                  <input
+                    type="checkbox"
+                    checked={selecionadas.has(s.id)}
+                    onChange={() => alternarSelecao(s.id)}
+                    className="mt-1 h-4 w-4 rounded border-slate-300 text-esmeralda focus:ring-esmeralda"
+                    aria-label="Selecionar solicitação"
+                  />
+                  <p className="font-medium text-tinta">
+                    {s.colaboradorFinalNome ?? s.colaboradorApontadoNome ?? '(não definido)'}
+                    <span className="ml-2 font-normal text-slate-400">· {s.turnoNome}</span>
+                  </p>
+                </div>
                 <div className="flex shrink-0 items-center gap-2">
                   <span className={`rounded-full px-3 py-1 text-xs font-medium ${corStatus[s.status]}`}>
                     {rotuloStatus[s.status]}

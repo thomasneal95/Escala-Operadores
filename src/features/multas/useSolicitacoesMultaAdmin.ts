@@ -277,6 +277,35 @@ export function useSolicitacoesMultaAdmin() {
     return { erro: null };
   }
 
+  async function excluirVarias(ids: string[]) {
+    if (ids.length === 0) return { erro: null };
+
+    setProcessando('varias');
+    setErro(null);
+
+    const idsUnicos = new Set(ids);
+    const imagensParaRemover = solicitacoes
+      .filter((s) => idsUnicos.has(s.id))
+      .flatMap((s) => s.imagens);
+
+    const { error } = await supabase.from('solicitacoes_multa').delete().in('id', ids);
+
+    setProcessando(null);
+
+    if (error) {
+      const mensagem = 'Não foi possível excluir as solicitações selecionadas.';
+      setErro(mensagem);
+      return { erro: mensagem };
+    }
+
+    if (imagensParaRemover.length > 0) {
+      await supabase.storage.from('comprovantes-multa').remove(imagensParaRemover);
+    }
+
+    await carregar();
+    return { erro: null };
+  }
+
   return {
     solicitacoes,
     colaboradores,
@@ -286,6 +315,7 @@ export function useSolicitacoesMultaAdmin() {
     erro,
     decidir,
     excluir,
+    excluirVarias,
     obterUrlImagem,
     recarregar: carregar,
   };
