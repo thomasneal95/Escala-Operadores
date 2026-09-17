@@ -5,6 +5,8 @@ import {
   type SolicitacaoMultaAdmin,
 } from '../../features/multas/useSolicitacoesMultaAdmin';
 import { useToast, useConfirm } from '../../components/FeedbackProvider';
+import { SecaoRecolhivel } from '../../components/SecaoRecolhivel';
+import { RegrasMultasEditor } from '../../components/RegrasMultasEditor';
 
 const rotuloStatus: Record<string, string> = {
   pendente: 'Pendente',
@@ -278,7 +280,15 @@ export function MultasAdminPage() {
         <p className="mb-4 rounded-md bg-red-50 px-4 py-3 text-sm text-red-700">{erro}</p>
       )}
 
-      <div className="flex flex-wrap gap-3 rounded-lg border border-slate-200 bg-white p-4">
+      <SecaoRecolhivel
+        titulo="Editar regras exibidas para os colaboradores"
+        padraoAberta={false}
+        descricao="Categorias, ícones e o texto de alerta do dashboard de multas."
+      >
+        <RegrasMultasEditor />
+      </SecaoRecolhivel>
+
+      <div className="mt-6 flex flex-wrap gap-3 rounded-lg border border-slate-200 bg-white p-4">
         <div>
           <label className="block text-xs font-medium text-slate-600">Turno</label>
           <select
