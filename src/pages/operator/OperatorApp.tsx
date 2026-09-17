@@ -87,7 +87,11 @@ export function OperatorApp() {
     trocas: trocasPendentes,
     multas: multasNovas,
   };
-  const totalNotificacoes = trocasPendentes + multasNovas + disponibilidadePendente;
+  // Não conta a aba em que a pessoa já está — ela já está vendo o que
+  // precisa ver ali, o ponto no menu é só pra avisar de OUTRA aba.
+  const totalNotificacoes = Object.entries(contagemPorAba)
+    .filter(([id]) => id !== abaAtiva)
+    .reduce((soma, [, valor]) => soma + (valor ?? 0), 0);
 
   function selecionarAba(aba: Aba) {
     setAbaAtiva(aba);
@@ -150,7 +154,7 @@ export function OperatorApp() {
               >
                 <span className="h-5 w-5 shrink-0">{iconesPorAba[aba.id]}</span>
                 {aba.rotulo}
-                <NotificacaoBadge contagem={contagemPorAba[aba.id] ?? 0} />
+                <NotificacaoBadge contagem={ativo ? 0 : (contagemPorAba[aba.id] ?? 0)} />
               </button>
             );
           })}
@@ -220,7 +224,9 @@ export function OperatorApp() {
               >
                 <span className="h-5 w-5 shrink-0">{iconesPorAba[aba.id]}</span>
                 {aba.rotulo}
-                <NotificacaoBadge contagem={contagemPorAba[aba.id] ?? 0} />
+                <NotificacaoBadge
+                  contagem={abaAtiva === aba.id ? 0 : (contagemPorAba[aba.id] ?? 0)}
+                />
               </button>
             ))}
           </nav>
