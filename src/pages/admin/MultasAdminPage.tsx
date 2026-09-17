@@ -133,14 +133,19 @@ export function MultasAdminPage() {
   const {
     solicitacoes,
     colaboradores,
+    turnos,
     carregando,
     processando,
     erro,
     decidir,
+    excluir,
     obterUrlImagem,
   } = useSolicitacoesMultaAdmin();
   const toast = useToast();
   const confirmar = useConfirm();
+
+  const [filtroTurnoId, setFiltroTurnoId] = useState('');
+  const [filtroColaboradorId, setFiltroColaboradorId] = useState('');
 
   async function handleVerImagem(caminho: string) {
     const url = await obterUrlImagem(caminho);
@@ -176,12 +181,38 @@ export function MultasAdminPage() {
     toast('Decisão registrada.');
   }
 
+  async function handleExcluir(id: string) {
+    const confirmou = await confirmar({
+      titulo: 'Excluir esta solicitação?',
+      mensagem:
+        'Isso apaga o apontamento permanentemente, incluindo as imagens de comprovação. Esta ação não pode ser desfeita.',
+      textoConfirmar: 'Excluir',
+      perigoso: true,
+    });
+    if (!confirmou) return;
+
+    const resultado = await excluir(id);
+    if (resultado.erro) {
+      toast(resultado.erro, 'erro');
+      return;
+    }
+    toast('Solicitação excluída.');
+  }
+
   if (carregando) {
     return <p className="text-sm text-slate-400">Carregando...</p>;
   }
 
-  const pendentes = solicitacoes.filter((s) => s.status === 'pendente');
-  const decididas = solicitacoes.filter((s) => s.status !== 'pendente');
+  const pessoaFiltro = (s: SolicitacaoMultaAdmin) => s.colaboradorFinalId ?? s.colaboradorApontadoId;
+
+  const filtradas = solicitacoes.filter((s) => {
+    if (filtroTurnoId && s.turnoId !== filtroTurnoId) return false;
+    if (filtroColaboradorId && pessoaFiltro(s) !== filtroColaboradorId) return false;
+    return true;
+  });
+
+  const pendentes = filtradas.filter((s) => s.status === 'pendente');
+  const decididas = filtradas.filter((s) => s.status !== 'pendente');
 
   return (
     <div>
@@ -189,7 +220,41 @@ export function MultasAdminPage() {
         <p className="mb-4 rounded-md bg-red-50 px-4 py-3 text-sm text-red-700">{erro}</p>
       )}
 
-      <p className="font-mono text-xs font-medium uppercase tracking-widest text-slate-400">
+      <div className="flex flex-wrap gap-3 rounded-lg border border-slate-200 bg-white p-4">
+        <div>
+          <label className="block text-xs font-medium text-slate-600">Turno</label>
+          <select
+            value={filtroTurnoId}
+            onChange={(e) => setFiltroTurnoId(e.target.value)}
+            className="mt-1 rounded-md border border-slate-300 px-2 py-1.5 text-sm text-tinta focus:border-esmeralda focus:outline-none focus:ring-1 focus:ring-esmeralda"
+          >
+            <option value="">Todos</option>
+            {turnos.map((t) => (
+              <option key={t.id} value={t.id}>
+                {t.nome}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div>
+          <label className="block text-xs font-medium text-slate-600">Operador</label>
+          <select
+            value={filtroColaboradorId}
+            onChange={(e) => setFiltroColaboradorId(e.target.value)}
+            className="mt-1 rounded-md border border-slate-300 px-2 py-1.5 text-sm text-tinta focus:border-esmeralda focus:outline-none focus:ring-1 focus:ring-esmeralda"
+          >
+            <option value="">Todos</option>
+            {colaboradores.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.nome_completo}
+              </option>
+            ))}
+          </select>
+        </div>
+      </div>
+
+      <p className="mt-6 font-mono text-xs font-medium uppercase tracking-widest text-slate-400">
         Pendentes · {pendentes.length}
       </p>
 
@@ -210,10 +275,20 @@ export function MultasAdminPage() {
                   {rotuloStatus[s.status]}
                 </span>
               </div>
-              <p className="mt-1 font-mono text-xs text-slate-400">
-                {formatarDataHora(s.criado_em)} · reportado por {s.reportanteNome}
-                {s.anonimo && ' (anônimo para os colaboradores)'}
-              </p>
+              <div className="mt-1 flex flex-wrap items-center justify-between gap-2">
+                <p className="font-mono text-xs text-slate-400">
+                  {formatarDataHora(s.criado_em)} · reportado por {s.reportanteNome}
+                  {s.anonimo && ' (anônimo para os colaboradores)'}
+                </p>
+                <button
+                  type="button"
+                  onClick={() => handleExcluir(s.id)}
+                  disabled={processando === s.id}
+                  className="text-xs font-medium text-red-600 hover:text-red-700 disabled:opacity-50"
+                >
+                  Excluir
+                </button>
+              </div>
 
               <LinhaDecisao
                 solicitacao={s}
@@ -248,10 +323,20 @@ export function MultasAdminPage() {
                   {rotuloStatus[s.status]}
                 </span>
               </div>
-              <p className="mt-1 font-mono text-xs text-slate-400">
-                {formatarDataHora(s.criado_em)} · reportado por {s.reportanteNome}
-                {s.anonimo && ' (anônimo para os colaboradores)'}
-              </p>
+              <div className="mt-1 flex flex-wrap items-center justify-between gap-2">
+                <p className="font-mono text-xs text-slate-400">
+                  {formatarDataHora(s.criado_em)} · reportado por {s.reportanteNome}
+                  {s.anonimo && ' (anônimo para os colaboradores)'}
+                </p>
+                <button
+                  type="button"
+                  onClick={() => handleExcluir(s.id)}
+                  disabled={processando === s.id}
+                  className="text-xs font-medium text-red-600 hover:text-red-700 disabled:opacity-50"
+                >
+                  Excluir
+                </button>
+              </div>
               {s.justificativaAdmin && (
                 <p className="mt-2 text-sm text-slate-600">{s.justificativaAdmin}</p>
               )}

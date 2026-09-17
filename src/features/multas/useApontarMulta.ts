@@ -50,10 +50,9 @@ export function useApontarMulta() {
         .select('id, nome, hora_inicio, hora_fim, ordem_exibicao, ativo_sabado, ativo_domingo')
         .eq('ativo', true)
         .order('ordem_exibicao'),
-      supabase
-        .from('colaboradores')
-        .select('id, perfis(nome_completo)')
-        .eq('ativo', true),
+      // Lista TODOS os operadores ativos (não só a própria equipe) — ver
+      // migration 20260918000000_ajustes_sistema_multas.sql.
+      supabase.rpc('colaboradores_ativos_nomes'),
     ]);
 
     if (turnosResultado.error || colaboradoresResultado.error) {
@@ -64,12 +63,7 @@ export function useApontarMulta() {
 
     setTurnos(turnosResultado.data ?? []);
 
-    const listaColaboradores: ColaboradorOpcao[] = (colaboradoresResultado.data ?? [])
-      .map((c) => {
-        const perfil = c.perfis as unknown as { nome_completo: string } | null;
-        return { id: c.id, nome_completo: perfil?.nome_completo ?? '(sem nome)' };
-      })
-      .sort((a, b) => a.nome_completo.localeCompare(b.nome_completo));
+    const listaColaboradores: ColaboradorOpcao[] = colaboradoresResultado.data ?? [];
 
     setColaboradores(listaColaboradores);
     setCarregando(false);

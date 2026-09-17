@@ -1,12 +1,14 @@
 import { useCallback, useEffect, useState } from 'react';
 import { supabase } from '../../lib/supabase/client';
 import { useAuth } from '../auth/AuthContext';
+import type { Turno } from '../../types/database';
 
 export interface SolicitacaoMultaAdmin {
   id: string;
   criado_em: string;
   reportanteNome: string;
   anonimo: boolean;
+  turnoId: string;
   turnoNome: string;
   colaboradorApontadoId: string | null;
   colaboradorApontadoNome: string | null;
@@ -27,6 +29,7 @@ export function useSolicitacoesMultaAdmin() {
   const { session } = useAuth();
   const [solicitacoes, setSolicitacoes] = useState<SolicitacaoMultaAdmin[]>([]);
   const [colaboradores, setColaboradores] = useState<ColaboradorOpcao[]>([]);
+  const [turnos, setTurnos] = useState<Turno[]>([]);
   const [carregando, setCarregando] = useState(true);
   const [processando, setProcessando] = useState<string | null>(null);
   const [erro, setErro] = useState<string | null>(null);
@@ -35,12 +38,12 @@ export function useSolicitacoesMultaAdmin() {
     setCarregando(true);
     setErro(null);
 
-    const [solicitacoesResultado, colaboradoresResultado] = await Promise.all([
+    const [solicitacoesResultado, colaboradoresResultado, turnosResultado] = await Promise.all([
       supabase
         .from('solicitacoes_multa')
         .select(
           `id, criado_em, anonimo, imagens, status, justificativa_admin, nao_sabe_informar,
-           colaborador_apontado_id, colaborador_final_id,
+           colaborador_apontado_id, colaborador_final_id, turno_id,
            reportante:colaboradores!solicitacoes_multa_reportante_id_fkey(perfis(nome_completo)),
            apontado:colaboradores!solicitacoes_multa_colaborador_apontado_id_fkey(perfis(nome_completo)),
            final:colaboradores!solicitacoes_multa_colaborador_final_id_fkey(perfis(nome_completo)),
@@ -51,9 +54,14 @@ export function useSolicitacoesMultaAdmin() {
         .from('colaboradores')
         .select('id, perfis(nome_completo)')
         .eq('ativo', true),
+      supabase
+        .from('turnos')
+        .select('id, nome, hora_inicio, hora_fim, ordem_exibicao, ativo_sabado, ativo_domingo')
+        .eq('ativo', true)
+        .order('ordem_exibicao'),
     ]);
 
-    if (solicitacoesResultado.error || colaboradoresResultado.error) {
+    if (solicitacoesResultado.error || colaboradoresResultado.error || turnosResultado.error) {
       setErro('Não foi possível carregar as solicitações de multa.');
       setCarregando(false);
       return;
@@ -70,6 +78,7 @@ export function useSolicitacoesMultaAdmin() {
         criado_em: s.criado_em,
         reportanteNome: reportante?.perfis?.nome_completo ?? '(desconhecido)',
         anonimo: s.anonimo,
+        turnoId: s.turno_id,
         turnoNome: turno?.nome ?? '(desconhecido)',
         colaboradorApontadoId: s.colaborador_apontado_id,
         colaboradorApontadoNome: apontado?.perfis?.nome_completo ?? null,
@@ -92,6 +101,7 @@ export function useSolicitacoesMultaAdmin() {
       .sort((a, b) => a.nome_completo.localeCompare(b.nome_completo));
 
     setColaboradores(listaColaboradores);
+    setTurnos(turnosResultado.data ?? []);
     setCarregando(false);
   }, []);
 
@@ -148,13 +158,39 @@ export function useSolicitacoesMultaAdmin() {
     return data.signedUrl;
   }
 
+  async function excluir(id: string) {
+    setProcessando(id);
+    setErro(null);
+
+    const solicitacao = solicitacoes.find((s) => s.id === id);
+
+    const { error } = await supabase.from('solicitacoes_multa').delete().eq('id', id);
+
+    setProcessando(null);
+
+    if (error) {
+      const mensagem = 'Não foi possível excluir esta solicitação.';
+      setErro(mensagem);
+      return { erro: mensagem };
+    }
+
+    if (solicitacao && solicitacao.imagens.length > 0) {
+      await supabase.storage.from('comprovantes-multa').remove(solicitacao.imagens);
+    }
+
+    await carregar();
+    return { erro: null };
+  }
+
   return {
     solicitacoes,
     colaboradores,
+    turnos,
     carregando,
     processando,
     erro,
     decidir,
+    excluir,
     obterUrlImagem,
     recarregar: carregar,
   };
