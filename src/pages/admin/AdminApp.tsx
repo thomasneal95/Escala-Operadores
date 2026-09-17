@@ -13,6 +13,7 @@ import { SolicitacoesTrocaAdminPage } from './SolicitacoesTrocaAdminPage';
 import { MapaCoberturaPage } from './MapaCoberturaPage';
 import { AssiduidadePage } from './AssiduidadePage';
 import { ComissionamentoPage } from './ComissionamentoPage';
+import { MultasAdminPage } from './MultasAdminPage';
 import { ErrorBoundary } from '../../components/ErrorBoundary';
 import { FallbackErroTela } from '../../components/FallbackErroTela';
 
@@ -26,6 +27,7 @@ type Aba =
   | 'mapa'
   | 'assiduidade'
   | 'comissionamento'
+  | 'multas'
   | 'configuracoes'
   | 'historico'
   | 'acesso';
@@ -40,6 +42,7 @@ const abas: { id: Aba; rotulo: string }[] = [
   { id: 'mapa', rotulo: 'Análises' },
   { id: 'assiduidade', rotulo: 'Assiduidade' },
   { id: 'comissionamento', rotulo: 'Comissionamento' },
+  { id: 'multas', rotulo: 'Multas' },
   { id: 'historico', rotulo: 'Histórico' },
   { id: 'acesso', rotulo: 'Acesso' },
   { id: 'configuracoes', rotulo: 'Configurações' },
@@ -109,6 +112,16 @@ const iconesPorAba: Record<Aba, ReactElement> = {
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8}>
       <circle cx="12" cy="12" r="8.5" />
       <path d="M12 7v10M9.5 9.5c0-1.4 1.1-2.5 2.5-2.5s2.5 1 2.5 2.2c0 2.8-5 1.6-5 4.4 0 1.2 1.1 2.2 2.5 2.2s2.5-1.1 2.5-2.5" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  ),
+  multas: (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8}>
+      <path d="M12 9v4M12 16.5h.01" strokeLinecap="round" strokeLinejoin="round" />
+      <path
+        d="M10.29 3.86 1.82 18a1.5 1.5 0 0 0 1.3 2.25h17.76a1.5 1.5 0 0 0 1.3-2.25L13.71 3.86a1.5 1.5 0 0 0-2.42 0Z"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
     </svg>
   ),
   historico: (
@@ -237,6 +250,7 @@ export function AdminApp() {
             {abaAtiva === 'mapa' && <MapaCoberturaPage />}
             {abaAtiva === 'assiduidade' && <AssiduidadePage />}
             {abaAtiva === 'comissionamento' && <ComissionamentoPage />}
+            {abaAtiva === 'multas' && <MultasAdminPage />}
             {abaAtiva === 'historico' && <HistoricoAdminPage />}
             {abaAtiva === 'acesso' && <GestaoAcessoPage />}
             {abaAtiva === 'configuracoes' && <ConfiguracoesPage />}

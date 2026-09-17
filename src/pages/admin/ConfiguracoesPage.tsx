@@ -1,5 +1,6 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { useConfiguracaoRecorrencia } from '../../features/schedules/useConfiguracaoRecorrencia';
+import { useRegrasMultas } from '../../features/multas/useRegrasMultas';
 import { HoraSelect } from '../../features/shifts/HoraSelect';
 
 const diasDaSemana = [
@@ -14,6 +15,36 @@ const diasDaSemana = [
 
 export function ConfiguracoesPage() {
   const { config, carregando, erro, salvando, salvar } = useConfiguracaoRecorrencia();
+  const {
+    regras,
+    carregando: carregandoRegras,
+    atualizando: salvandoRegras,
+    erro: erroRegras,
+    atualizarRegras,
+  } = useRegrasMultas();
+
+  const [textoRegras, setTextoRegras] = useState('');
+  const [erroFormRegras, setErroFormRegras] = useState<string | null>(null);
+  const [sucessoRegras, setSucessoRegras] = useState(false);
+
+  useEffect(() => {
+    setTextoRegras(regras);
+  }, [regras]);
+
+  async function handleSalvarRegras(event: FormEvent) {
+    event.preventDefault();
+    setErroFormRegras(null);
+    setSucessoRegras(false);
+
+    const resultado = await atualizarRegras(textoRegras);
+
+    if (resultado.erro) {
+      setErroFormRegras(resultado.erro);
+      return;
+    }
+
+    setSucessoRegras(true);
+  }
 
   const [diaAbertura, setDiaAbertura] = useState(1);
   const [horaAbertura, setHoraAbertura] = useState('08:00');
@@ -175,6 +206,50 @@ export function ConfiguracoesPage() {
             {salvando ? 'Salvando...' : 'Salvar configuração'}
           </button>
         </form>
+      </div>
+
+      <div className="mt-6 rounded-lg border border-slate-200 bg-white p-6">
+        <h2 className="font-display font-semibold text-tinta">Regras de multas</h2>
+        <p className="mt-1 text-sm text-slate-500">
+          Texto exibido para os colaboradores na tela de multas, explicando o
+          funcionamento e as regras de aplicação.
+        </p>
+
+        {erroRegras && (
+          <p className="mt-3 rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">{erroRegras}</p>
+        )}
+
+        {carregandoRegras ? (
+          <p className="mt-4 text-sm text-slate-400">Carregando...</p>
+        ) : (
+          <form onSubmit={handleSalvarRegras} className="mt-4 space-y-3">
+            <textarea
+              value={textoRegras}
+              onChange={(e) => setTextoRegras(e.target.value)}
+              rows={8}
+              className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm text-tinta focus:border-esmeralda focus:outline-none focus:ring-1 focus:ring-esmeralda"
+            />
+
+            {erroFormRegras && (
+              <p className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">
+                {erroFormRegras}
+              </p>
+            )}
+            {sucessoRegras && (
+              <p className="rounded-md bg-esmeralda-light px-3 py-2 text-sm text-esmeralda-dark">
+                Regras salvas com sucesso.
+              </p>
+            )}
+
+            <button
+              type="submit"
+              disabled={salvandoRegras}
+              className="rounded-md bg-esmeralda px-5 py-2.5 font-medium text-white transition hover:bg-esmeralda-dark disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {salvandoRegras ? 'Salvando...' : 'Salvar regras'}
+            </button>
+          </form>
+        )}
       </div>
     </div>
   );

@@ -5,16 +5,18 @@ import { AreaColaboradorPage } from './AreaColaboradorPage';
 import { ColegasEquipePage } from './ColegasEquipePage';
 import { HistoricoEscalasPage } from './HistoricoEscalasPage';
 import { SolicitacoesTrocaPage } from './SolicitacoesTrocaPage';
+import { MultasPage } from './MultasPage';
 import { TourOperador } from '../../components/TourOperador';
 import { ErrorBoundary } from '../../components/ErrorBoundary';
 import { FallbackErroTela } from '../../components/FallbackErroTela';
 
-type Aba = 'minha-area' | 'equipe' | 'trocas' | 'historico';
+type Aba = 'minha-area' | 'equipe' | 'trocas' | 'multas' | 'historico';
 
 const abas: { id: Aba; rotulo: string }[] = [
   { id: 'minha-area', rotulo: 'Minha área' },
   { id: 'equipe', rotulo: 'Equipe' },
   { id: 'trocas', rotulo: 'Trocas' },
+  { id: 'multas', rotulo: 'Multas' },
   { id: 'historico', rotulo: 'Histórico' },
 ];
 
@@ -43,6 +45,16 @@ const iconesPorAba: Record<Aba, ReactElement> = {
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8}>
       <path d="M4 7h13l-3-3" strokeLinecap="round" strokeLinejoin="round" />
       <path d="M20 17H7l3 3" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  ),
+  multas: (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8}>
+      <path d="M12 9v4M12 16.5h.01" strokeLinecap="round" strokeLinejoin="round" />
+      <path
+        d="M10.29 3.86 1.82 18a1.5 1.5 0 0 0 1.3 2.25h17.76a1.5 1.5 0 0 0 1.3-2.25L13.71 3.86a1.5 1.5 0 0 0-2.42 0Z"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
     </svg>
   ),
   historico: (
@@ -152,6 +164,7 @@ export function OperatorApp() {
             {abaAtiva === 'minha-area' && <AreaColaboradorPage />}
             {abaAtiva === 'equipe' && <ColegasEquipePage />}
             {abaAtiva === 'trocas' && <SolicitacoesTrocaPage />}
+            {abaAtiva === 'multas' && <MultasPage />}
             {abaAtiva === 'historico' && <HistoricoEscalasPage />}
           </ErrorBoundary>
         </div>
