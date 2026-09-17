@@ -32,6 +32,7 @@ interface LinhaDecisaoProps {
     colaboradorFinalId: string | null
   ) => Promise<void>;
   onVerImagem: (caminho: string) => void;
+  onCancelar?: () => void;
 }
 
 function LinhaDecisao({
@@ -40,11 +41,12 @@ function LinhaDecisao({
   processando,
   onDecidir,
   onVerImagem,
+  onCancelar,
 }: LinhaDecisaoProps) {
   const [colaboradorFinalId, setColaboradorFinalId] = useState(
-    solicitacao.colaboradorApontadoId ?? ''
+    solicitacao.colaboradorFinalId ?? solicitacao.colaboradorApontadoId ?? ''
   );
-  const [justificativa, setJustificativa] = useState('');
+  const [justificativa, setJustificativa] = useState(solicitacao.justificativaAdmin ?? '');
   const [erroLocal, setErroLocal] = useState<string | null>(null);
 
   async function handleClick(status: 'aprovada' | 'recusada') {
@@ -124,6 +126,16 @@ function LinhaDecisao({
         >
           {processando ? 'Enviando...' : 'Recusar'}
         </button>
+        {onCancelar && (
+          <button
+            type="button"
+            onClick={onCancelar}
+            disabled={processando}
+            className="text-sm font-medium text-slate-500 hover:text-slate-700 disabled:opacity-60"
+          >
+            Cancelar
+          </button>
+        )}
       </div>
     </div>
   );
@@ -146,6 +158,7 @@ export function MultasAdminPage() {
 
   const [filtroTurnoId, setFiltroTurnoId] = useState('');
   const [filtroColaboradorId, setFiltroColaboradorId] = useState('');
+  const [editandoId, setEditandoId] = useState<string | null>(null);
 
   async function handleVerImagem(caminho: string) {
     const url = await obterUrlImagem(caminho);
@@ -178,6 +191,7 @@ export function MultasAdminPage() {
       toast(resultado.erro, 'erro');
       return;
     }
+    setEditandoId(null);
     toast('Decisão registrada.');
   }
 
@@ -325,6 +339,13 @@ export function MultasAdminPage() {
                   </span>
                   <button
                     type="button"
+                    onClick={() => setEditandoId(editandoId === s.id ? null : s.id)}
+                    className="rounded-md border border-slate-300 px-2 py-1 text-xs font-medium text-slate-600 hover:bg-slate-100"
+                  >
+                    {editandoId === s.id ? 'Editando...' : 'Editar'}
+                  </button>
+                  <button
+                    type="button"
                     onClick={() => handleExcluir(s.id)}
                     disabled={processando === s.id}
                     className="rounded-md border border-red-200 px-2 py-1 text-xs font-medium text-red-600 hover:bg-red-50 disabled:opacity-50"
@@ -337,22 +358,38 @@ export function MultasAdminPage() {
                 {formatarDataHora(s.criado_em)} · reportado por {s.reportanteNome}
                 {s.anonimo && ' (anônimo para os colaboradores)'}
               </p>
-              {s.justificativaAdmin && (
-                <p className="mt-2 text-sm text-slate-600">{s.justificativaAdmin}</p>
-              )}
-              {s.imagens.length > 0 && (
-                <div className="mt-2 flex flex-wrap gap-2">
-                  {s.imagens.map((caminho, i) => (
-                    <button
-                      key={caminho}
-                      type="button"
-                      onClick={() => handleVerImagem(caminho)}
-                      className="rounded-md border border-slate-300 bg-white px-2 py-1 text-xs font-medium text-slate-600 hover:bg-slate-100"
-                    >
-                      Ver imagem {i + 1}
-                    </button>
-                  ))}
-                </div>
+
+              {editandoId === s.id ? (
+                <LinhaDecisao
+                  solicitacao={s}
+                  colaboradores={colaboradores}
+                  processando={processando === s.id}
+                  onDecidir={(status, justificativa, colaboradorFinalId) =>
+                    handleDecidir(s.id, status, justificativa, colaboradorFinalId)
+                  }
+                  onVerImagem={handleVerImagem}
+                  onCancelar={() => setEditandoId(null)}
+                />
+              ) : (
+                <>
+                  {s.justificativaAdmin && (
+                    <p className="mt-2 text-sm text-slate-600">{s.justificativaAdmin}</p>
+                  )}
+                  {s.imagens.length > 0 && (
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      {s.imagens.map((caminho, i) => (
+                        <button
+                          key={caminho}
+                          type="button"
+                          onClick={() => handleVerImagem(caminho)}
+                          className="rounded-md border border-slate-300 bg-white px-2 py-1 text-xs font-medium text-slate-600 hover:bg-slate-100"
+                        >
+                          Ver imagem {i + 1}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </>
               )}
             </div>
           ))}
