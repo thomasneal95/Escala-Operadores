@@ -61,6 +61,32 @@ export const ICONES_MULTAS = {
       <path d="M9 12h6M9 15.5h6M9 8.5h3" strokeLinecap="round" />
     </svg>
   ),
+  geladeira: (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8}>
+      <rect x="6" y="2.5" width="12" height="19" rx="1.5" />
+      <path d="M6 9.5h12" strokeLinecap="round" />
+      <path d="M9 5v2M9 12v2" strokeLinecap="round" />
+    </svg>
+  ),
+  lixo: (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8}>
+      <path d="M5 7h14" strokeLinecap="round" />
+      <path d="M9.5 7V5a1 1 0 0 1 1-1h3a1 1 0 0 1 1 1v2" strokeLinecap="round" strokeLinejoin="round" />
+      <path
+        d="M7 7l1 12.2A1.5 1.5 0 0 0 9.5 20.7h5A1.5 1.5 0 0 0 16 19.2L17 7"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <path d="M10 10.5v6M14 10.5v6" strokeLinecap="round" />
+    </svg>
+  ),
+  atraso: (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8}>
+      <circle cx="12" cy="13" r="7.5" />
+      <path d="M12 9.5v4l2.8 1.7" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M5.5 5 7.8 7.3M18.5 5l-2.3 2.3" strokeLinecap="round" />
+    </svg>
+  ),
 } satisfies Record<string, ReactElement>;
 
 export type ChaveIconeMulta = keyof typeof ICONES_MULTAS;
@@ -82,6 +108,9 @@ export const ROTULOS_ICONES_MULTAS: Record<ChaveIconeMulta, string> = {
   relogio: 'Relógio',
   ferramenta: 'Ferramenta',
   lista: 'Lista',
+  geladeira: 'Geladeira',
+  lixo: 'Lixo',
+  atraso: 'Atraso',
 };
 
 export function iconePorChave(chave: string) {
