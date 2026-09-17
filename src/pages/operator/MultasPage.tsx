@@ -1,7 +1,7 @@
 import { useState } from 'react';
-import { useRegrasMultas } from '../../features/multas/useRegrasMultas';
 import { useMuralMultas } from '../../features/multas/useMuralMultas';
 import { ApontarMultaModal } from '../../components/ApontarMultaModal';
+import { RegrasMultasDashboard } from '../../components/RegrasMultasDashboard';
 import { useToast } from '../../components/FeedbackProvider';
 
 const rotuloStatus: Record<string, string> = {
@@ -22,7 +22,6 @@ function formatarDataHora(iso: string) {
 }
 
 export function MultasPage() {
-  const { regras, carregando: carregandoRegras } = useRegrasMultas();
   const { itens, carregando: carregandoMural, erro, recarregar } = useMuralMultas();
   const [modalAberto, setModalAberto] = useState(false);
   const toast = useToast();
@@ -41,13 +40,8 @@ export function MultasPage() {
         Organização e limpeza
       </h1>
 
-      <div className="mt-4 rounded-lg border border-slate-200 bg-white p-5">
-        <p className="font-medium text-tinta">Como funciona</p>
-        {carregandoRegras ? (
-          <p className="mt-2 text-sm text-slate-400">Carregando...</p>
-        ) : (
-          <p className="mt-2 whitespace-pre-wrap text-sm text-slate-600">{regras}</p>
-        )}
+      <div className="mt-4">
+        <RegrasMultasDashboard />
       </div>
 
       <div className="mt-4">
