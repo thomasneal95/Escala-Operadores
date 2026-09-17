@@ -80,13 +80,14 @@ export function OperatorApp() {
   const { perfil, sair } = useAuth();
   const [abaAtiva, setAbaAtiva] = useState<Aba>('minha-area');
   const [menuAberto, setMenuAberto] = useState(false);
-  const { trocasPendentes, multasNovas } = useNotificacoesOperador();
+  const { trocasPendentes, multasNovas, disponibilidadePendente } = useNotificacoesOperador();
 
   const contagemPorAba: Partial<Record<Aba, number>> = {
+    'minha-area': disponibilidadePendente,
     trocas: trocasPendentes,
     multas: multasNovas,
   };
-  const totalNotificacoes = trocasPendentes + multasNovas;
+  const totalNotificacoes = trocasPendentes + multasNovas + disponibilidadePendente;
 
   function selecionarAba(aba: Aba) {
     setAbaAtiva(aba);

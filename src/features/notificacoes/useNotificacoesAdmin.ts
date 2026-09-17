@@ -11,9 +11,11 @@ const INTERVALO_MS = 30_000;
 export function useNotificacoesAdmin() {
   const [trocasPendentes, setTrocasPendentes] = useState(0);
   const [multasPendentes, setMultasPendentes] = useState(0);
+  const [escalaParaMontar, setEscalaParaMontar] = useState(0);
+  const [presencasPendentes, setPresencasPendentes] = useState(0);
 
   const carregar = useCallback(async () => {
-    const [trocasResultado, multasResultado] = await Promise.all([
+    const [trocasResultado, multasResultado, periodoAtualResultado] = await Promise.all([
       supabase
         .from('solicitacoes_troca')
         .select('id', { count: 'exact', head: true })
@@ -22,10 +24,41 @@ export function useNotificacoesAdmin() {
         .from('solicitacoes_multa')
         .select('id', { count: 'exact', head: true })
         .eq('status', 'pendente'),
+      supabase
+        .from('periodos_operacao')
+        .select('id, status')
+        .order('data_inicio', { ascending: false })
+        .limit(1)
+        .maybeSingle(),
     ]);
 
     setTrocasPendentes(trocasResultado.count ?? 0);
     setMultasPendentes(multasResultado.count ?? 0);
+    // "Escala" pisca quando o recebimento fechou e a escala ainda não foi
+    // montada/confirmada — é literalmente pra onde os botões do Painel
+    // mandam o admin nesse momento.
+    setEscalaParaMontar(periodoAtualResultado.data?.status === 'em_organizacao' ? 1 : 0);
+
+    const { data: periodoPresenca } = await supabase
+      .from('periodos_operacao')
+      .select('id')
+      .in('status', ['confirmado', 'encerrado'])
+      .order('data_inicio', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (periodoPresenca) {
+      const { count } = await supabase
+        .from('escalas')
+        .select('id', { count: 'exact', head: true })
+        .eq('periodo_id', periodoPresenca.id)
+        .is('compareceu', null);
+      // "Histórico" é onde o admin de fato marca quem compareceu (botão
+      // "Confirmar presença" do Painel manda pra lá).
+      setPresencasPendentes(count ?? 0);
+    } else {
+      setPresencasPendentes(0);
+    }
   }, []);
 
   useEffect(() => {
@@ -34,5 +67,5 @@ export function useNotificacoesAdmin() {
     return () => clearInterval(intervalo);
   }, [carregar]);
 
-  return { trocasPendentes, multasPendentes };
+  return { trocasPendentes, multasPendentes, escalaParaMontar, presencasPendentes };
 }

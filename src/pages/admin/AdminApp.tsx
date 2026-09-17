@@ -162,13 +162,16 @@ export function AdminApp() {
   const { perfil, sair } = useAuth();
   const [abaAtiva, setAbaAtiva] = useState<Aba>('painel');
   const [menuAberto, setMenuAberto] = useState(false);
-  const { trocasPendentes, multasPendentes } = useNotificacoesAdmin();
+  const { trocasPendentes, multasPendentes, escalaParaMontar, presencasPendentes } =
+    useNotificacoesAdmin();
 
   const contagemPorAba: Partial<Record<Aba, number>> = {
     trocas: trocasPendentes,
     multas: multasPendentes,
+    escala: escalaParaMontar,
+    historico: presencasPendentes,
   };
-  const totalNotificacoes = trocasPendentes + multasPendentes;
+  const totalNotificacoes = trocasPendentes + multasPendentes + escalaParaMontar + presencasPendentes;
 
   function selecionarAba(aba: Aba) {
     setAbaAtiva(aba);

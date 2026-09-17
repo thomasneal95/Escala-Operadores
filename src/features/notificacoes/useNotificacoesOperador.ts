@@ -12,6 +12,7 @@ export function useNotificacoesOperador() {
   const { session } = useAuth();
   const [trocasPendentes, setTrocasPendentes] = useState(0);
   const [multasNovas, setMultasNovas] = useState(0);
+  const [disponibilidadePendente, setDisponibilidadePendente] = useState(0);
 
   const carregar = useCallback(async () => {
     if (!session?.user) return;
@@ -24,16 +25,35 @@ export function useNotificacoesOperador() {
 
     if (!colaborador) return;
 
-    const [trocasResultado, muralResultado] = await Promise.all([
+    const [trocasResultado, muralResultado, periodoResultado] = await Promise.all([
       supabase
         .from('solicitacoes_troca')
         .select('id', { count: 'exact', head: true })
         .eq('colega_id', colaborador.id)
         .eq('status', 'pendente'),
       supabase.rpc('mural_multas'),
+      supabase
+        .from('periodos_operacao')
+        .select('id')
+        .eq('status', 'aberto')
+        .maybeSingle(),
     ]);
 
     setTrocasPendentes(trocasResultado.count ?? 0);
+
+    // "Minha área" pisca se o período de disponibilidade está aberto e essa
+    // pessoa ainda não enviou nada (mesmo critério do resumo dentro da aba).
+    if (periodoResultado.data) {
+      const { data: jaEnviou } = await supabase
+        .from('disponibilidades')
+        .select('id')
+        .eq('colaborador_id', colaborador.id)
+        .eq('periodo_id', periodoResultado.data.id)
+        .limit(1);
+      setDisponibilidadePendente((jaEnviou ?? []).length === 0 ? 1 : 0);
+    } else {
+      setDisponibilidadePendente(0);
+    }
 
     const itens = (muralResultado.data ?? []) as ItemMural[];
     const ultimaVisualizacao = obterUltimaVisualizacao('multas', session.user.id);
@@ -55,5 +75,5 @@ export function useNotificacoesOperador() {
     return () => clearInterval(intervalo);
   }, [carregar]);
 
-  return { trocasPendentes, multasNovas };
+  return { trocasPendentes, multasNovas, disponibilidadePendente };
 }
