@@ -9,6 +9,8 @@ export interface ItemMural {
   status: 'pendente' | 'aprovada' | 'recusada';
   justificativa_admin: string | null;
   eu_reportei: boolean;
+  decidido_em: string | null;
+  sou_eu_multado: boolean;
 }
 
 export function useMuralMultas() {

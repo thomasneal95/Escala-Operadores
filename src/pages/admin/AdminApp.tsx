@@ -16,6 +16,8 @@ import { ComissionamentoPage } from './ComissionamentoPage';
 import { MultasAdminPage } from './MultasAdminPage';
 import { ErrorBoundary } from '../../components/ErrorBoundary';
 import { FallbackErroTela } from '../../components/FallbackErroTela';
+import { NotificacaoBadge } from '../../components/NotificacaoBadge';
+import { useNotificacoesAdmin } from '../../features/notificacoes/useNotificacoesAdmin';
 
 type Aba =
   | 'painel'
@@ -160,6 +162,13 @@ export function AdminApp() {
   const { perfil, sair } = useAuth();
   const [abaAtiva, setAbaAtiva] = useState<Aba>('painel');
   const [menuAberto, setMenuAberto] = useState(false);
+  const { trocasPendentes, multasPendentes } = useNotificacoesAdmin();
+
+  const contagemPorAba: Partial<Record<Aba, number>> = {
+    trocas: trocasPendentes,
+    multas: multasPendentes,
+  };
+  const totalNotificacoes = trocasPendentes + multasPendentes;
 
   function selecionarAba(aba: Aba) {
     setAbaAtiva(aba);
@@ -174,10 +183,13 @@ export function AdminApp() {
           <div className="flex items-center gap-3">
             <button
               onClick={() => setMenuAberto(true)}
-              className="rounded-md p-1.5 text-white hover:bg-white/10"
+              className="relative rounded-md p-1.5 text-white hover:bg-white/10"
               aria-label="Abrir menu"
             >
               <span className="block h-6 w-6">{iconeMenu}</span>
+              {totalNotificacoes > 0 && (
+                <span className="absolute right-1 top-1 h-2 w-2 rounded-full bg-red-500" />
+              )}
             </button>
             <div>
               <p className="text-sm text-slate-400">Painel administrativo</p>
@@ -217,6 +229,7 @@ export function AdminApp() {
               >
                 <span className="h-5 w-5 shrink-0">{iconesPorAba[aba.id]}</span>
                 {aba.rotulo}
+                <NotificacaoBadge contagem={contagemPorAba[aba.id] ?? 0} />
               </button>
             );
           })}
@@ -294,6 +307,7 @@ export function AdminApp() {
               >
                 <span className="h-5 w-5 shrink-0">{iconesPorAba[aba.id]}</span>
                 {aba.rotulo}
+                <NotificacaoBadge contagem={contagemPorAba[aba.id] ?? 0} />
               </button>
             ))}
           </nav>

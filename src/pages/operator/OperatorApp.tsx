@@ -9,6 +9,8 @@ import { MultasPage } from './MultasPage';
 import { TourOperador } from '../../components/TourOperador';
 import { ErrorBoundary } from '../../components/ErrorBoundary';
 import { FallbackErroTela } from '../../components/FallbackErroTela';
+import { NotificacaoBadge } from '../../components/NotificacaoBadge';
+import { useNotificacoesOperador } from '../../features/notificacoes/useNotificacoesOperador';
 
 type Aba = 'minha-area' | 'equipe' | 'trocas' | 'multas' | 'historico';
 
@@ -78,6 +80,13 @@ export function OperatorApp() {
   const { perfil, sair } = useAuth();
   const [abaAtiva, setAbaAtiva] = useState<Aba>('minha-area');
   const [menuAberto, setMenuAberto] = useState(false);
+  const { trocasPendentes, multasNovas } = useNotificacoesOperador();
+
+  const contagemPorAba: Partial<Record<Aba, number>> = {
+    trocas: trocasPendentes,
+    multas: multasNovas,
+  };
+  const totalNotificacoes = trocasPendentes + multasNovas;
 
   function selecionarAba(aba: Aba) {
     setAbaAtiva(aba);
@@ -94,10 +103,13 @@ export function OperatorApp() {
           <div className="flex items-center gap-3">
             <button
               onClick={() => setMenuAberto(true)}
-              className="rounded-md p-1.5 text-white hover:bg-white/10"
+              className="relative rounded-md p-1.5 text-white hover:bg-white/10"
               aria-label="Abrir menu"
             >
               <span className="block h-6 w-6">{iconeMenu}</span>
+              {totalNotificacoes > 0 && (
+                <span className="absolute right-1 top-1 h-2 w-2 rounded-full bg-red-500" />
+              )}
             </button>
             <div>
               <p className="text-sm text-slate-400">Olá,</p>
@@ -137,6 +149,7 @@ export function OperatorApp() {
               >
                 <span className="h-5 w-5 shrink-0">{iconesPorAba[aba.id]}</span>
                 {aba.rotulo}
+                <NotificacaoBadge contagem={contagemPorAba[aba.id] ?? 0} />
               </button>
             );
           })}
@@ -206,6 +219,7 @@ export function OperatorApp() {
               >
                 <span className="h-5 w-5 shrink-0">{iconesPorAba[aba.id]}</span>
                 {aba.rotulo}
+                <NotificacaoBadge contagem={contagemPorAba[aba.id] ?? 0} />
               </button>
             ))}
           </nav>

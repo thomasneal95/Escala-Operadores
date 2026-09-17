@@ -1,8 +1,10 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useMuralMultas } from '../../features/multas/useMuralMultas';
 import { ApontarMultaModal } from '../../components/ApontarMultaModal';
 import { RegrasMultasDashboard } from '../../components/RegrasMultasDashboard';
 import { useToast } from '../../components/FeedbackProvider';
+import { useAuth } from '../../features/auth/AuthContext';
+import { marcarComoVisualizado } from '../../lib/notificacoesVistas';
 
 const rotuloStatus: Record<string, string> = {
   pendente: 'Em análise',
@@ -25,6 +27,13 @@ export function MultasPage() {
   const { itens, carregando: carregandoMural, erro, recarregar } = useMuralMultas();
   const [modalAberto, setModalAberto] = useState(false);
   const toast = useToast();
+  const { session } = useAuth();
+
+  useEffect(() => {
+    if (session?.user) {
+      marcarComoVisualizado('multas', session.user.id);
+    }
+  }, [session]);
 
   function handleEnviado() {
     toast('Apontamento enviado. O administrador vai avaliar.');
