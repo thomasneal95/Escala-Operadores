@@ -266,29 +266,29 @@ export function MultasAdminPage() {
         <div className="mt-3 space-y-3">
           {pendentes.map((s) => (
             <div key={s.id} className="rounded-lg border border-slate-200 bg-white p-4">
-              <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="flex flex-wrap items-start justify-between gap-2">
                 <p className="font-medium text-tinta">
                   {s.colaboradorApontadoNome ?? 'Não sabe informar'}
                   <span className="ml-2 font-normal text-slate-400">· {s.turnoNome}</span>
                 </p>
-                <span className={`rounded-full px-3 py-1 text-xs font-medium ${corStatus[s.status]}`}>
-                  {rotuloStatus[s.status]}
-                </span>
+                <div className="flex shrink-0 items-center gap-2">
+                  <span className={`rounded-full px-3 py-1 text-xs font-medium ${corStatus[s.status]}`}>
+                    {rotuloStatus[s.status]}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => handleExcluir(s.id)}
+                    disabled={processando === s.id}
+                    className="rounded-md border border-red-200 px-2 py-1 text-xs font-medium text-red-600 hover:bg-red-50 disabled:opacity-50"
+                  >
+                    Excluir
+                  </button>
+                </div>
               </div>
-              <div className="mt-1 flex flex-wrap items-center justify-between gap-2">
-                <p className="font-mono text-xs text-slate-400">
-                  {formatarDataHora(s.criado_em)} · reportado por {s.reportanteNome}
-                  {s.anonimo && ' (anônimo para os colaboradores)'}
-                </p>
-                <button
-                  type="button"
-                  onClick={() => handleExcluir(s.id)}
-                  disabled={processando === s.id}
-                  className="text-xs font-medium text-red-600 hover:text-red-700 disabled:opacity-50"
-                >
-                  Excluir
-                </button>
-              </div>
+              <p className="mt-1 font-mono text-xs text-slate-400">
+                {formatarDataHora(s.criado_em)} · reportado por {s.reportanteNome}
+                {s.anonimo && ' (anônimo para os colaboradores)'}
+              </p>
 
               <LinhaDecisao
                 solicitacao={s}
@@ -314,29 +314,29 @@ export function MultasAdminPage() {
         <div className="mt-3 space-y-2">
           {decididas.map((s) => (
             <div key={s.id} className="rounded-lg border border-slate-200 bg-white p-4">
-              <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="flex flex-wrap items-start justify-between gap-2">
                 <p className="font-medium text-tinta">
                   {s.colaboradorFinalNome ?? s.colaboradorApontadoNome ?? '(não definido)'}
                   <span className="ml-2 font-normal text-slate-400">· {s.turnoNome}</span>
                 </p>
-                <span className={`rounded-full px-3 py-1 text-xs font-medium ${corStatus[s.status]}`}>
-                  {rotuloStatus[s.status]}
-                </span>
+                <div className="flex shrink-0 items-center gap-2">
+                  <span className={`rounded-full px-3 py-1 text-xs font-medium ${corStatus[s.status]}`}>
+                    {rotuloStatus[s.status]}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => handleExcluir(s.id)}
+                    disabled={processando === s.id}
+                    className="rounded-md border border-red-200 px-2 py-1 text-xs font-medium text-red-600 hover:bg-red-50 disabled:opacity-50"
+                  >
+                    Excluir
+                  </button>
+                </div>
               </div>
-              <div className="mt-1 flex flex-wrap items-center justify-between gap-2">
-                <p className="font-mono text-xs text-slate-400">
-                  {formatarDataHora(s.criado_em)} · reportado por {s.reportanteNome}
-                  {s.anonimo && ' (anônimo para os colaboradores)'}
-                </p>
-                <button
-                  type="button"
-                  onClick={() => handleExcluir(s.id)}
-                  disabled={processando === s.id}
-                  className="text-xs font-medium text-red-600 hover:text-red-700 disabled:opacity-50"
-                >
-                  Excluir
-                </button>
-              </div>
+              <p className="mt-1 font-mono text-xs text-slate-400">
+                {formatarDataHora(s.criado_em)} · reportado por {s.reportanteNome}
+                {s.anonimo && ' (anônimo para os colaboradores)'}
+              </p>
               {s.justificativaAdmin && (
                 <p className="mt-2 text-sm text-slate-600">{s.justificativaAdmin}</p>
               )}
