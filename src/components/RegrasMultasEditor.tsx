@@ -19,6 +19,7 @@ export function RegrasMultasEditor() {
   const [categorias, setCategorias] = useState<CategoriaRegraMulta[]>([]);
   const [alertaTitulo, setAlertaTitulo] = useState('');
   const [alertaTexto, setAlertaTexto] = useState('');
+  const [valorMulta, setValorMulta] = useState('20');
   const [erroForm, setErroForm] = useState<string | null>(null);
 
   useEffect(() => {
@@ -26,6 +27,7 @@ export function RegrasMultasEditor() {
       setCategorias(config.categorias);
       setAlertaTitulo(config.alertaTitulo);
       setAlertaTexto(config.alertaTexto);
+      setValorMulta(String(config.valorMulta));
     }
   }, [config]);
 
@@ -84,10 +86,17 @@ export function RegrasMultasEditor() {
       return;
     }
 
+    const valorNumerico = Number(valorMulta.replace(',', '.'));
+    if (!Number.isFinite(valorNumerico) || valorNumerico <= 0) {
+      setErroForm('Informe um valor de multa válido.');
+      return;
+    }
+
     const resultado = await salvar({
       categorias: categoriasLimpas,
       alertaTitulo: alertaTitulo.trim(),
       alertaTexto: alertaTexto.trim(),
+      valorMulta: valorNumerico,
     });
 
     if (resultado.erro) {
@@ -190,6 +199,21 @@ export function RegrasMultasEditor() {
 
       <div className="rounded-md border border-amber-200 bg-amber-50 p-4">
         <label className="block text-xs font-medium text-amber-800">
+          Valor da multa (R$)
+        </label>
+        <input
+          type="text"
+          inputMode="decimal"
+          value={valorMulta}
+          onChange={(e) => setValorMulta(e.target.value)}
+          className="mt-1 w-32 rounded-md border border-amber-300 bg-white px-2 py-1.5 text-sm text-tinta focus:border-amber-500 focus:outline-none focus:ring-1 focus:ring-amber-500"
+        />
+        <p className="mt-1 text-xs text-amber-700">
+          Valor cobrado por multa aprovada. Mudar aqui não afeta multas já aprovadas antes —
+          só as próximas.
+        </p>
+
+        <label className="mt-3 block text-xs font-medium text-amber-800">
           Título da caixa de alerta
         </label>
         <input

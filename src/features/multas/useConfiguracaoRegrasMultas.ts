@@ -12,6 +12,7 @@ export interface ConfiguracaoRegrasMultas {
   categorias: CategoriaRegraMulta[];
   alertaTitulo: string;
   alertaTexto: string;
+  valorMulta: number;
 }
 
 export function useConfiguracaoRegrasMultas() {
@@ -26,7 +27,7 @@ export function useConfiguracaoRegrasMultas() {
 
     const { data, error } = await supabase
       .from('configuracao_multas')
-      .select('categorias, alerta_titulo, alerta_texto')
+      .select('categorias, alerta_titulo, alerta_texto, valor_multa')
       .eq('id', true)
       .single();
 
@@ -40,6 +41,7 @@ export function useConfiguracaoRegrasMultas() {
       categorias: (data?.categorias as CategoriaRegraMulta[] | null) ?? [],
       alertaTitulo: data?.alerta_titulo ?? '',
       alertaTexto: data?.alerta_texto ?? '',
+      valorMulta: Number(data?.valor_multa ?? 20),
     });
     setCarregando(false);
   }, []);
@@ -58,6 +60,7 @@ export function useConfiguracaoRegrasMultas() {
         categorias: novaConfig.categorias,
         alerta_titulo: novaConfig.alertaTitulo,
         alerta_texto: novaConfig.alertaTexto,
+        valor_multa: novaConfig.valorMulta,
       })
       .eq('id', true);
 

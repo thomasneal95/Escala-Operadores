@@ -7,6 +7,7 @@ import {
 import { useToast, useConfirm } from '../../components/FeedbackProvider';
 import { SecaoRecolhivel } from '../../components/SecaoRecolhivel';
 import { RegrasMultasEditor } from '../../components/RegrasMultasEditor';
+import { DebitosMultasSecao } from '../../components/DebitosMultasSecao';
 
 const rotuloStatus: Record<string, string> = {
   pendente: 'Pendente',
@@ -160,6 +161,7 @@ export function MultasAdminPage() {
     processando,
     erro,
     decidir,
+    marcarComoPago,
     excluir,
     excluirVarias,
     obterUrlImagem,
@@ -259,6 +261,15 @@ export function MultasAdminPage() {
     toast(`${ids.length} solicitaç${ids.length > 1 ? 'ões excluídas' : 'ão excluída'}.`);
   }
 
+  async function handleMarcarComoPago(id: string, pago: boolean) {
+    const resultado = await marcarComoPago(id, pago);
+    if (resultado.erro) {
+      toast(resultado.erro, 'erro');
+      return;
+    }
+    toast(pago ? 'Marcado como pago.' : 'Pagamento desmarcado.');
+  }
+
   if (carregando) {
     return <p className="text-sm text-slate-400">Carregando...</p>;
   }
@@ -287,6 +298,17 @@ export function MultasAdminPage() {
       >
         <RegrasMultasEditor />
       </SecaoRecolhivel>
+
+      <p className="mt-6 font-mono text-xs font-medium uppercase tracking-widest text-slate-400">
+        Débitos por colaborador
+      </p>
+      <div className="mt-3">
+        <DebitosMultasSecao
+          solicitacoes={solicitacoes}
+          processando={processando}
+          onMarcarComoPago={handleMarcarComoPago}
+        />
+      </div>
 
       <div className="mt-6 flex flex-wrap gap-3 rounded-lg border border-slate-200 bg-white p-4">
         <div>

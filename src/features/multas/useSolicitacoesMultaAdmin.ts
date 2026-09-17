@@ -8,6 +8,17 @@ import type { Turno } from '../../types/database';
 // bate com o turno desta solicitação (mesmo campo usado na escala automática).
 export const TODOS_DO_TURNO = '__todos_do_turno__';
 
+// Segunda-feira seguinte à data informada (mesma semana se hoje já for
+// segunda conta como "essa semana", então a cobrança cai na próxima).
+function proximaSegundaISO(data: Date): string {
+  const utc = Date.UTC(data.getUTCFullYear(), data.getUTCMonth(), data.getUTCDate());
+  const diaDaSemana = new Date(utc).getUTCDay(); // 0=domingo..6=sabado
+  const diasDesdeSegunda = (diaDaSemana + 6) % 7; // segunda=0
+  const segundaDestaSemana = utc - diasDesdeSegunda * 24 * 60 * 60 * 1000;
+  const proxima = segundaDestaSemana + 7 * 24 * 60 * 60 * 1000;
+  return new Date(proxima).toISOString().slice(0, 10);
+}
+
 export interface SolicitacaoMultaAdmin {
   id: string;
   criado_em: string;
@@ -24,6 +35,10 @@ export interface SolicitacaoMultaAdmin {
   colaboradorFinalId: string | null;
   colaboradorFinalNome: string | null;
   justificativaAdmin: string | null;
+  valorBase: number | null;
+  dataVencimento: string | null;
+  paga: boolean;
+  pagoEm: string | null;
 }
 
 export interface ColaboradorOpcao {
@@ -39,33 +54,37 @@ export function useSolicitacoesMultaAdmin() {
   const [carregando, setCarregando] = useState(true);
   const [processando, setProcessando] = useState<string | null>(null);
   const [erro, setErro] = useState<string | null>(null);
+  const [valorMulta, setValorMulta] = useState(20);
 
   const carregar = useCallback(async () => {
     setCarregando(true);
     setErro(null);
 
-    const [solicitacoesResultado, colaboradoresResultado, turnosResultado] = await Promise.all([
-      supabase
-        .from('solicitacoes_multa')
-        .select(
-          `id, criado_em, anonimo, imagens, status, justificativa_admin, nao_sabe_informar,
+    const [solicitacoesResultado, colaboradoresResultado, turnosResultado, configResultado] =
+      await Promise.all([
+        supabase
+          .from('solicitacoes_multa')
+          .select(
+            `id, criado_em, anonimo, imagens, status, justificativa_admin, nao_sabe_informar,
            colaborador_apontado_id, colaborador_final_id, turno_id, reportante_id,
+           valor_base, data_vencimento, paga, pago_em,
            reportante:colaboradores!solicitacoes_multa_reportante_id_fkey(perfis(nome_completo)),
            apontado:colaboradores!solicitacoes_multa_colaborador_apontado_id_fkey(perfis(nome_completo)),
            final:colaboradores!solicitacoes_multa_colaborador_final_id_fkey(perfis(nome_completo)),
            turnos(nome)`
-        )
-        .order('criado_em', { ascending: false }),
-      supabase
-        .from('colaboradores')
-        .select('id, perfis(nome_completo)')
-        .eq('ativo', true),
-      supabase
-        .from('turnos')
-        .select('id, nome, hora_inicio, hora_fim, ordem_exibicao, ativo_sabado, ativo_domingo')
-        .eq('ativo', true)
-        .order('ordem_exibicao'),
-    ]);
+          )
+          .order('criado_em', { ascending: false }),
+        supabase
+          .from('colaboradores')
+          .select('id, perfis(nome_completo)')
+          .eq('ativo', true),
+        supabase
+          .from('turnos')
+          .select('id, nome, hora_inicio, hora_fim, ordem_exibicao, ativo_sabado, ativo_domingo')
+          .eq('ativo', true)
+          .order('ordem_exibicao'),
+        supabase.from('configuracao_multas').select('valor_multa').eq('id', true).single(),
+      ]);
 
     if (solicitacoesResultado.error || colaboradoresResultado.error || turnosResultado.error) {
       setErro('Não foi possível carregar as solicitações de multa.');
@@ -95,6 +114,10 @@ export function useSolicitacoesMultaAdmin() {
         colaboradorFinalId: s.colaborador_final_id,
         colaboradorFinalNome: final?.perfis?.nome_completo ?? null,
         justificativaAdmin: s.justificativa_admin,
+        valorBase: s.valor_base,
+        dataVencimento: s.data_vencimento,
+        paga: s.paga,
+        pagoEm: s.pago_em,
       };
     });
 
@@ -109,6 +132,9 @@ export function useSolicitacoesMultaAdmin() {
 
     setColaboradores(listaColaboradores);
     setTurnos(turnosResultado.data ?? []);
+    if (!configResultado.error && configResultado.data) {
+      setValorMulta(Number(configResultado.data.valor_multa));
+    }
     setCarregando(false);
   }, []);
 
@@ -139,6 +165,24 @@ export function useSolicitacoesMultaAdmin() {
     setProcessando(id);
     setErro(null);
 
+    const solicitacaoAtual = solicitacoes.find((s) => s.id === id);
+    // Só grava valor/vencimento na PRIMEIRA vez que vira aprovada — editar
+    // depois (trocar responsável/justificativa) não reinicia o prazo/juros.
+    // Recusar sempre limpa o débito, mesmo que já tivesse sido aprovada antes.
+    const jaEstavaAprovada = solicitacaoAtual?.status === 'aprovada';
+
+    const camposFinanceiros =
+      decisao.status === 'recusada'
+        ? { valor_base: null, data_vencimento: null, paga: false, pago_em: null }
+        : jaEstavaAprovada
+          ? {}
+          : {
+              valor_base: valorMulta,
+              data_vencimento: proximaSegundaISO(new Date()),
+              paga: false,
+              pago_em: null,
+            };
+
     const { error } = await supabase
       .from('solicitacoes_multa')
       .update({
@@ -148,6 +192,7 @@ export function useSolicitacoesMultaAdmin() {
           decisao.colaboradorFinalId === TODOS_DO_TURNO ? null : decisao.colaboradorFinalId,
         decidido_por: session.user.id,
         decidido_em: new Date().toISOString(),
+        ...camposFinanceiros,
       })
       .eq('id', id);
 
@@ -193,6 +238,7 @@ export function useSolicitacoesMultaAdmin() {
     }
 
     const agora = new Date().toISOString();
+    const vencimento = proximaSegundaISO(new Date());
     const [primeiro, ...restantes] = colaboradoresDoTurno;
 
     const { error: erroUpdate } = await supabase
@@ -203,6 +249,10 @@ export function useSolicitacoesMultaAdmin() {
         colaborador_final_id: primeiro.id,
         decidido_por: session.user.id,
         decidido_em: agora,
+        valor_base: valorMulta,
+        data_vencimento: vencimento,
+        paga: false,
+        pago_em: null,
       })
       .eq('id', id);
 
@@ -226,6 +276,10 @@ export function useSolicitacoesMultaAdmin() {
         justificativa_admin: justificativa,
         decidido_por: session.user.id,
         decidido_em: agora,
+        valor_base: valorMulta,
+        data_vencimento: vencimento,
+        paga: false,
+        pago_em: null,
       }));
 
       const { error: erroInsercao } = await supabase.from('solicitacoes_multa').insert(novasLinhas);
@@ -240,6 +294,27 @@ export function useSolicitacoesMultaAdmin() {
     }
 
     setProcessando(null);
+    await carregar();
+    return { erro: null };
+  }
+
+  async function marcarComoPago(id: string, pago: boolean) {
+    setProcessando(id);
+    setErro(null);
+
+    const { error } = await supabase
+      .from('solicitacoes_multa')
+      .update({ paga: pago, pago_em: pago ? new Date().toISOString() : null })
+      .eq('id', id);
+
+    setProcessando(null);
+
+    if (error) {
+      const mensagem = 'Não foi possível atualizar o pagamento.';
+      setErro(mensagem);
+      return { erro: mensagem };
+    }
+
     await carregar();
     return { erro: null };
   }
@@ -310,10 +385,12 @@ export function useSolicitacoesMultaAdmin() {
     solicitacoes,
     colaboradores,
     turnos,
+    valorMulta,
     carregando,
     processando,
     erro,
     decidir,
+    marcarComoPago,
     excluir,
     excluirVarias,
     obterUrlImagem,
