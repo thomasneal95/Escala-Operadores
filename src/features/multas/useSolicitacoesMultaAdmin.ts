@@ -3,9 +3,15 @@ import { supabase } from '../../lib/supabase/client';
 import { useAuth } from '../auth/AuthContext';
 import type { Turno } from '../../types/database';
 
+// Valor especial selecionável em "quem vai levar a multa": ao aprovar com
+// esse valor, cria uma multa para cada colaborador ativo cujo turno_semana_id
+// bate com o turno desta solicitação (mesmo campo usado na escala automática).
+export const TODOS_DO_TURNO = '__todos_do_turno__';
+
 export interface SolicitacaoMultaAdmin {
   id: string;
   criado_em: string;
+  reportanteId: string;
   reportanteNome: string;
   anonimo: boolean;
   turnoId: string;
@@ -43,7 +49,7 @@ export function useSolicitacoesMultaAdmin() {
         .from('solicitacoes_multa')
         .select(
           `id, criado_em, anonimo, imagens, status, justificativa_admin, nao_sabe_informar,
-           colaborador_apontado_id, colaborador_final_id, turno_id,
+           colaborador_apontado_id, colaborador_final_id, turno_id, reportante_id,
            reportante:colaboradores!solicitacoes_multa_reportante_id_fkey(perfis(nome_completo)),
            apontado:colaboradores!solicitacoes_multa_colaborador_apontado_id_fkey(perfis(nome_completo)),
            final:colaboradores!solicitacoes_multa_colaborador_final_id_fkey(perfis(nome_completo)),
@@ -76,6 +82,7 @@ export function useSolicitacoesMultaAdmin() {
       return {
         id: s.id,
         criado_em: s.criado_em,
+        reportanteId: s.reportante_id,
         reportanteNome: reportante?.perfis?.nome_completo ?? '(desconhecido)',
         anonimo: s.anonimo,
         turnoId: s.turno_id,
@@ -123,6 +130,12 @@ export function useSolicitacoesMultaAdmin() {
       return { erro: 'Selecione quem vai levar a multa antes de aprovar.' };
     }
 
+    // "Todos do turno": só faz sentido ao aprovar (recusar não define
+    // responsável nenhum, então trata como se nada tivesse sido escolhido).
+    if (decisao.status === 'aprovada' && decisao.colaboradorFinalId === TODOS_DO_TURNO) {
+      return decidirTodosDoTurno(id, decisao.justificativa);
+    }
+
     setProcessando(id);
     setErro(null);
 
@@ -131,7 +144,8 @@ export function useSolicitacoesMultaAdmin() {
       .update({
         status: decisao.status,
         justificativa_admin: decisao.justificativa,
-        colaborador_final_id: decisao.colaboradorFinalId,
+        colaborador_final_id:
+          decisao.colaboradorFinalId === TODOS_DO_TURNO ? null : decisao.colaboradorFinalId,
         decidido_por: session.user.id,
         decidido_em: new Date().toISOString(),
       })
@@ -145,6 +159,87 @@ export function useSolicitacoesMultaAdmin() {
       return { erro: mensagem };
     }
 
+    await carregar();
+    return { erro: null };
+  }
+
+  async function decidirTodosDoTurno(id: string, justificativa: string) {
+    if (!session?.user) return { erro: 'Sessão inválida.' };
+
+    const solicitacao = solicitacoes.find((s) => s.id === id);
+    if (!solicitacao) return { erro: 'Solicitação não encontrada.' };
+
+    setProcessando(id);
+    setErro(null);
+
+    const { data: colaboradoresDoTurno, error: erroColaboradores } = await supabase
+      .from('colaboradores')
+      .select('id')
+      .eq('ativo', true)
+      .eq('turno_semana_id', solicitacao.turnoId);
+
+    if (erroColaboradores) {
+      setProcessando(null);
+      const mensagem = 'Não foi possível buscar os operadores desse turno.';
+      setErro(mensagem);
+      return { erro: mensagem };
+    }
+
+    if (!colaboradoresDoTurno || colaboradoresDoTurno.length === 0) {
+      setProcessando(null);
+      const mensagem = 'Nenhum operador ativo tem esse turno como turno da semana.';
+      setErro(mensagem);
+      return { erro: mensagem };
+    }
+
+    const agora = new Date().toISOString();
+    const [primeiro, ...restantes] = colaboradoresDoTurno;
+
+    const { error: erroUpdate } = await supabase
+      .from('solicitacoes_multa')
+      .update({
+        status: 'aprovada',
+        justificativa_admin: justificativa,
+        colaborador_final_id: primeiro.id,
+        decidido_por: session.user.id,
+        decidido_em: agora,
+      })
+      .eq('id', id);
+
+    if (erroUpdate) {
+      setProcessando(null);
+      const mensagem = 'Não foi possível registrar a decisão.';
+      setErro(mensagem);
+      return { erro: mensagem };
+    }
+
+    if (restantes.length > 0) {
+      const novasLinhas = restantes.map((c) => ({
+        reportante_id: solicitacao.reportanteId,
+        anonimo: solicitacao.anonimo,
+        turno_id: solicitacao.turnoId,
+        colaborador_apontado_id: solicitacao.colaboradorApontadoId,
+        nao_sabe_informar: solicitacao.naoSabeInformar,
+        imagens: solicitacao.imagens,
+        status: 'aprovada' as const,
+        colaborador_final_id: c.id,
+        justificativa_admin: justificativa,
+        decidido_por: session.user.id,
+        decidido_em: agora,
+      }));
+
+      const { error: erroInsercao } = await supabase.from('solicitacoes_multa').insert(novasLinhas);
+
+      if (erroInsercao) {
+        setProcessando(null);
+        const mensagem =
+          'A primeira multa foi registrada, mas não foi possível criar as demais do turno.';
+        setErro(mensagem);
+        return { erro: mensagem };
+      }
+    }
+
+    setProcessando(null);
     await carregar();
     return { erro: null };
   }

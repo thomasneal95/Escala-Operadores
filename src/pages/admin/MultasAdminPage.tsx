@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import {
   useSolicitacoesMultaAdmin,
+  TODOS_DO_TURNO,
   type SolicitacaoMultaAdmin,
 } from '../../features/multas/useSolicitacoesMultaAdmin';
 import { useToast, useConfirm } from '../../components/FeedbackProvider';
@@ -79,7 +80,14 @@ function LinhaDecisao({
               {c.nome_completo}
             </option>
           ))}
+          <option value={TODOS_DO_TURNO}>Todos (todo mundo desse turno)</option>
         </select>
+        {colaboradorFinalId === TODOS_DO_TURNO && (
+          <p className="mt-1 text-xs text-amber-700">
+            Ao aprovar, cria uma multa aprovada para cada operador ativo que tem{' '}
+            {solicitacao.turnoNome} como turno da semana.
+          </p>
+        )}
       </div>
 
       <div>
