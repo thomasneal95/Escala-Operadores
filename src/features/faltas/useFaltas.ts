@@ -30,13 +30,6 @@ interface DadosEdicaoFalta {
   justificada: boolean;
 }
 
-// Último dia do mês (formato YYYY-MM-DD) a partir de uma referência YYYY-MM.
-function fimDoMes(mesReferencia: string): string {
-  const [ano, mes] = mesReferencia.split('-').map(Number);
-  const ultimoDia = new Date(Date.UTC(ano, mes, 0)).getUTCDate();
-  return `${mesReferencia}-${String(ultimoDia).padStart(2, '0')}`;
-}
-
 export function useFaltas() {
   const { session } = useAuth();
   const [colaboradores, setColaboradores] = useState<ColaboradorOpcao[]>([]);
@@ -46,12 +39,12 @@ export function useFaltas() {
   const [processando, setProcessando] = useState<string | null>(null);
   const [erro, setErro] = useState<string | null>(null);
 
+  // Traz todas as faltas (sem filtro de mês) — a visão geral precisa
+  // enxergar todos os meses de uma vez. A tela filtra por mês só na lista
+  // de lançamentos detalhados, do lado do cliente.
   const carregar = useCallback(async () => {
     setCarregando(true);
     setErro(null);
-
-    const inicio = `${mesReferencia}-01`;
-    const fim = fimDoMes(mesReferencia);
 
     const [colaboradoresResultado, faltasResultado] = await Promise.all([
       supabase
@@ -66,8 +59,6 @@ export function useFaltas() {
            colaborador:colaboradores(perfis(nome_completo)),
            responsavel:perfis!faltas_registrado_por_fkey(nome_completo)`
         )
-        .gte('data', inicio)
-        .lte('data', fim)
         .order('data', { ascending: false }),
     ]);
 
@@ -102,7 +93,7 @@ export function useFaltas() {
     setColaboradores(listaColaboradores);
     setFaltas(listaFaltas);
     setCarregando(false);
-  }, [mesReferencia]);
+  }, []);
 
   useEffect(() => {
     carregar();
@@ -128,11 +119,10 @@ export function useFaltas() {
       return { erro: 'Não foi possível registrar a falta.' };
     }
 
-    if (dados.data.slice(0, 7) !== mesReferencia) {
-      setMesReferencia(dados.data.slice(0, 7));
-    } else {
-      await carregar();
-    }
+    await carregar();
+    // Pula pro mês da falta recém-lançada, pra ela aparecer de cara na
+    // lista de lançamentos detalhados.
+    setMesReferencia(dados.data.slice(0, 7));
     return { erro: null };
   }
 

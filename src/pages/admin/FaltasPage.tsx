@@ -196,6 +196,7 @@ export function FaltasPage() {
   const totalJustificadas = faltas.filter((f) => f.justificada).length;
   const totalNaoJustificadas = faltas.length - totalJustificadas;
   const maiorTotal = Math.max(1, ...resumoPorColaborador.map((r) => r.total));
+  const faltasDoMes = faltas.filter((f) => f.data.startsWith(mesReferencia));
 
   return (
     <div>
@@ -274,39 +275,23 @@ export function FaltasPage() {
         {erroForm && <p className="w-full text-sm text-red-600">{erroForm}</p>}
       </form>
 
-      <div className="mt-6 flex flex-wrap items-center justify-center gap-3 sm:justify-between">
-        <button
-          type="button"
-          onClick={() => setMesReferencia(mesAdjacente(mesReferencia, -1))}
-          className="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-600 hover:bg-slate-100"
-        >
-          ← Anterior
-        </button>
-        <p className="order-first w-full text-center font-medium text-tinta sm:order-none sm:w-auto">
-          {formatarMesReferencia(mesReferencia)}
-        </p>
-        <button
-          type="button"
-          onClick={() => setMesReferencia(mesAdjacente(mesReferencia, 1))}
-          className="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-600 hover:bg-slate-100"
-        >
-          Próximo →
-        </button>
-      </div>
-
       {carregando ? (
         <p className="mt-6 text-sm text-slate-400">Carregando...</p>
       ) : faltas.length === 0 ? (
-        <div className="mt-3 rounded-lg border border-slate-200 bg-white p-8 text-center">
-          <p className="text-slate-600">Nenhuma falta registrada nesse mês.</p>
+        <div className="mt-6 rounded-lg border border-slate-200 bg-white p-8 text-center">
+          <p className="text-slate-600">Nenhuma falta registrada ainda.</p>
         </div>
       ) : (
         <>
-          <div className="mt-3 rounded-lg border border-slate-200 bg-white p-6">
-            <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+          <div className="mt-6 rounded-lg border border-slate-200 bg-white p-6">
+            <p className="font-mono text-xs font-medium uppercase tracking-widest text-slate-400">
+              Visão geral · todos os meses
+            </p>
+
+            <div className="mt-4 grid grid-cols-2 gap-4 sm:grid-cols-4">
               <div>
                 <p className="text-2xl font-semibold text-tinta">{faltas.length}</p>
-                <p className="text-xs text-slate-500">Faltas no mês</p>
+                <p className="text-xs text-slate-500">Faltas no total</p>
               </div>
               <div>
                 <p className="text-2xl font-semibold text-tinta">{resumoPorColaborador.length}</p>
@@ -359,10 +344,38 @@ export function FaltasPage() {
             </div>
           </div>
 
+          <div className="mt-6 flex flex-wrap items-center justify-center gap-3 sm:justify-between">
+            <button
+              type="button"
+              onClick={() => setMesReferencia(mesAdjacente(mesReferencia, -1))}
+              className="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-600 hover:bg-slate-100"
+            >
+              ← Anterior
+            </button>
+            <p className="order-first w-full text-center font-medium text-tinta sm:order-none sm:w-auto">
+              {formatarMesReferencia(mesReferencia)}
+            </p>
+            <button
+              type="button"
+              onClick={() => setMesReferencia(mesAdjacente(mesReferencia, 1))}
+              className="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-600 hover:bg-slate-100"
+            >
+              Próximo →
+            </button>
+          </div>
+
           <div className="mt-4">
-            <SecaoRecolhivel titulo={`Lançamentos do mês · ${faltas.length}`} padraoAberta={false}>
-              <div className="-mx-5 -mb-5 space-y-3 border-t border-slate-100 bg-nuvem/40 p-5">
-                {faltas.map((f) => (
+            <SecaoRecolhivel
+              titulo={`Lançamentos de ${formatarMesReferencia(mesReferencia)} · ${faltasDoMes.length}`}
+              padraoAberta={false}
+            >
+              {faltasDoMes.length === 0 ? (
+                <p className="-mx-5 -mb-5 border-t border-slate-100 bg-nuvem/40 p-5 text-sm text-slate-500">
+                  Nenhuma falta registrada nesse mês.
+                </p>
+              ) : (
+                <div className="-mx-5 -mb-5 space-y-3 border-t border-slate-100 bg-nuvem/40 p-5">
+                  {faltasDoMes.map((f) => (
                   <div key={f.id} className="rounded-lg border border-slate-200 bg-white p-4">
                     <div className="flex flex-wrap items-start justify-between gap-2">
                       <div>
@@ -417,8 +430,9 @@ export function FaltasPage() {
                       f.motivo && <p className="mt-2 text-sm text-slate-600">{f.motivo}</p>
                     )}
                   </div>
-                ))}
-              </div>
+                  ))}
+                </div>
+              )}
             </SecaoRecolhivel>
           </div>
         </>
