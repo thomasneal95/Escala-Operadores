@@ -9,6 +9,7 @@ export interface ColaboradorOpcao {
 
 export interface FaltaAdmin {
   id: string;
+  colaboradorId: string;
   colaboradorNome: string;
   data: string;
   motivo: string | null;
@@ -61,7 +62,7 @@ export function useFaltas() {
       supabase
         .from('faltas')
         .select(
-          `id, data, motivo, justificada, created_at,
+          `id, data, motivo, justificada, created_at, colaborador_id,
            colaborador:colaboradores(perfis(nome_completo)),
            responsavel:perfis!faltas_registrado_por_fkey(nome_completo)`
         )
@@ -88,6 +89,7 @@ export function useFaltas() {
       const responsavel = f.responsavel as unknown as { nome_completo: string } | null;
       return {
         id: f.id,
+        colaboradorId: f.colaborador_id,
         colaboradorNome: colaborador?.perfis?.nome_completo ?? '(sem nome)',
         data: f.data,
         motivo: f.motivo,

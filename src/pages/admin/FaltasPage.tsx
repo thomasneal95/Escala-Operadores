@@ -2,6 +2,7 @@ import { useState } from 'react';
 import type { FormEvent } from 'react';
 import { useFaltas, type FaltaAdmin } from '../../features/faltas/useFaltas';
 import { useToast, useConfirm } from '../../components/FeedbackProvider';
+import { SecaoRecolhivel } from '../../components/SecaoRecolhivel';
 
 function hojeISO() {
   return new Date().toISOString().slice(0, 10);
@@ -26,6 +27,34 @@ function mesAdjacente(mesReferencia: string, deslocamento: number) {
   const [ano, mes] = mesReferencia.split('-').map(Number);
   const data = new Date(Date.UTC(ano, mes - 1 + deslocamento, 1));
   return `${data.getUTCFullYear()}-${String(data.getUTCMonth() + 1).padStart(2, '0')}`;
+}
+
+interface ResumoColaborador {
+  colaboradorId: string;
+  nome: string;
+  total: number;
+  justificadas: number;
+  naoJustificadas: number;
+}
+
+function agruparPorColaborador(faltas: FaltaAdmin[]): ResumoColaborador[] {
+  const porColaborador = new Map<string, ResumoColaborador>();
+
+  for (const f of faltas) {
+    const atual = porColaborador.get(f.colaboradorId) ?? {
+      colaboradorId: f.colaboradorId,
+      nome: f.colaboradorNome,
+      total: 0,
+      justificadas: 0,
+      naoJustificadas: 0,
+    };
+    atual.total += 1;
+    if (f.justificada) atual.justificadas += 1;
+    else atual.naoJustificadas += 1;
+    porColaborador.set(f.colaboradorId, atual);
+  }
+
+  return [...porColaborador.values()].sort((a, b) => b.total - a.total);
 }
 
 interface LinhaEdicaoProps {
@@ -163,6 +192,11 @@ export function FaltasPage() {
     toast('Falta excluída.');
   }
 
+  const resumoPorColaborador = agruparPorColaborador(faltas);
+  const totalJustificadas = faltas.filter((f) => f.justificada).length;
+  const totalNaoJustificadas = faltas.length - totalJustificadas;
+  const maiorTotal = Math.max(1, ...resumoPorColaborador.map((r) => r.total));
+
   return (
     <div>
       {erro && <p className="mb-4 rounded-md bg-red-50 px-4 py-3 text-sm text-red-700">{erro}</p>}
@@ -267,62 +301,127 @@ export function FaltasPage() {
           <p className="text-slate-600">Nenhuma falta registrada nesse mês.</p>
         </div>
       ) : (
-        <div className="mt-3 space-y-3">
-          {faltas.map((f) => (
-            <div key={f.id} className="rounded-lg border border-slate-200 bg-white p-4">
-              <div className="flex flex-wrap items-start justify-between gap-2">
-                <div>
-                  <p className="font-medium text-tinta">
-                    {f.colaboradorNome}
-                    <span className="ml-2 font-normal text-slate-400">· {formatarData(f.data)}</span>
-                  </p>
-                  <p className="mt-1 font-mono text-xs text-slate-400">
-                    Registrado por {f.registradoPorNome}
-                  </p>
-                </div>
-                <div className="flex shrink-0 items-center gap-2">
-                  <span
-                    className={`rounded-full px-3 py-1 text-xs font-medium ${
-                      f.justificada
-                        ? 'bg-esmeralda-light text-esmeralda-dark'
-                        : 'bg-amber-50 text-amber-700'
-                    }`}
-                  >
-                    {f.justificada ? 'Justificada' : 'Não justificada'}
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => setEditandoId(editandoId === f.id ? null : f.id)}
-                    className="rounded-md border border-slate-300 px-2 py-1 text-xs font-medium text-slate-600 hover:bg-slate-100"
-                  >
-                    {editandoId === f.id ? 'Editando...' : 'Editar'}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleExcluir(f.id)}
-                    disabled={processando === f.id}
-                    className="rounded-md border border-red-200 px-2 py-1 text-xs font-medium text-red-600 hover:bg-red-50 disabled:opacity-50"
-                  >
-                    Excluir
-                  </button>
-                </div>
+        <>
+          <div className="mt-3 rounded-lg border border-slate-200 bg-white p-6">
+            <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+              <div>
+                <p className="text-2xl font-semibold text-tinta">{faltas.length}</p>
+                <p className="text-xs text-slate-500">Faltas no mês</p>
               </div>
-
-              {editandoId === f.id ? (
-                <LinhaEdicao
-                  falta={f}
-                  processando={processando === f.id}
-                  onSalvar={(motivoEditado, justificadaEditada) =>
-                    handleSalvarEdicao(f.id, motivoEditado, justificadaEditada)
-                  }
-                  onCancelar={() => setEditandoId(null)}
-                />
-              ) : (
-                f.motivo && <p className="mt-2 text-sm text-slate-600">{f.motivo}</p>
-              )}
+              <div>
+                <p className="text-2xl font-semibold text-tinta">{resumoPorColaborador.length}</p>
+                <p className="text-xs text-slate-500">Colaboradores com falta</p>
+              </div>
+              <div>
+                <p className="text-2xl font-semibold text-esmeralda-dark">{totalJustificadas}</p>
+                <p className="text-xs text-slate-500">Justificadas</p>
+              </div>
+              <div>
+                <p className="text-2xl font-semibold text-amber-600">{totalNaoJustificadas}</p>
+                <p className="text-xs text-slate-500">Não justificadas</p>
+              </div>
             </div>
-          ))}
-        </div>
+
+            <div className="mt-6 space-y-4 border-t border-slate-100 pt-6">
+              {resumoPorColaborador.map((r) => (
+                <div key={r.colaboradorId}>
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="font-medium text-tinta">{r.nome}</span>
+                    <span className="text-slate-500">
+                      {r.total} falta{r.total > 1 ? 's' : ''}
+                    </span>
+                  </div>
+                  <div className="mt-1.5 flex h-3 w-full overflow-hidden rounded-full bg-slate-100">
+                    {r.justificadas > 0 && (
+                      <div
+                        className="h-full bg-esmeralda"
+                        style={{ width: `${(r.justificadas / maiorTotal) * 100}%` }}
+                      />
+                    )}
+                    {r.naoJustificadas > 0 && (
+                      <div
+                        className="h-full bg-amber-400"
+                        style={{ width: `${(r.naoJustificadas / maiorTotal) * 100}%` }}
+                      />
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div className="mt-6 flex flex-wrap items-center gap-3 border-t border-slate-100 pt-4 text-xs text-slate-500">
+              <span className="flex items-center gap-1.5">
+                <span className="h-3 w-3 rounded bg-esmeralda" /> Justificada
+              </span>
+              <span className="flex items-center gap-1.5">
+                <span className="h-3 w-3 rounded bg-amber-400" /> Não justificada
+              </span>
+            </div>
+          </div>
+
+          <div className="mt-4">
+            <SecaoRecolhivel titulo={`Lançamentos do mês · ${faltas.length}`} padraoAberta={false}>
+              <div className="-mx-5 -mb-5 space-y-3 border-t border-slate-100 bg-nuvem/40 p-5">
+                {faltas.map((f) => (
+                  <div key={f.id} className="rounded-lg border border-slate-200 bg-white p-4">
+                    <div className="flex flex-wrap items-start justify-between gap-2">
+                      <div>
+                        <p className="font-medium text-tinta">
+                          {f.colaboradorNome}
+                          <span className="ml-2 font-normal text-slate-400">
+                            · {formatarData(f.data)}
+                          </span>
+                        </p>
+                        <p className="mt-1 font-mono text-xs text-slate-400">
+                          Registrado por {f.registradoPorNome}
+                        </p>
+                      </div>
+                      <div className="flex shrink-0 items-center gap-2">
+                        <span
+                          className={`rounded-full px-3 py-1 text-xs font-medium ${
+                            f.justificada
+                              ? 'bg-esmeralda-light text-esmeralda-dark'
+                              : 'bg-amber-50 text-amber-700'
+                          }`}
+                        >
+                          {f.justificada ? 'Justificada' : 'Não justificada'}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => setEditandoId(editandoId === f.id ? null : f.id)}
+                          className="rounded-md border border-slate-300 px-2 py-1 text-xs font-medium text-slate-600 hover:bg-slate-100"
+                        >
+                          {editandoId === f.id ? 'Editando...' : 'Editar'}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleExcluir(f.id)}
+                          disabled={processando === f.id}
+                          className="rounded-md border border-red-200 px-2 py-1 text-xs font-medium text-red-600 hover:bg-red-50 disabled:opacity-50"
+                        >
+                          Excluir
+                        </button>
+                      </div>
+                    </div>
+
+                    {editandoId === f.id ? (
+                      <LinhaEdicao
+                        falta={f}
+                        processando={processando === f.id}
+                        onSalvar={(motivoEditado, justificadaEditada) =>
+                          handleSalvarEdicao(f.id, motivoEditado, justificadaEditada)
+                        }
+                        onCancelar={() => setEditandoId(null)}
+                      />
+                    ) : (
+                      f.motivo && <p className="mt-2 text-sm text-slate-600">{f.motivo}</p>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </SecaoRecolhivel>
+          </div>
+        </>
       )}
     </div>
   );
