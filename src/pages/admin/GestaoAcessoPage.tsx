@@ -24,11 +24,10 @@ export function GestaoAcessoPage() {
 
   async function handleExcluir(perfilId: string, nome: string) {
     const confirmou = await confirmar(
-      `Tem certeza que deseja excluir "${nome}"?\n\n` +
-        'Se este colaborador nunca teve disponibilidade ou escala registrada, ' +
-        'ele será excluído completamente do sistema.\n\n' +
-        'Se ele já tiver histórico de escalas, o cadastro será desativado e o ' +
-        'acesso bloqueado, mas o histórico será preservado.'
+      `Tem certeza que deseja excluir "${nome}" definitivamente?\n\n` +
+        'A exclusão só é permitida para cadastros sem nenhum registro ' +
+        '(escala, disponibilidade, falta, multa, fechamento...).\n\n' +
+        'Para quem já tem histórico, use "Desativar" na tela de Colaboradores.'
     );
 
     if (!confirmou) return;
@@ -43,15 +42,7 @@ export function GestaoAcessoPage() {
       return;
     }
 
-    if (resultado.modo === 'excluido') {
-      await recarregar();
-    } else {
-      setMensagemLinha((atual) => ({
-        ...atual,
-        [perfilId]: 'Colaborador desativado e acesso bloqueado (histórico preservado).',
-      }));
-      await recarregar();
-    }
+    await recarregar();
   }
 
   function iniciarAlterarSenha(perfilId: string) {
@@ -147,6 +138,11 @@ export function GestaoAcessoPage() {
                     >
                       {perfil.papel === 'administrador' ? 'Administrador' : 'Colaborador'}
                     </span>
+                    {!perfil.ativo && (
+                      <span className="ml-2 rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-500">
+                        Inativo
+                      </span>
+                    )}
                   </td>
                   <td className="px-4 py-3">
                     {alterandoSenhaDele ? (

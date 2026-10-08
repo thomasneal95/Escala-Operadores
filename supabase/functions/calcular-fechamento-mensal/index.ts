@@ -111,13 +111,14 @@ export default {
 
     const leadsConvertidos = todosOsLeads.filter((l) => l.convertido);
 
-    // 2. Colaboradores ativos (com e-mail, auxílio, admissão).
+    // 2. Colaboradores ativos no mês: os ativos hoje e os desativados a partir
+    // do início do mês (entram até a data de desativação).
         const { data: colaboradoresData, error: erroColaboradores } = await ctx.supabaseAdmin
       .from("colaboradores")
       .select(
-        "id, equipe_id, data_admissao, auxilio_mensal, comissionamento_individual, ativo, perfis(email, nome_completo)"
+        "id, equipe_id, data_admissao, desativado_em, auxilio_mensal, comissionamento_individual, ativo, perfis(email, nome_completo)"
       )
-      .eq("ativo", true);
+      .or(`ativo.eq.true,desativado_em.gte.${mesInicio}`);
 
     if (erroColaboradores) {
       return Response.json({ erro: "Não foi possível carregar os colaboradores." }, { status: 500 });
@@ -127,6 +128,7 @@ export default {
       id: string;
       equipe_id: string | null;
       data_admissao: string | null;
+      desativado_em: string | null;
       auxilio_mensal: number;
       email: string | null;
       nome: string;
@@ -137,6 +139,7 @@ export default {
       id: c.id,
       equipe_id: c.equipe_id,
       data_admissao: c.data_admissao,
+      desativado_em: c.ativo ? null : c.desativado_em,
       auxilio_mensal: Number(c.auxilio_mensal) || 0,
       email: c.perfis?.email?.toLowerCase().trim() ?? null,
       nome: c.perfis?.nome_completo ?? "(sem nome)",
@@ -328,21 +331,17 @@ export default {
       }
     }
 
-    // 7. Auxílio proporcional à data de admissão.
+    // 7. Auxílio proporcional aos dias ativos no mês (admissão e desativação).
     const diasNoMes = diasDoMes.length;
 
     function auxilioProporcional(c: ColaboradorInfo): number {
-      if (!c.data_admissao) return c.auxilio_mensal;
-      if (c.data_admissao <= mesInicio) return c.auxilio_mensal;
-      if (c.data_admissao > mesFim) return 0;
+      const inicio = c.data_admissao && c.data_admissao > mesInicio ? c.data_admissao : mesInicio;
+      const fimAtivo = c.desativado_em && c.desativado_em < mesFim ? c.desativado_em : mesFim;
+      if (inicio > fimAtivo) return 0;
+      if (inicio === mesInicio && fimAtivo === mesFim) return c.auxilio_mensal;
 
-      const [anoA, mesA, diaA] = c.data_admissao.split("-").map(Number);
-      const [anoF, mesF, diaF] = mesFim.split("-").map(Number);
-      const admissao = Date.UTC(anoA, mesA - 1, diaA);
-      const fim = Date.UTC(anoF, mesF - 1, diaF);
-      const diasRestantes = Math.round((fim - admissao) / (1000 * 60 * 60 * 24)) + 1;
-
-      return (c.auxilio_mensal * diasRestantes) / diasNoMes;
+      const diasAtivos = diasDoMes.filter((d) => d >= inicio && d <= fimAtivo).length;
+      return (c.auxilio_mensal * diasAtivos) / diasNoMes;
     }
 
     // 8. Adiantamentos já lançados para este mês.

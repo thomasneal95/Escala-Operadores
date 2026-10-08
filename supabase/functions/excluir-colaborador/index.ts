@@ -56,51 +56,61 @@ export default {
       );
     }
 
-    // 3. Verifica se o colaborador tem histórico (disponibilidades/escalas).
+    // 3. Verifica se o colaborador tem qualquer registro. Exclusão física só
+    // para cadastros sem nenhum dado (ex.: criado por engano) — com
+    // histórico, o caminho é desativar, que preserva tudo.
     const { data: colaborador } = await ctx.supabaseAdmin
       .from("colaboradores")
       .select("id")
       .eq("perfil_id", body.perfil_id)
       .maybeSingle();
 
-    let temHistorico = false;
-
     if (colaborador) {
-      const { count: countDisponibilidades } = await ctx.supabaseAdmin
-        .from("disponibilidades")
-        .select("id", { count: "exact", head: true })
-        .eq("colaborador_id", colaborador.id);
+      const id = colaborador.id;
+      const contar = (tabela: string) =>
+        ctx.supabaseAdmin.from(tabela).select("id", { count: "exact", head: true });
 
-      const { count: countEscalas } = await ctx.supabaseAdmin
-        .from("escalas")
-        .select("id", { count: "exact", head: true })
-        .eq("colaborador_id", colaborador.id);
+      const contagens = await Promise.all([
+        contar("disponibilidades").eq("colaborador_id", id),
+        contar("escalas").eq("colaborador_id", id),
+        contar("faltas").eq("colaborador_id", id),
+        contar("solicitacoes_multa").or(
+          `reportante_id.eq.${id},colaborador_apontado_id.eq.${id},colaborador_final_id.eq.${id}`
+        ),
+        contar("fechamentos_mensais").eq("colaborador_id", id),
+        contar("adiantamentos_mensais").eq("colaborador_id", id),
+        contar("solicitacoes_troca").or(`solicitante_id.eq.${id},colega_id.eq.${id}`),
+      ]);
 
-      temHistorico = (countDisponibilidades ?? 0) > 0 || (countEscalas ?? 0) > 0;
-    }
+      if (contagens.some((r) => r.error)) {
+        return Response.json(
+          { erro: "Não foi possível verificar o histórico do colaborador." },
+          { status: 500 }
+        );
+      }
 
-    // 4a. Tem histórico: desativação completa (preserva histórico, bloqueia acesso).
-    if (temHistorico) {
-      await ctx.supabaseAdmin
+      if (contagens.some((r) => (r.count ?? 0) > 0)) {
+        return Response.json(
+          {
+            erro:
+              'Este colaborador já tem histórico (escalas, faltas, multas, fechamentos...). Para não perder esses dados, use "Desativar" na tela de Colaboradores.',
+          },
+          { status: 409 }
+        );
+      }
+
+      // 4. Sem nenhum registro: exclusão física completa.
+      const { error: erroColaborador } = await ctx.supabaseAdmin
         .from("colaboradores")
-        .update({ ativo: false })
-        .eq("perfil_id", body.perfil_id);
+        .delete()
+        .eq("id", id);
 
-      await ctx.supabaseAdmin
-        .from("perfis")
-        .update({ ativo: false })
-        .eq("id", body.perfil_id);
-
-      await ctx.supabaseAdmin.auth.admin.updateUserById(body.perfil_id, {
-        ban_duration: "876000h",
-      });
-
-      return Response.json({ modo: "desativado" });
-    }
-
-    // 4b. Sem histórico: exclusão física completa.
-    if (colaborador) {
-      await ctx.supabaseAdmin.from("colaboradores").delete().eq("id", colaborador.id);
+      if (erroColaborador) {
+        return Response.json(
+          { erro: "Não foi possível excluir o colaborador." },
+          { status: 400 }
+        );
+      }
     }
 
     const { error: erroExcluir } = await ctx.supabaseAdmin.auth.admin.deleteUser(

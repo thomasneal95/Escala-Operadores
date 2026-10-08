@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import { FunctionsHttpError } from '@supabase/supabase-js';
 import { supabase } from '../../lib/supabase/client';
 
 interface ColaboradorLista {
@@ -13,6 +14,22 @@ interface ColaboradorLista {
   data_admissao: string | null;
   auxilio_mensal: number;
   ativo: boolean;
+  desativado_em: string | null;
+}
+
+export interface PreviaDesativacao {
+  escalas_futuras: number;
+  disponibilidades_futuras: number;
+  trocas_pendentes: number;
+}
+
+// A edge function responde { erro } com status 4xx/5xx; extrai a mensagem.
+async function mensagemDeErroDaFuncao(error: unknown, padrao: string) {
+  if (error instanceof FunctionsHttpError) {
+    const corpo = await error.context.json().catch(() => null);
+    if (corpo?.erro) return corpo.erro as string;
+  }
+  return padrao;
 }
 
 interface DadosCadastro {
@@ -37,7 +54,7 @@ export function useColaboradores() {
                     const { data, error } = await supabase
       .from('colaboradores')
       .select(
-        'id, perfil_id, equipe_id, turno_semana_id, telefone, matricula, data_admissao, auxilio_mensal, ativo, comissionamento_individual, perfis(nome_completo, papel), equipes(nome)'
+        'id, perfil_id, equipe_id, turno_semana_id, telefone, matricula, data_admissao, auxilio_mensal, ativo, desativado_em, comissionamento_individual, perfis(nome_completo, papel), equipes(nome)'
       );
 
     if (error) {
@@ -68,6 +85,7 @@ export function useColaboradores() {
         data_admissao: c.data_admissao,
         auxilio_mensal: c.auxilio_mensal,
         ativo: c.ativo,
+        desativado_em: c.desativado_em,
       };
     });
 
@@ -113,12 +131,33 @@ export function useColaboradores() {
     return { erro: null };
   }
 
-  async function alternarAtivo(id: string, ativo: boolean) {
+  // O que será removido ao desativar (escalas/disponibilidades de períodos
+  // ainda não terminados e trocas pendentes) — para a confirmação.
+  async function previaDesativacao(id: string) {
+    const { data, error } = await supabase.rpc('previa_desativacao_colaborador', {
+      p_colaborador_id: id,
+    });
+    if (error) return null;
+    return ((data as PreviaDesativacao[] | null)?.[0] ?? null);
+  }
+
+  // Desativa (tira de tudo que é atual/futuro, bloqueia o login, preserva o
+  // histórico) ou reativa — ver edge function desativar-colaborador.
+  async function alterarAtivo(id: string, acao: 'desativar' | 'reativar') {
     setProcessando(true);
-    const { error } = await supabase.from('colaboradores').update({ ativo }).eq('id', id);
+    const { error } = await supabase.functions.invoke('desativar-colaborador', {
+      body: { colaborador_id: id, acao },
+    });
     setProcessando(false);
 
-    if (error) return { erro: 'Não foi possível atualizar o status.' };
+    if (error) {
+      const padrao =
+        acao === 'desativar'
+          ? 'Não foi possível desativar o colaborador.'
+          : 'Não foi possível reativar o colaborador.';
+      return { erro: await mensagemDeErroDaFuncao(error, padrao) };
+    }
+
     await carregar();
     return { erro: null };
   }
@@ -173,7 +212,8 @@ export function useColaboradores() {
     processando,
     recarregar: carregar,
     atualizarEquipe,
-    alternarAtivo,
+    previaDesativacao,
+    alterarAtivo,
     atualizarCadastro,
   };
 }

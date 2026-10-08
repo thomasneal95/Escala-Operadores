@@ -126,7 +126,7 @@ export function FeedbackProvider({ children }: { children: React.ReactNode }) {
                   {dialogo.opcoes.titulo}
                 </h3>
               )}
-              <p id="mensagem-confirmacao" className="mt-2 text-sm text-slate-600">
+              <p id="mensagem-confirmacao" className="mt-2 whitespace-pre-line text-sm text-slate-600">
                 {dialogo.opcoes.mensagem}
               </p>
               <div className="mt-5 flex justify-end gap-3">

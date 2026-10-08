@@ -5,6 +5,7 @@ import { useCriarColaborador } from '../../features/employees/useCriarColaborado
 import { useColaboradores } from '../../features/employees/useColaboradores';
 import { useEquipes } from '../../features/teams/useEquipes';
 import { useTurnos } from '../../features/shifts/useTurnos';
+import { useConfirm, useToast } from '../../components/FeedbackProvider';
 
 interface FormularioNovoColaborador {
   nome_completo: string;
@@ -52,7 +53,8 @@ export function ColaboradoresPage() {
     processando: atualizando,
     recarregar,
     atualizarEquipe,
-    alternarAtivo,
+    previaDesativacao,
+    alterarAtivo,
     atualizarCadastro,
   } = useColaboradores();
   const { equipes } = useEquipes();
@@ -76,9 +78,70 @@ export function ColaboradoresPage() {
   const [sucessoLinha, setSucessoLinha] = useState<Record<string, string>>({});
   const [busca, setBusca] = useState('');
 
-  const colaboradoresFiltrados = colaboradores.filter((c) =>
-    c.nome_completo.toLowerCase().includes(busca.toLowerCase())
+  const [mostrarInativos, setMostrarInativos] = useState(false);
+  const confirmar = useConfirm();
+  const mostrarToast = useToast();
+
+  const totalInativos = colaboradores.filter((c) => !c.ativo).length;
+  const colaboradoresFiltrados = colaboradores.filter(
+    (c) =>
+      (mostrarInativos || c.ativo) &&
+      c.nome_completo.toLowerCase().includes(busca.toLowerCase())
   );
+
+  async function handleDesativar(colaboradorId: string, nome: string) {
+    const previa = await previaDesativacao(colaboradorId);
+
+    const remocoes: string[] = [];
+    if (previa?.escalas_futuras) {
+      remocoes.push(`• ${previa.escalas_futuras} escala(s) em finais de semana ainda não encerrados — essas vagas ficarão abertas`);
+    }
+    if (previa?.disponibilidades_futuras) {
+      remocoes.push(`• ${previa.disponibilidades_futuras} disponibilidade(s) enviada(s) para períodos em aberto`);
+    }
+    if (previa?.trocas_pendentes) {
+      remocoes.push(`• ${previa.trocas_pendentes} solicitação(ões) de troca pendente(s) serão canceladas`);
+    }
+
+    const confirmou = await confirmar({
+      titulo: `Desativar ${nome}?`,
+      mensagem:
+        'A pessoa perde o acesso ao sistema, sai da equipe e deixa de aparecer nas ' +
+        'escalas, disponibilidades, multas e faltas daqui pra frente.\n\n' +
+        (remocoes.length > 0 ? `Será removido:\n${remocoes.join('\n')}\n\n` : '') +
+        'O histórico (escalas passadas, faltas, multas, fechamentos) é mantido. ' +
+        'É possível reativar depois.',
+      textoConfirmar: 'Desativar',
+      perigoso: true,
+    });
+    if (!confirmou) return;
+
+    setErroLinha((atual) => ({ ...atual, [colaboradorId]: '' }));
+    const resultado = await alterarAtivo(colaboradorId, 'desativar');
+    if (resultado.erro) {
+      setErroLinha((atual) => ({ ...atual, [colaboradorId]: resultado.erro as string }));
+      return;
+    }
+    mostrarToast(`${nome} foi desativado(a).`);
+  }
+
+  async function handleReativar(colaboradorId: string, nome: string) {
+    const confirmou = await confirmar({
+      titulo: `Reativar ${nome}?`,
+      mensagem:
+        'O acesso ao sistema é liberado de novo. Depois, escolha a equipe da pessoa na lista.',
+      textoConfirmar: 'Reativar',
+    });
+    if (!confirmou) return;
+
+    setErroLinha((atual) => ({ ...atual, [colaboradorId]: '' }));
+    const resultado = await alterarAtivo(colaboradorId, 'reativar');
+    if (resultado.erro) {
+      setErroLinha((atual) => ({ ...atual, [colaboradorId]: resultado.erro as string }));
+      return;
+    }
+    mostrarToast(`${nome} foi reativado(a). Escolha a equipe na lista.`);
+  }
 
   function nomeTurnoPorId(turnoId: string | null) {
     if (!turnoId) return '—';
@@ -290,7 +353,7 @@ export function ColaboradoresPage() {
         )}
       </SecaoRecolhivel>
 
-      <div className="mt-6">
+      <div className="mt-6 flex flex-wrap items-center gap-4">
         <input
           type="text"
           value={busca}
@@ -298,6 +361,17 @@ export function ColaboradoresPage() {
           placeholder="Buscar colaborador por nome..."
           className="w-full max-w-sm rounded-md border border-slate-300 px-3 py-2 text-sm text-tinta focus:border-esmeralda focus:outline-none focus:ring-1 focus:ring-esmeralda"
         />
+        {totalInativos > 0 && (
+          <label className="flex items-center gap-2 text-sm text-slate-600">
+            <input
+              type="checkbox"
+              checked={mostrarInativos}
+              onChange={(e) => setMostrarInativos(e.target.checked)}
+              className="accent-esmeralda"
+            />
+            Mostrar inativos ({totalInativos})
+          </label>
+        )}
       </div>
 
       <div className="mt-3 overflow-hidden rounded-lg border border-slate-200 bg-white">
@@ -360,7 +434,7 @@ export function ColaboradoresPage() {
                       <select
                         value={colaborador.equipe_id ?? ''}
                         onChange={(e) => atualizarEquipe(colaborador.id, e.target.value || null)}
-                        disabled={atualizando}
+                        disabled={atualizando || !colaborador.ativo}
                         className="rounded-md border border-slate-300 px-2 py-1 text-sm"
                       >
                         <option value="">Sem equipe</option>
@@ -447,7 +521,11 @@ export function ColaboradoresPage() {
                             : 'bg-slate-100 text-slate-500'
                         }`}
                       >
-                        {colaborador.ativo ? 'Ativo' : 'Inativo'}
+                        {colaborador.ativo
+                          ? 'Ativo'
+                          : colaborador.desativado_em
+                            ? `Inativo desde ${formatarDataExibicao(colaborador.desativado_em)}`
+                            : 'Inativo'}
                       </span>
                     </td>
                     <td className="px-4 py-3">
@@ -485,7 +563,11 @@ export function ColaboradoresPage() {
                             Editar
                           </button>
                           <button
-                            onClick={() => alternarAtivo(colaborador.id, !colaborador.ativo)}
+                            onClick={() =>
+                              colaborador.ativo
+                                ? handleDesativar(colaborador.id, colaborador.nome_completo)
+                                : handleReativar(colaborador.id, colaborador.nome_completo)
+                            }
                             disabled={atualizando}
                             className="text-sm font-medium text-slate-600 hover:text-tinta"
                           >

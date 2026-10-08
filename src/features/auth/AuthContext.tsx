@@ -28,7 +28,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   async function carregarPerfil(userId: string) {
     const { data, error } = await supabase
       .from('perfis')
-      .select('id, papel, nome_completo')
+      .select('id, papel, nome_completo, ativo')
       .eq('id', userId)
       .single();
 
@@ -38,7 +38,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return;
     }
 
-    setPerfil(data as Perfil);
+    // Perfil desativado: encerra a sessão que ainda estiver aberta (o login
+    // novo já é bloqueado no Auth pela desativação).
+    if (data.ativo === false) {
+      setPerfil(null);
+      await supabase.auth.signOut();
+      return;
+    }
+
+    setPerfil({ id: data.id, papel: data.papel, nome_completo: data.nome_completo } as Perfil);
   }
 
   useEffect(() => {
