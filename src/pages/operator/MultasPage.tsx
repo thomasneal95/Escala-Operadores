@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useMuralMultas } from '../../features/multas/useMuralMultas';
+import { useMuralMultas, type ItemMural } from '../../features/multas/useMuralMultas';
 import { ApontarMultaModal } from '../../components/ApontarMultaModal';
 import { RegrasMultasDashboard } from '../../components/RegrasMultasDashboard';
 import { useToast } from '../../components/FeedbackProvider';
@@ -21,6 +21,33 @@ const corStatus: Record<string, string> = {
 function formatarDataHora(iso: string) {
   const d = new Date(iso);
   return d.toLocaleDateString('pt-BR') + ' às ' + d.toLocaleTimeString('pt-BR').slice(0, 5);
+}
+
+type EntradaMural =
+  | { tipo: 'pessoa'; nome: string; multas: ItemMural[] }
+  | { tipo: 'item'; item: ItemMural };
+
+// Multas aplicadas à mesma pessoa viram um card só (com todos os motivos),
+// na posição da mais recente. Em análise e recusadas continuam separadas.
+function entradasMural(itens: ItemMural[]): EntradaMural[] {
+  const entradas: EntradaMural[] = [];
+  const porPessoa = new Map<string, { tipo: 'pessoa'; nome: string; multas: ItemMural[] }>();
+
+  for (const item of itens) {
+    if (item.status === 'aprovada' && item.colaborador_nome) {
+      const existente = porPessoa.get(item.colaborador_nome);
+      if (existente) {
+        existente.multas.push(item);
+      } else {
+        const nova = { tipo: 'pessoa' as const, nome: item.colaborador_nome, multas: [item] };
+        porPessoa.set(item.colaborador_nome, nova);
+        entradas.push(nova);
+      }
+    } else {
+      entradas.push({ tipo: 'item', item });
+    }
+  }
+  return entradas;
 }
 
 export function MultasPage() {
@@ -90,34 +117,65 @@ export function MultasPage() {
         </div>
       ) : (
         <div className="mt-3 space-y-2">
-          {itens.map((item) => (
-            <div
-              key={item.id}
-              className="rounded-lg border border-slate-200 bg-white p-4"
-            >
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <div>
-                  <p className="font-medium text-tinta">
-                    {item.colaborador_nome ?? 'A definir'}
-                    <span className="ml-2 font-normal text-slate-400">· {item.turno_nome}</span>
-                  </p>
-                  <p className="font-mono text-xs text-slate-400">
-                    {formatarDataHora(item.criado_em)}
-                    {item.eu_reportei && ' · você reportou'}
-                  </p>
+          {entradasMural(itens).map((entrada) =>
+            entrada.tipo === 'pessoa' ? (
+              <div
+                key={`pessoa-${entrada.nome}`}
+                className="rounded-lg border border-slate-200 bg-white p-4"
+              >
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <p className="font-medium text-tinta">{entrada.nome}</p>
+                  <span className={`rounded-full px-3 py-1 text-xs font-medium ${corStatus.aprovada}`}>
+                    {entrada.multas.length > 1
+                      ? `${entrada.multas.length} multas aplicadas`
+                      : rotuloStatus.aprovada}
+                  </span>
                 </div>
-                <span
-                  className={`rounded-full px-3 py-1 text-xs font-medium ${corStatus[item.status]}`}
-                >
-                  {rotuloStatus[item.status]}
-                </span>
+                <ul className="mt-2 space-y-1.5">
+                  {entrada.multas.map((m) => (
+                    <li key={m.id} className="text-sm">
+                      <span className="font-mono text-xs text-slate-400">
+                        {formatarDataHora(m.criado_em)} · {m.turno_nome}
+                        {m.eu_reportei && ' · você reportou'}
+                      </span>
+                      {m.justificativa_admin && (
+                        <p className="text-slate-500">{m.justificativa_admin}</p>
+                      )}
+                    </li>
+                  ))}
+                </ul>
               </div>
+            ) : (
+              <div
+                key={entrada.item.id}
+                className="rounded-lg border border-slate-200 bg-white p-4"
+              >
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div>
+                    <p className="font-medium text-tinta">
+                      {entrada.item.colaborador_nome ?? 'A definir'}
+                      <span className="ml-2 font-normal text-slate-400">
+                        · {entrada.item.turno_nome}
+                      </span>
+                    </p>
+                    <p className="font-mono text-xs text-slate-400">
+                      {formatarDataHora(entrada.item.criado_em)}
+                      {entrada.item.eu_reportei && ' · você reportou'}
+                    </p>
+                  </div>
+                  <span
+                    className={`rounded-full px-3 py-1 text-xs font-medium ${corStatus[entrada.item.status]}`}
+                  >
+                    {rotuloStatus[entrada.item.status]}
+                  </span>
+                </div>
 
-              {item.justificativa_admin && (
-                <p className="mt-2 text-sm text-slate-500">{item.justificativa_admin}</p>
-              )}
-            </div>
-          ))}
+                {entrada.item.justificativa_admin && (
+                  <p className="mt-2 text-sm text-slate-500">{entrada.item.justificativa_admin}</p>
+                )}
+              </div>
+            )
+          )}
         </div>
       )}
 

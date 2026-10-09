@@ -8,6 +8,7 @@ import { useToast, useConfirm } from '../../components/FeedbackProvider';
 import { SecaoRecolhivel } from '../../components/SecaoRecolhivel';
 import { RegrasMultasEditor } from '../../components/RegrasMultasEditor';
 import { DebitosMultasSecao } from '../../components/DebitosMultasSecao';
+import { AplicarMultaAdminModal } from '../../components/AplicarMultaAdminModal';
 
 const rotuloStatus: Record<string, string> = {
   pendente: 'Pendente',
@@ -157,10 +158,12 @@ export function MultasAdminPage() {
     solicitacoes,
     colaboradores,
     turnos,
+    valorMulta,
     carregando,
     processando,
     erro,
     decidir,
+    aplicarMulta,
     marcarComoPago,
     excluir,
     excluirVarias,
@@ -173,6 +176,17 @@ export function MultasAdminPage() {
   const [filtroColaboradorId, setFiltroColaboradorId] = useState('');
   const [editandoId, setEditandoId] = useState<string | null>(null);
   const [selecionadas, setSelecionadas] = useState<Set<string>>(new Set());
+  const [modalAplicarAberto, setModalAplicarAberto] = useState(false);
+
+  async function handleAplicarMulta(dados: Parameters<typeof aplicarMulta>[0]) {
+    const resultado = await aplicarMulta(dados);
+    if (resultado.erro) return { erro: resultado.erro };
+    const quantidade = resultado.quantidade ?? 1;
+    toast(
+      quantidade > 1 ? `${quantidade} multas aplicadas.` : 'Multa aplicada e lançada nos débitos.'
+    );
+    return { erro: null };
+  }
 
   function alternarSelecao(id: string) {
     setSelecionadas((atual) => {
@@ -284,12 +298,118 @@ export function MultasAdminPage() {
 
   const pendentes = filtradas.filter((s) => s.status === 'pendente');
   const decididas = filtradas.filter((s) => s.status !== 'pendente');
+  const recusadas = decididas.filter((s) => s.status !== 'aprovada' || !s.colaboradorFinalId);
+
+  // Várias multas da mesma pessoa ficam num card só (cada uma com seu motivo).
+  const gruposAprovadas = new Map<
+    string,
+    { colaboradorId: string; nome: string; itens: SolicitacaoMultaAdmin[] }
+  >();
+  for (const s of decididas) {
+    if (s.status !== 'aprovada' || !s.colaboradorFinalId) continue;
+    const grupo = gruposAprovadas.get(s.colaboradorFinalId) ?? {
+      colaboradorId: s.colaboradorFinalId,
+      nome: s.colaboradorFinalNome ?? '(desconhecido)',
+      itens: [],
+    };
+    grupo.itens.push(s);
+    gruposAprovadas.set(s.colaboradorFinalId, grupo);
+  }
+  const aprovadasPorPessoa = [...gruposAprovadas.values()];
+
+  function renderItemDecidido(s: SolicitacaoMultaAdmin) {
+    return (
+      <>
+        <div className="flex flex-wrap items-start justify-between gap-2">
+          <div className="flex items-start gap-2">
+            <input
+              type="checkbox"
+              checked={selecionadas.has(s.id)}
+              onChange={() => alternarSelecao(s.id)}
+              className="mt-0.5 h-4 w-4 rounded border-slate-300 text-esmeralda focus:ring-esmeralda"
+              aria-label="Selecionar solicitação"
+            />
+            <p className="font-mono text-xs text-slate-400">
+              {formatarDataHora(s.criado_em)} · {s.turnoNome} ·{' '}
+              {s.aplicadaPorAdmin
+                ? `aplicada direto por ${s.reportanteNome}`
+                : `reportado por ${s.reportanteNome}`}
+              {s.anonimo && ' (anônimo para os colaboradores)'}
+            </p>
+          </div>
+          <div className="flex shrink-0 items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setEditandoId(editandoId === s.id ? null : s.id)}
+              className="rounded-md border border-slate-300 px-2 py-1 text-xs font-medium text-slate-600 hover:bg-slate-100"
+            >
+              {editandoId === s.id ? 'Editando...' : 'Editar'}
+            </button>
+            <button
+              type="button"
+              onClick={() => handleExcluir(s.id)}
+              disabled={processando === s.id}
+              className="rounded-md border border-red-200 px-2 py-1 text-xs font-medium text-red-600 hover:bg-red-50 disabled:opacity-50"
+            >
+              Excluir
+            </button>
+          </div>
+        </div>
+
+        {editandoId === s.id ? (
+          <LinhaDecisao
+            solicitacao={s}
+            colaboradores={colaboradores}
+            processando={processando === s.id}
+            onDecidir={(status, justificativa, colaboradorFinalId) =>
+              handleDecidir(s.id, status, justificativa, colaboradorFinalId)
+            }
+            onVerImagem={handleVerImagem}
+            onCancelar={() => setEditandoId(null)}
+          />
+        ) : (
+          <>
+            {s.justificativaAdmin && (
+              <p className="mt-2 text-sm text-slate-600">{s.justificativaAdmin}</p>
+            )}
+            {s.imagens.length > 0 && (
+              <div className="mt-2 flex flex-wrap gap-2">
+                {s.imagens.map((caminho, i) => (
+                  <button
+                    key={caminho}
+                    type="button"
+                    onClick={() => handleVerImagem(caminho)}
+                    className="rounded-md border border-slate-300 bg-white px-2 py-1 text-xs font-medium text-slate-600 hover:bg-slate-100"
+                  >
+                    Ver imagem {i + 1}
+                  </button>
+                ))}
+              </div>
+            )}
+          </>
+        )}
+      </>
+    );
+  }
 
   return (
     <div>
       {erro && (
         <p className="mb-4 rounded-md bg-red-50 px-4 py-3 text-sm text-red-700">{erro}</p>
       )}
+
+      <div className="mb-4">
+        <button
+          type="button"
+          onClick={() => setModalAplicarAberto(true)}
+          className="rounded-md bg-esmeralda px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-esmeralda-dark"
+        >
+          Aplicar multa
+        </button>
+        <p className="mt-1 text-xs text-slate-500">
+          Multas aplicadas pelo admin não passam por análise e entram direto nos débitos.
+        </p>
+      </div>
 
       <SecaoRecolhivel
         titulo="Editar regras exibidas para os colaboradores"
@@ -444,84 +564,51 @@ export function MultasAdminPage() {
         <p className="mt-3 text-sm text-slate-400">Nenhuma solicitação decidida ainda.</p>
       ) : (
         <div className="mt-3 space-y-2">
-          {decididas.map((s) => (
-            <div key={s.id} className="rounded-lg border border-slate-200 bg-white p-4">
-              <div className="flex flex-wrap items-start justify-between gap-2">
-                <div className="flex items-start gap-2">
-                  <input
-                    type="checkbox"
-                    checked={selecionadas.has(s.id)}
-                    onChange={() => alternarSelecao(s.id)}
-                    className="mt-1 h-4 w-4 rounded border-slate-300 text-esmeralda focus:ring-esmeralda"
-                    aria-label="Selecionar solicitação"
-                  />
-                  <p className="font-medium text-tinta">
-                    {s.colaboradorFinalNome ?? s.colaboradorApontadoNome ?? '(não definido)'}
-                    <span className="ml-2 font-normal text-slate-400">· {s.turnoNome}</span>
-                  </p>
-                </div>
-                <div className="flex shrink-0 items-center gap-2">
-                  <span className={`rounded-full px-3 py-1 text-xs font-medium ${corStatus[s.status]}`}>
-                    {rotuloStatus[s.status]}
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => setEditandoId(editandoId === s.id ? null : s.id)}
-                    className="rounded-md border border-slate-300 px-2 py-1 text-xs font-medium text-slate-600 hover:bg-slate-100"
-                  >
-                    {editandoId === s.id ? 'Editando...' : 'Editar'}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleExcluir(s.id)}
-                    disabled={processando === s.id}
-                    className="rounded-md border border-red-200 px-2 py-1 text-xs font-medium text-red-600 hover:bg-red-50 disabled:opacity-50"
-                  >
-                    Excluir
-                  </button>
-                </div>
+          {/* Multas aprovadas: um card por pessoa, com todas as multas dela. */}
+          {aprovadasPorPessoa.map((grupo) => (
+            <div key={grupo.colaboradorId} className="rounded-lg border border-slate-200 bg-white p-4">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <p className="font-medium text-tinta">{grupo.nome}</p>
+                <span className={`rounded-full px-3 py-1 text-xs font-medium ${corStatus.aprovada}`}>
+                  {grupo.itens.length} multa{grupo.itens.length > 1 ? 's' : ''} aprovada
+                  {grupo.itens.length > 1 ? 's' : ''}
+                </span>
               </div>
-              <p className="mt-1 font-mono text-xs text-slate-400">
-                {formatarDataHora(s.criado_em)} · reportado por {s.reportanteNome}
-                {s.anonimo && ' (anônimo para os colaboradores)'}
-              </p>
+              <div className="mt-3 divide-y divide-slate-100 rounded-md border border-slate-100">
+                {grupo.itens.map((s) => (
+                  <div key={s.id} className="p-3">
+                    {renderItemDecidido(s)}
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
 
-              {editandoId === s.id ? (
-                <LinhaDecisao
-                  solicitacao={s}
-                  colaboradores={colaboradores}
-                  processando={processando === s.id}
-                  onDecidir={(status, justificativa, colaboradorFinalId) =>
-                    handleDecidir(s.id, status, justificativa, colaboradorFinalId)
-                  }
-                  onVerImagem={handleVerImagem}
-                  onCancelar={() => setEditandoId(null)}
-                />
-              ) : (
-                <>
-                  {s.justificativaAdmin && (
-                    <p className="mt-2 text-sm text-slate-600">{s.justificativaAdmin}</p>
-                  )}
-                  {s.imagens.length > 0 && (
-                    <div className="mt-2 flex flex-wrap gap-2">
-                      {s.imagens.map((caminho, i) => (
-                        <button
-                          key={caminho}
-                          type="button"
-                          onClick={() => handleVerImagem(caminho)}
-                          className="rounded-md border border-slate-300 bg-white px-2 py-1 text-xs font-medium text-slate-600 hover:bg-slate-100"
-                        >
-                          Ver imagem {i + 1}
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                </>
-              )}
+          {recusadas.map((s) => (
+            <div key={s.id} className="rounded-lg border border-slate-200 bg-white p-4">
+              <div className="mb-1 flex flex-wrap items-center justify-between gap-2">
+                <p className="font-medium text-tinta">
+                  {s.colaboradorFinalNome ?? s.colaboradorApontadoNome ?? '(não definido)'}
+                </p>
+                <span className={`rounded-full px-3 py-1 text-xs font-medium ${corStatus[s.status]}`}>
+                  {rotuloStatus[s.status]}
+                </span>
+              </div>
+              {renderItemDecidido(s)}
             </div>
           ))}
         </div>
       )}
+
+      <AplicarMultaAdminModal
+        aberto={modalAplicarAberto}
+        turnos={turnos}
+        colaboradores={colaboradores}
+        valorMulta={valorMulta}
+        enviando={processando === 'aplicar'}
+        onFechar={() => setModalAplicarAberto(false)}
+        onAplicar={handleAplicarMulta}
+      />
     </div>
   );
 }

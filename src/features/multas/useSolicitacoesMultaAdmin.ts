@@ -22,8 +22,9 @@ function proximaSegundaISO(data: Date): string {
 export interface SolicitacaoMultaAdmin {
   id: string;
   criado_em: string;
-  reportanteId: string;
+  reportanteId: string | null;
   reportanteNome: string;
+  aplicadaPorAdmin: boolean;
   anonimo: boolean;
   turnoId: string;
   turnoNome: string;
@@ -67,7 +68,8 @@ export function useSolicitacoesMultaAdmin() {
           .select(
             `id, criado_em, anonimo, imagens, status, justificativa_admin, nao_sabe_informar,
            colaborador_apontado_id, colaborador_final_id, turno_id, reportante_id,
-           valor_base, data_vencimento, paga, pago_em,
+           valor_base, data_vencimento, paga, pago_em, aplicada_por_admin,
+           decisor:perfis!solicitacoes_multa_decidido_por_fkey(nome_completo),
            reportante:colaboradores!solicitacoes_multa_reportante_id_fkey(perfis(nome_completo)),
            apontado:colaboradores!solicitacoes_multa_colaborador_apontado_id_fkey(perfis(nome_completo)),
            final:colaboradores!solicitacoes_multa_colaborador_final_id_fkey(perfis(nome_completo)),
@@ -98,12 +100,16 @@ export function useSolicitacoesMultaAdmin() {
       const apontado = s.apontado as unknown as { perfis: { nome_completo: string } | null } | null;
       const final = s.final as unknown as { perfis: { nome_completo: string } | null } | null;
       const turno = s.turnos as unknown as { nome: string } | null;
+      const decisor = s.decisor as unknown as { nome_completo: string } | null;
 
       return {
         id: s.id,
         criado_em: s.criado_em,
         reportanteId: s.reportante_id,
-        reportanteNome: reportante?.perfis?.nome_completo ?? '(desconhecido)',
+        reportanteNome: s.aplicada_por_admin
+          ? decisor?.nome_completo ?? '(admin)'
+          : reportante?.perfis?.nome_completo ?? '(desconhecido)',
+        aplicadaPorAdmin: s.aplicada_por_admin,
         anonimo: s.anonimo,
         turnoId: s.turno_id,
         turnoNome: turno?.nome ?? '(desconhecido)',
@@ -267,6 +273,7 @@ export function useSolicitacoesMultaAdmin() {
     if (restantes.length > 0) {
       const novasLinhas = restantes.map((c) => ({
         reportante_id: solicitacao.reportanteId,
+        aplicada_por_admin: solicitacao.aplicadaPorAdmin,
         anonimo: solicitacao.anonimo,
         turno_id: solicitacao.turnoId,
         colaborador_apontado_id: solicitacao.colaboradorApontadoId,
@@ -299,6 +306,94 @@ export function useSolicitacoesMultaAdmin() {
     return { erro: null };
   }
 
+  // Multa enviada pelo próprio admin: já nasce aprovada (sem análise) e entra
+  // direto nos débitos. Aceita "Todos do turno" (uma multa por operador ativo
+  // daquele turno da semana, como na aprovação).
+  async function aplicarMulta(dados: {
+    colaboradorId: string;
+    turnoId: string;
+    motivo: string;
+    imagens: File[];
+  }) {
+    if (!session?.user) return { erro: 'Sessão inválida.' };
+    if (!dados.turnoId) return { erro: 'Selecione o turno.' };
+    if (!dados.colaboradorId) return { erro: 'Selecione quem vai levar a multa.' };
+    if (!dados.motivo.trim()) return { erro: 'Informe o motivo da multa.' };
+    if (dados.imagens.length === 0) return { erro: 'Anexe ao menos uma imagem de comprovação.' };
+
+    setProcessando('aplicar');
+    setErro(null);
+
+    let destinatarios = [dados.colaboradorId];
+
+    if (dados.colaboradorId === TODOS_DO_TURNO) {
+      const { data: doTurno, error: erroTurno } = await supabase
+        .from('colaboradores')
+        .select('id')
+        .eq('ativo', true)
+        .eq('turno_semana_id', dados.turnoId);
+
+      if (erroTurno || !doTurno || doTurno.length === 0) {
+        setProcessando(null);
+        return {
+          erro: erroTurno
+            ? 'Não foi possível buscar os operadores desse turno.'
+            : 'Nenhum operador ativo tem esse turno como turno da semana.',
+        };
+      }
+      destinatarios = doTurno.map((c) => c.id);
+    }
+
+    const caminhosImagens: string[] = [];
+    for (const arquivo of dados.imagens) {
+      const extensao = arquivo.name.split('.').pop() ?? 'jpg';
+      const caminho = `admin/${session.user.id}/${crypto.randomUUID()}.${extensao}`;
+      const { error: erroUpload } = await supabase.storage
+        .from('comprovantes-multa')
+        .upload(caminho, arquivo);
+
+      if (erroUpload) {
+        setProcessando(null);
+        return { erro: 'Não foi possível enviar a(s) imagem(ns) de comprovação.' };
+      }
+      caminhosImagens.push(caminho);
+    }
+
+    const agora = new Date().toISOString();
+    const vencimento = proximaSegundaISO(new Date());
+
+    const { error } = await supabase.from('solicitacoes_multa').insert(
+      destinatarios.map((colaboradorId) => ({
+        reportante_id: null,
+        aplicada_por_admin: true,
+        anonimo: false,
+        turno_id: dados.turnoId,
+        colaborador_apontado_id: colaboradorId,
+        nao_sabe_informar: false,
+        imagens: caminhosImagens,
+        status: 'aprovada' as const,
+        colaborador_final_id: colaboradorId,
+        justificativa_admin: dados.motivo.trim(),
+        decidido_por: session.user.id,
+        decidido_em: agora,
+        valor_base: valorMulta,
+        data_vencimento: vencimento,
+        paga: false,
+        pago_em: null,
+      }))
+    );
+
+    setProcessando(null);
+
+    if (error) {
+      await supabase.storage.from('comprovantes-multa').remove(caminhosImagens);
+      return { erro: 'Não foi possível registrar a multa.' };
+    }
+
+    await carregar();
+    return { erro: null, quantidade: destinatarios.length };
+  }
+
   async function marcarComoPago(id: string, pago: boolean) {
     setProcessando(id);
     setErro(null);
@@ -329,11 +424,25 @@ export function useSolicitacoesMultaAdmin() {
     return data.signedUrl;
   }
 
+  // Imagens das solicitações excluídas que nenhuma outra solicitação usa —
+  // multas criadas juntas ("Todos do turno") compartilham as mesmas fotos,
+  // então não dá pra apagar a foto se ainda tem outra multa apontando pra ela.
+  function imagensSemOutroUso(idsExcluidos: Set<string>) {
+    const emUso = new Set(
+      solicitacoes.filter((s) => !idsExcluidos.has(s.id)).flatMap((s) => s.imagens)
+    );
+    return [
+      ...new Set(
+        solicitacoes.filter((s) => idsExcluidos.has(s.id)).flatMap((s) => s.imagens)
+      ),
+    ].filter((caminho) => !emUso.has(caminho));
+  }
+
   async function excluir(id: string) {
     setProcessando(id);
     setErro(null);
 
-    const solicitacao = solicitacoes.find((s) => s.id === id);
+    const imagensParaRemover = imagensSemOutroUso(new Set([id]));
 
     const { error } = await supabase.from('solicitacoes_multa').delete().eq('id', id);
 
@@ -345,8 +454,8 @@ export function useSolicitacoesMultaAdmin() {
       return { erro: mensagem };
     }
 
-    if (solicitacao && solicitacao.imagens.length > 0) {
-      await supabase.storage.from('comprovantes-multa').remove(solicitacao.imagens);
+    if (imagensParaRemover.length > 0) {
+      await supabase.storage.from('comprovantes-multa').remove(imagensParaRemover);
     }
 
     await carregar();
@@ -359,10 +468,7 @@ export function useSolicitacoesMultaAdmin() {
     setProcessando('varias');
     setErro(null);
 
-    const idsUnicos = new Set(ids);
-    const imagensParaRemover = solicitacoes
-      .filter((s) => idsUnicos.has(s.id))
-      .flatMap((s) => s.imagens);
+    const imagensParaRemover = imagensSemOutroUso(new Set(ids));
 
     const { error } = await supabase.from('solicitacoes_multa').delete().in('id', ids);
 
@@ -391,6 +497,7 @@ export function useSolicitacoesMultaAdmin() {
     processando,
     erro,
     decidir,
+    aplicarMulta,
     marcarComoPago,
     excluir,
     excluirVarias,

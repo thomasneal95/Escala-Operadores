@@ -51,7 +51,12 @@ export function DebitosMultasSecao({
       {linhas.map((linha) => (
         <div key={linha.colaboradorId} className="rounded-lg border border-slate-200 bg-white p-4">
           <div className="flex flex-wrap items-center justify-between gap-2">
-            <p className="font-medium text-tinta">{linha.nome}</p>
+            <p className="font-medium text-tinta">
+              {linha.nome}
+              <span className="ml-2 font-normal text-slate-400">
+                · {linha.multas.length} multa{linha.multas.length > 1 ? 's' : ''}
+              </span>
+            </p>
             <span
               className={`rounded-full px-3 py-1 text-xs font-medium ${
                 linha.totalDevido > 0
@@ -82,6 +87,11 @@ export function DebitosMultasSecao({
                       base {formatarReais(m.valorBase!)} · vencimento {formatarData(m.dataVencimento!)}
                       {emAtraso && ` · ${semanas} semana${semanas > 1 ? 's' : ''} de juros`}
                     </span>
+                    {m.justificativaAdmin && (
+                      <p className="mt-0.5 text-xs text-slate-600">
+                        {new Date(m.criado_em).toLocaleDateString('pt-BR')} · {m.justificativaAdmin}
+                      </p>
+                    )}
                   </div>
                   <button
                     type="button"
