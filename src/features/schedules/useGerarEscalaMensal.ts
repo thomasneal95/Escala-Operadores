@@ -8,7 +8,11 @@ import type { PeriodoOperacao } from '../../types/database';
 //   - Dupla B: Tarde + Noite
 // Prioridade para quem MAIS trabalhou fins de semana (dias trabalhados em
 // escalas confirmadas, sem contar faltas). Cada pessoa trabalha no máximo
-// 1 dia por fim de semana e, opcionalmente, um máximo de fins de semana no mês.
+// 1 dia por fim de semana e tem pelo menos 1 fim de semana de folga no mês
+// (além de um limite mensal opcional, menor).
+// Domingo é home office: entre os escalados do fim de semana, o domingo vai
+// para quem fez menos domingos no mês (e, no empate, no histórico), para
+// que todos passem por ele.
 //
 // As escalas continuam sendo linhas normais de `escalas` (uma por turno), então
 // histórico, assiduidade, trocas e comissionamento seguem funcionando iguais.
@@ -75,6 +79,7 @@ export function useGerarEscalaMensal() {
     colaboradores,
     turnos,
     maxFinsDeSemanaNoMes,
+    finsDeSemanaNoMes,
   }: {
     periodos: PeriodoOperacao[];
     periodosDoMes: PeriodoOperacao[];
@@ -82,6 +87,7 @@ export function useGerarEscalaMensal() {
     colaboradores: ColaboradorParaGeracao[];
     turnos: TurnoParaGeracao[];
     maxFinsDeSemanaNoMes: number | null;
+    finsDeSemanaNoMes: number;
   }): Promise<{ erro: string | null; adicionadas: number; duplasSemGente: number }> {
     const ordenados = [...turnos].sort(
       (a, b) => (a.ordem_exibicao ?? 999) - (b.ordem_exibicao ?? 999)
@@ -165,6 +171,14 @@ export function useGerarEscalaMensal() {
       return { erro: 'Não foi possível carregar as escalas do mês.', adicionadas: 0, duplasSemGente: 0 };
     }
 
+    // Pelo menos 1 fim de semana de folga no mês.
+    const limiteNoMes = Math.min(maxFinsDeSemanaNoMes ?? Infinity, finsDeSemanaNoMes - 1);
+
+    const domingoDoPeriodo = new Map(
+      [...periodosDoMes, ...periodos].map((p) => [p.id, p.data_fim])
+    );
+    const domingosNoMes = new Map<string, Set<string>>();
+
     const finsDeSemanaPorColaborador = new Map<string, Set<string>>();
     const escaladoNoPeriodo = new Set<string>(); // `${periodo}|${colab}`
     const turnosOcupados = new Set<string>(); // `${data}|${turno}|${colab}`
@@ -173,6 +187,11 @@ export function useGerarEscalaMensal() {
       const fins = finsDeSemanaPorColaborador.get(e.colaborador_id) ?? new Set<string>();
       fins.add(e.periodo_id);
       finsDeSemanaPorColaborador.set(e.colaborador_id, fins);
+      if (domingoDoPeriodo.get(e.periodo_id) === e.data) {
+        const domingos = domingosNoMes.get(e.colaborador_id) ?? new Set<string>();
+        domingos.add(e.data);
+        domingosNoMes.set(e.colaborador_id, domingos);
+      }
       escaladoNoPeriodo.add(`${e.periodo_id}|${e.colaborador_id}`);
       turnosOcupados.add(`${e.data}|${e.turno_id}|${e.colaborador_id}`);
     }
@@ -188,7 +207,18 @@ export function useGerarEscalaMensal() {
 
     const periodosEmOrdem = [...periodos].sort((a, b) => a.data_inicio.localeCompare(b.data_inicio));
 
-    for (const periodo of periodosEmOrdem) {
+    // Quantas duplas um fim de semana completo tem (pelos turnos que funcionam
+    // no sábado e no domingo).
+    const duplasPorFimDeSemana = (['A', 'B'] as Dupla[]).reduce(
+      (total, dupla) =>
+        total +
+        (turnoMarcador[dupla].ativo_sabado ? 1 : 0) +
+        (turnoMarcador[dupla].ativo_domingo ? 1 : 0),
+      0
+    );
+
+    for (const [indicePeriodo, periodo] of periodosEmOrdem.entries()) {
+      const finsDeSemanaSeguintes = periodosEmOrdem.length - indicePeriodo - 1;
       const dias = [
         { data: periodo.data_inicio, chave: 'sab' as const },
         { data: periodo.data_fim, chave: 'dom' as const },
@@ -218,11 +248,7 @@ export function useGerarEscalaMensal() {
         // passaram do limite do mês. Quem mais trabalhou vem primeiro.
         const candidatos = membros
           .filter((m) => !escaladoNoPeriodo.has(`${periodo.id}|${m.id}`))
-          .filter(
-            (m) =>
-              maxFinsDeSemanaNoMes === null ||
-              (finsDeSemanaPorColaborador.get(m.id)?.size ?? 0) < maxFinsDeSemanaNoMes
-          )
+          .filter((m) => (finsDeSemanaPorColaborador.get(m.id)?.size ?? 0) < limiteNoMes)
           .sort(
             (a, b) =>
               pontuacao(b.id) - pontuacao(a.id) || a.nome_completo.localeCompare(b.nome_completo)
@@ -231,31 +257,81 @@ export function useGerarEscalaMensal() {
         const escolhidos = candidatos.slice(0, vagas.length);
         duplasSemGente += vagas.length - escolhidos.length;
 
-        // Distribui os escolhidos entre as vagas pela afinidade: dupla do
-        // turno da semana, dupla que mais fez e dia em que mais vem.
+        // Espalha as folgas: se escalar só quem mais vem deixar os próximos
+        // fins de semana sem gente suficiente (porque essas pessoas esgotam o
+        // limite do mês), troca o escolhido de menor prioridade que tem pouca
+        // capacidade sobrando por quem ainda tem mais capacidade do que fins
+        // de semana pela frente.
+        function capacidade(c: ColaboradorParaGeracao) {
+          return limiteNoMes - (finsDeSemanaPorColaborador.get(c.id)?.size ?? 0);
+        }
+        function viavel() {
+          const demanda = duplasPorFimDeSemana * finsDeSemanaSeguintes;
+          const oferta = membros.reduce((soma, m) => {
+            if (escaladoNoPeriodo.has(`${periodo.id}|${m.id}`) && !escolhidos.includes(m)) {
+              return soma + Math.min(capacidade(m), finsDeSemanaSeguintes);
+            }
+            const restante = capacidade(m) - (escolhidos.includes(m) ? 1 : 0);
+            return soma + Math.min(Math.max(restante, 0), finsDeSemanaSeguintes);
+          }, 0);
+          return oferta >= demanda;
+        }
+        while (!viavel()) {
+          const sai = [...escolhidos].reverse().find((c) => capacidade(c) <= finsDeSemanaSeguintes);
+          const entra = candidatos.find(
+            (c) => !escolhidos.includes(c) && capacidade(c) > finsDeSemanaSeguintes
+          );
+          if (!sai || !entra) break;
+          escolhidos.splice(escolhidos.indexOf(sai), 1, entra);
+        }
+
+        // Domingo primeiro, para quem fez menos domingos no mês (depois
+        // menos domingos no histórico; depois quem mais trabalhou).
+        const vagasDomingo = vagas.filter((v) => v.chave === 'dom');
+        const vagasSabado = vagas.filter((v) => v.chave === 'sab');
+        const porDomingos = [...escolhidos].sort(
+          (a, b) =>
+            (domingosNoMes.get(a.id)?.size ?? 0) - (domingosNoMes.get(b.id)?.size ?? 0) ||
+            (preferenciaDia.get(`${a.id}|dom`) ?? 0) - (preferenciaDia.get(`${b.id}|dom`) ?? 0) ||
+            pontuacao(b.id) - pontuacao(a.id)
+        );
+        const doDomingo = porDomingos.slice(0, vagasDomingo.length);
+        const doSabado = porDomingos.slice(vagasDomingo.length);
+
+        // Dentro do dia, a dupla vai pela afinidade: dupla do turno da
+        // semana e, depois, a dupla que a pessoa mais fez.
         function afinidade(c: ColaboradorParaGeracao, vaga: (typeof vagas)[number]) {
           const marcador = turnoMarcador[vaga.dupla].id;
           return (
             (c.turno_semana_id === marcador ? 1000 : 0) +
-            (preferenciaTurno.get(`${c.id}|${marcador}`) ?? 0) * 10 +
-            (preferenciaDia.get(`${c.id}|${vaga.chave}`) ?? 0)
+            (preferenciaTurno.get(`${c.id}|${marcador}`) ?? 0)
           );
         }
 
-        const restantes = [...escolhidos];
-        const vagasRestantes = [...vagas];
-        while (restantes.length > 0 && vagasRestantes.length > 0) {
-          let melhor = { colaborador: 0, vaga: 0, valor: -1 };
-          restantes.forEach((c, i) => {
-            vagasRestantes.forEach((v, j) => {
-              const valor = afinidade(c, v);
-              if (valor > melhor.valor) melhor = { colaborador: i, vaga: j, valor };
+        const atribuicoes: { colaborador: ColaboradorParaGeracao; vaga: (typeof vagas)[number] }[] =
+          [];
+        for (const [pessoas, vagasDoDia] of [
+          [doDomingo, vagasDomingo],
+          [doSabado, vagasSabado],
+        ] as const) {
+          const restantes = [...pessoas];
+          const vagasRestantes = [...vagasDoDia];
+          while (restantes.length > 0 && vagasRestantes.length > 0) {
+            let melhor = { colaborador: 0, vaga: 0, valor: -1 };
+            restantes.forEach((c, i) => {
+              vagasRestantes.forEach((v, j) => {
+                const valor = afinidade(c, v);
+                if (valor > melhor.valor) melhor = { colaborador: i, vaga: j, valor };
+              });
             });
-          });
+            atribuicoes.push({
+              colaborador: restantes.splice(melhor.colaborador, 1)[0],
+              vaga: vagasRestantes.splice(melhor.vaga, 1)[0],
+            });
+          }
+        }
 
-          const colaborador = restantes.splice(melhor.colaborador, 1)[0];
-          const vaga = vagasRestantes.splice(melhor.vaga, 1)[0];
-
+        for (const { colaborador, vaga } of atribuicoes) {
           for (const turno of turnosDaDupla[vaga.dupla]) {
             const funciona = vaga.chave === 'sab' ? turno.ativo_sabado : turno.ativo_domingo;
             if (!funciona || turnosOcupados.has(`${vaga.data}|${turno.id}|${colaborador.id}`)) continue;
@@ -366,6 +442,7 @@ export function useGerarEscalaMensal() {
         colaboradores,
         turnos,
         maxFinsDeSemanaNoMes,
+        finsDeSemanaNoMes: fins.length,
       });
 
       const primeiroPeriodoId =
@@ -413,6 +490,7 @@ export function useGerarEscalaMensal() {
         colaboradores,
         turnos,
         maxFinsDeSemanaNoMes,
+        finsDeSemanaNoMes: sabados.length,
       });
     } finally {
       setGerando(false);

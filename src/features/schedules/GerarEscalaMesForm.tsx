@@ -34,8 +34,9 @@ export function GerarEscalaMesForm({
       <p className="mt-1 text-sm text-slate-500">
         Cria todos os fins de semana do mês e monta a escala pelo histórico: por equipe e por
         dia, uma pessoa faz Manhã + Tarde e outra faz Tarde + Noite. Quem mais trabalhou tem
-        prioridade, e cada pessoa trabalha no máximo 1 dia por fim de semana. A escala fica em
-        organização até você confirmar.
+        prioridade, cada pessoa trabalha no máximo 1 dia por fim de semana e tem pelo menos 1
+        fim de semana de folga no mês. O domingo (home office) passa em rodízio por todos. A
+        escala fica em organização até você confirmar.
       </p>
 
       <form onSubmit={handleSubmit} className="mt-4 flex flex-wrap items-end gap-4">
@@ -61,7 +62,7 @@ export function GerarEscalaMesForm({
             id="max_fins_semana"
             type="number"
             min={1}
-            placeholder="Sem limite"
+            placeholder="Só a folga mensal"
             value={maxFinsDeSemana}
             onChange={(e) => onMudarMaxFinsDeSemana(e.target.value)}
             className="mt-1 w-44 rounded-md border border-slate-300 px-3 py-2 text-slate-900 focus:border-esmeralda focus:outline-none focus:ring-1 focus:ring-esmeralda"
