@@ -8,6 +8,8 @@ import { SeletorColaborador } from '../../features/schedules/SeletorColaborador'
 import { GerarEscalaMesForm } from '../../features/schedules/GerarEscalaMesForm';
 import { useGerarEscalaMensal } from '../../features/schedules/useGerarEscalaMensal';
 import { lacunasDeCobertura } from '../../features/schedules/coberturaEquipes';
+import { useDuplasFimDeSemana } from '../../features/teams/useDuplasFimDeSemana';
+import { papelDaDupla } from '../../lib/rodizioDuplas';
 import { corTurno } from '../../lib/turnoColors';
 import { useToast } from '../../components/FeedbackProvider';
 import { useConfirm } from '../../components/FeedbackProvider';
@@ -69,8 +71,15 @@ export function VisaoAdminPage() {
     colaboradorJaEscalado,
     adicionar,
     remover,
+    substituirNoDia,
     recarregar: recarregarEscala,
   } = useEscala(periodo?.id ?? null);
+  const duplas = useDuplasFimDeSemana();
+  // Substituição em andamento: de quem, em qual dia, e por quem.
+  const [substituicao, setSubstituicao] = useState<{ colaboradorId: string; data: string } | null>(
+    null
+  );
+  const [substituto, setSubstituto] = useState('');
   const { gerarMes, gerarFimDeSemana, gerando: gerandoMensal } = useGerarEscalaMensal();
   const { session } = useAuth();
   const toast = useToast();
@@ -83,6 +92,7 @@ export function VisaoAdminPage() {
 
   useEffect(() => {
     setEdicaoHabilitada(false);
+    setSubstituicao(null);
   }, [periodo?.id]);
 
   function turnosDoDia(data: string) {
@@ -181,11 +191,46 @@ export function VisaoAdminPage() {
     nome: string;
   }
 
+  // Quem deveria trabalhar no dia pelo rodízio de duplas, para a equipe.
+  function duplaDoRodizio(nomeEquipe: string, data: string) {
+    if (!periodo) return null;
+    const equipeId = colaboradores.find((c) => c.equipe_nome === nomeEquipe)?.equipe_id;
+    if (!equipeId) return null;
+    const papelDoDia = data === periodo.data_inicio ? 'sabado' : 'domingo';
+    const dupla = duplas
+      .duplasDaEquipe(equipeId)
+      .find((d) => papelDaDupla(d.numero, periodo.data_inicio) === papelDoDia);
+    if (!dupla) return null;
+    const nome = (id: string | null) => (id ? nomePorId(id) : '—');
+    return {
+      numero: dupla.numero,
+      texto: `${nome(dupla.manha_tarde_id)} (Manhã + Tarde) e ${nome(dupla.tarde_noite_id)} (Tarde + Noite)`,
+    };
+  }
+
+  async function handleSubstituir() {
+    if (!substituicao || !substituto) return;
+    const resultado = await substituirNoDia(substituicao.colaboradorId, substituto, substituicao.data);
+    if (resultado.erro) {
+      toast(resultado.erro, 'erro');
+      return;
+    }
+    toast(`${nomePorId(substituto)} assumiu os turnos de ${nomePorId(substituicao.colaboradorId)} no dia.`);
+    setSubstituicao(null);
+    setSubstituto('');
+  }
+
   // Matriz equipe × turno para um dia: uma linha por equipe, uma coluna por
   // turno — deixa claro, lado a lado, quem de cada equipe trabalha em cada
   // período, em vez de misturar tudo numa lista só.
   function matrizEquipePorDia(data: string) {
     const porEquipeETurno = new Map<string, Map<string, MembroEscalado[]>>();
+    // Todas as equipes aparecem, mesmo sem ninguém escalado no dia.
+    for (const c of colaboradores) {
+      if (c.equipe_nome && !porEquipeETurno.has(c.equipe_nome)) {
+        porEquipeETurno.set(c.equipe_nome, new Map());
+      }
+    }
 
     for (const turno of turnosDoDia(data)) {
       for (const e of escaladosEm(data, turno.id)) {
@@ -536,6 +581,15 @@ export function VisaoAdminPage() {
                                   {totalEquipe} escalado{totalEquipe !== 1 ? 's' : ''}
                                 </span>
                               </div>
+                              {(() => {
+                                const rodizio = duplaDoRodizio(nomeEquipe, data);
+                                return rodizio ? (
+                                  <p className="mt-1 text-xs text-slate-500">
+                                    Pelo rodízio: <span className="font-medium">Dupla {rodizio.numero}</span>{' '}
+                                    — {rodizio.texto}
+                                  </p>
+                                ) : null;
+                              })()}
 
                               <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-3">
                                 {turnosDisponiveisNesseDia.map((turno) => {
@@ -600,7 +654,71 @@ export function VisaoAdminPage() {
                       </span>
                     </h2>
 
-                                        {turnosDisponiveisNesseDia.length === 0 ? (
+                    {(() => {
+                      const equipesDoDia = [
+                        ...new Set(colaboradores.map((c) => c.equipe_nome).filter((n): n is string => !!n)),
+                      ].sort();
+                      const linhas = equipesDoDia
+                        .map((nomeEquipe) => ({ nomeEquipe, rodizio: duplaDoRodizio(nomeEquipe, data) }))
+                        .filter((l) => l.rodizio);
+                      return linhas.length > 0 ? (
+                        <div className="mt-2 space-y-0.5 text-xs text-slate-500">
+                          <p className="font-medium text-slate-600">Pelo rodízio de duplas:</p>
+                          {linhas.map(({ nomeEquipe, rodizio }) => (
+                            <p key={nomeEquipe}>
+                              {nomeEquipe} — Dupla {rodizio!.numero}: {rodizio!.texto}
+                            </p>
+                          ))}
+                        </div>
+                      ) : null;
+                    })()}
+
+                    {substituicao?.data === data && (
+                      <div className="mt-3 flex flex-wrap items-center gap-2 rounded-md border border-ceruleo/30 bg-ceruleo-light/40 p-3 text-sm">
+                        <span className="text-tinta">
+                          Substituir <span className="font-medium">{nomePorId(substituicao.colaboradorId)}</span>{' '}
+                          em todos os turnos do dia por:
+                        </span>
+                        <select
+                          value={substituto}
+                          onChange={(e) => setSubstituto(e.target.value)}
+                          className="rounded-md border border-slate-300 bg-white px-2 py-1.5 text-sm"
+                        >
+                          <option value="">Escolha a pessoa</option>
+                          {[...colaboradores]
+                            .filter((c) => c.id !== substituicao.colaboradorId)
+                            .sort(
+                              (a, b) =>
+                                Number(b.equipe_nome === equipeNomePorId(substituicao.colaboradorId)) -
+                                  Number(a.equipe_nome === equipeNomePorId(substituicao.colaboradorId)) ||
+                                a.nome_completo.localeCompare(b.nome_completo)
+                            )
+                            .map((c) => (
+                              <option key={c.id} value={c.id}>
+                                {c.nome_completo} — {c.equipe_nome ?? 'Sem equipe'}
+                              </option>
+                            ))}
+                        </select>
+                        <button
+                          onClick={handleSubstituir}
+                          disabled={!substituto || processando !== null}
+                          className="rounded-md bg-esmeralda px-3 py-1.5 font-medium text-white hover:bg-esmeralda-dark disabled:opacity-60"
+                        >
+                          Substituir
+                        </button>
+                        <button
+                          onClick={() => {
+                            setSubstituicao(null);
+                            setSubstituto('');
+                          }}
+                          className="font-medium text-slate-500 hover:text-slate-700"
+                        >
+                          Cancelar
+                        </button>
+                      </div>
+                    )}
+
+                    {turnosDisponiveisNesseDia.length === 0 ? (
                       <p className="mt-3 text-sm text-slate-400">Não há operação neste dia.</p>
                     ) : (
                       <>
@@ -701,14 +819,26 @@ export function VisaoAdminPage() {
                                       </span>
                                     </div>
                                     {!escalaEstaTrancada && (
-                                      <button
-                                        onClick={() => remover(e.id)}
-                                        disabled={processando === e.id}
-                                        className="opacity-70 hover:opacity-100 disabled:opacity-40"
-                                        title="Remover da escala"
-                                      >
-                                        ×
-                                      </button>
+                                      <div className="flex items-center gap-2">
+                                        <button
+                                          onClick={() => {
+                                            setSubstituicao({ colaboradorId: e.colaborador_id, data });
+                                            setSubstituto('');
+                                          }}
+                                          className="opacity-70 hover:opacity-100"
+                                          title="Substituir esta pessoa em todos os turnos do dia"
+                                        >
+                                          ⇄
+                                        </button>
+                                        <button
+                                          onClick={() => remover(e.id)}
+                                          disabled={processando === e.id}
+                                          className="opacity-70 hover:opacity-100 disabled:opacity-40"
+                                          title="Remover da escala"
+                                        >
+                                          ×
+                                        </button>
+                                      </div>
                                     )}
                                   </div>
                                 ))}

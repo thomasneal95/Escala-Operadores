@@ -129,6 +129,37 @@ export function useEscala(periodoId: string | null) {
     await carregar();
   }
 
+  // Passa todos os turnos de uma pessoa num dia (o bloco, ex.: Manhã +
+  // Tarde) para outra pessoa, num único comando. As linhas continuam as
+  // mesmas — só muda o dono —, então nada mais da escala é apagado.
+  async function substituirNoDia(deColaboradorId: string, paraColaboradorId: string, data: string) {
+    if (!periodoId) return { erro: 'Nenhum período carregado.' };
+
+    setProcessando(`${deColaboradorId}|${data}`);
+    setErro(null);
+
+    const { error } = await supabase
+      .from('escalas')
+      .update({ colaborador_id: paraColaboradorId })
+      .eq('periodo_id', periodoId)
+      .eq('data', data)
+      .eq('colaborador_id', deColaboradorId);
+
+    setProcessando(null);
+
+    if (error) {
+      let mensagem = 'Não foi possível substituir esta pessoa.';
+      if (error.code === '23P01' || error.code === '23505') {
+        mensagem = 'A pessoa escolhida já trabalha nesse dia em um horário que conflita.';
+      }
+      setErro(mensagem);
+      return { erro: mensagem };
+    }
+
+    await carregar();
+    return { erro: null };
+  }
+
   async function marcarPresenca(escalaId: string, compareceu: boolean) {
     if (!session?.user) return { erro: 'Sessão inválida.' };
 
@@ -165,6 +196,7 @@ export function useEscala(periodoId: string | null) {
     colaboradorJaEscalado,
     adicionar,
     remover,
+    substituirNoDia,
     marcarPresenca,
     recarregar: carregar,
   };
