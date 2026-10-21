@@ -44,8 +44,7 @@ export function useAreaColaborador() {
       const { data: periodosData, error: erroPeriodo } = await supabase
         .from('periodos_operacao')
         .select('id, data_inicio, data_fim, status')
-        .order('data_inicio', { ascending: false })
-        .limit(12);
+        .order('data_inicio', { ascending: false });
 
       if (erroPeriodo) {
         setErro('Não foi possível carregar o período de operação.');
@@ -56,6 +55,8 @@ export function useAreaColaborador() {
       const lista = periodosData ?? [];
       const hoje = hojeIso();
       setPeriodo(lista[0] ?? null);
+      // Sem limite de quantidade: a escala é gerada por mês e todos os fins
+      // de semana futuros confirmados precisam aparecer.
       setPeriodosPublicados(
         lista
           .filter(

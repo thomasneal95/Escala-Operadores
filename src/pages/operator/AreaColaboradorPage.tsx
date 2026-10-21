@@ -57,8 +57,9 @@ export function AreaColaboradorPage() {
 
   let conteudo: ReactNode;
 
-  // Fim de semana do resumo: o próximo já publicado; senão, o mais recente.
-  const periodoDoResumo = periodosPublicados[0] ?? periodo;
+  // Fim de semana do resumo: o próximo já publicado. Escalas que já passaram
+  // não aparecem aqui (ficam no Histórico).
+  const periodoDoResumo = periodosPublicados[0] ?? null;
 
   if (periodosPublicados.length > 0 && colaboradorId) {
     conteudo = (
@@ -70,17 +71,6 @@ export function AreaColaboradorPage() {
           </div>
         ))}
       </div>
-    );
-  } else if (periodo && (periodo.status === 'confirmado' || periodo.status === 'encerrado') && colaboradorId) {
-    conteudo = (
-      <>
-        <TermoAceiteModal
-          periodoId={periodo.id}
-          dataInicio={periodo.data_inicio}
-          dataFim={periodo.data_fim}
-        />
-        <MinhaEscalaPage colaboradorId={colaboradorId} periodo={periodo} />
-      </>
     );
   } else {
     conteudo = (
