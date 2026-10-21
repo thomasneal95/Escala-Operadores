@@ -24,7 +24,6 @@ export function useEscala(periodoId: string | null) {
       return;
     }
 
-    setCarregando(true);
     setErro(null);
 
     const { data, error } = await supabase
@@ -42,7 +41,11 @@ export function useEscala(periodoId: string | null) {
     setCarregando(false);
   }, [periodoId]);
 
-    useEffect(() => {
+  // "Carregando" só na primeira carga ou ao trocar de fim de semana. Depois de
+  // cada alteração a escala é atualizada sem esconder a tela, para a página
+  // não perder a rolagem e voltar para o topo.
+  useEffect(() => {
+    setCarregando(true);
     carregar();
   }, [carregar]);
 
