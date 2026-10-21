@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useSolicitacoesTroca } from '../../features/schedules/useSolicitacoesTroca';
 import { useColegasEquipe } from '../../features/teams/useColegasEquipe';
 import { useAreaColaborador } from '../../features/schedules/useAreaColaborador';
@@ -39,9 +39,13 @@ export function SolicitacoesTrocaPage() {
     cancelarSolicitacao,
   } = useSolicitacoesTroca();
   const { colegas } = useColegasEquipe();
-  const { escalas: minhasEscalas } = useMinhasEscalasDosPeriodos(
-    periodosPublicados.map((p) => p.id)
-  );
+  const { escalas: minhasEscalas, recarregar: recarregarMinhasEscalas } =
+    useMinhasEscalasDosPeriodos(periodosPublicados.map((p) => p.id));
+
+  // Uma troca aprovada muda os meus turnos: recarrega a lista de dias.
+  useEffect(() => {
+    recarregarMinhasEscalas();
+  }, [solicitacoes, recarregarMinhasEscalas]);
   // Troca por bloco de trabalho: todos os turnos do dia juntos.
   const meusBlocos = agruparEmBlocos(minhasEscalas);
 

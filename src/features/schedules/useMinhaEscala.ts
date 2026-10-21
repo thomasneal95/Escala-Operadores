@@ -27,7 +27,6 @@ export function useMinhaEscala(colaboradorId: string | null, periodoId: string |
       return;
     }
 
-    setCarregando(true);
     setErro(null);
 
     const { data, error } = await supabase
@@ -47,7 +46,10 @@ export function useMinhaEscala(colaboradorId: string | null, periodoId: string |
     setCarregando(false);
   }, [colaboradorId, periodoId]);
 
+  // "Carregando" só na primeira carga (ou ao trocar de período); as
+  // atualizações depois disso trocam os dados sem piscar a tela.
   useEffect(() => {
+    setCarregando(true);
     carregar();
   }, [carregar]);
 
@@ -73,6 +75,48 @@ export function useMinhaEscala(colaboradorId: string | null, periodoId: string |
 
     return () => {
       supabase.removeChannel(canal);
+    };
+  }, [colaboradorId, periodoId, carregar, idInstancia]);
+
+  // Quando o admin aprova uma troca, o turno muda de dono e o aviso de
+  // mudança em `escalas` não chega a quem perdeu ou ganhou o turno. Por isso
+  // também recarrega quando uma troca em que a pessoa participa muda de
+  // situação, e quando ela volta para o site (reabrir o app, trocar de aba).
+  useEffect(() => {
+    if (!colaboradorId || !periodoId) return;
+
+    const canal = supabase
+      .channel(`minha-escala-trocas-${colaboradorId}-${periodoId}-${idInstancia}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'solicitacoes_troca',
+          filter: `solicitante_id=eq.${colaboradorId}`,
+        },
+        () => carregar()
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'solicitacoes_troca',
+          filter: `colega_id=eq.${colaboradorId}`,
+        },
+        () => carregar()
+      )
+      .subscribe();
+
+    function aoVoltarParaOSite() {
+      if (document.visibilityState === 'visible') carregar();
+    }
+    document.addEventListener('visibilitychange', aoVoltarParaOSite);
+
+    return () => {
+      supabase.removeChannel(canal);
+      document.removeEventListener('visibilitychange', aoVoltarParaOSite);
     };
   }, [colaboradorId, periodoId, carregar, idInstancia]);
 
