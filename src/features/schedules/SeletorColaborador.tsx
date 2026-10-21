@@ -1,6 +1,9 @@
+import { agruparPorEquipe } from '../../lib/agruparPorEquipe';
+
 interface Colaborador {
   id: string;
   nome_completo: string;
+  equipe_nome?: string | null;
 }
 
 interface SeletorColaboradorProps {
@@ -34,10 +37,14 @@ export function SeletorColaborador({
       className="w-full rounded-md border border-dashed border-slate-300 bg-white px-2 py-1 text-xs text-slate-500 hover:border-esmeralda disabled:cursor-wait disabled:opacity-60"
     >
       <option value="">+ Adicionar</option>
-      {disponiveis.map((c) => (
-        <option key={c.id} value={c.id}>
-          {c.nome_completo}
-        </option>
+      {agruparPorEquipe(disponiveis).map(({ equipe, membros }) => (
+        <optgroup key={equipe} label={equipe}>
+          {membros.map((c) => (
+            <option key={c.id} value={c.id}>
+              {c.nome_completo}
+            </option>
+          ))}
+        </optgroup>
       ))}
     </select>
   );

@@ -5,6 +5,7 @@ import { useVisaoAdmin } from '../../features/schedules/useVisaoAdmin';
 import { useAuth } from '../../features/auth/AuthContext';
 import { useEscala } from '../../features/schedules/useEscala';
 import { SeletorColaborador } from '../../features/schedules/SeletorColaborador';
+import { agruparPorEquipe } from '../../lib/agruparPorEquipe';
 import { GerarEscalaMesForm } from '../../features/schedules/GerarEscalaMesForm';
 import { useGerarEscalaMensal } from '../../features/schedules/useGerarEscalaMensal';
 import { lacunasDeCobertura } from '../../features/schedules/coberturaEquipes';
@@ -180,6 +181,14 @@ export function VisaoAdminPage() {
 
   function nomePorId(colaboradorId: string) {
     return colaboradores.find((c) => c.id === colaboradorId)?.nome_completo ?? '(desconhecido)';
+  }
+
+  // Ordem das equipes na tela: por nome, "Sem equipe" por último.
+  function compararEquipe(a: string, b: string) {
+    if (a === b) return 0;
+    if (a === 'Sem equipe') return 1;
+    if (b === 'Sem equipe') return -1;
+    return a.localeCompare(b);
   }
 
   function equipeNomePorId(colaboradorId: string) {
@@ -685,18 +694,23 @@ export function VisaoAdminPage() {
                           className="rounded-md border border-slate-300 bg-white px-2 py-1.5 text-sm"
                         >
                           <option value="">Escolha a pessoa</option>
-                          {[...colaboradores]
-                            .filter((c) => c.id !== substituicao.colaboradorId)
+                          {agruparPorEquipe(
+                            colaboradores.filter((c) => c.id !== substituicao.colaboradorId)
+                          )
+                            // A equipe de quem sai vem primeiro.
                             .sort(
                               (a, b) =>
-                                Number(b.equipe_nome === equipeNomePorId(substituicao.colaboradorId)) -
-                                  Number(a.equipe_nome === equipeNomePorId(substituicao.colaboradorId)) ||
-                                a.nome_completo.localeCompare(b.nome_completo)
+                                Number(b.equipe === equipeNomePorId(substituicao.colaboradorId)) -
+                                Number(a.equipe === equipeNomePorId(substituicao.colaboradorId))
                             )
-                            .map((c) => (
-                              <option key={c.id} value={c.id}>
-                                {c.nome_completo} — {c.equipe_nome ?? 'Sem equipe'}
-                              </option>
+                            .map(({ equipe, membros }) => (
+                              <optgroup key={equipe} label={equipe}>
+                                {membros.map((c) => (
+                                  <option key={c.id} value={c.id}>
+                                    {c.nome_completo}
+                                  </option>
+                                ))}
+                              </optgroup>
                             ))}
                         </select>
                         <button
@@ -724,24 +738,36 @@ export function VisaoAdminPage() {
                       <>
                         {!escalaEstaTrancada && (
                           <div className="mt-4 hidden flex-wrap gap-2 rounded-md border border-dashed border-slate-300 bg-slate-50 p-3 sm:flex">
-                            {colaboradores.map((c) => (
-                                <span
-                                  key={c.id}
-                                  draggable
-                                  onDragStart={(e) => {
-                                    e.dataTransfer.setData('text/colaborador-id', c.id);
-                                  }}
-                                  className="cursor-grab rounded-full border border-slate-300 bg-white px-3 py-1 text-xs font-medium text-tinta active:cursor-grabbing"
-                                  title="Arraste para um turno"
-                                >
-                                  {c.nome_completo}
+                            {agruparPorEquipe(colaboradores).map(({ equipe, membros }) => (
+                              <div key={equipe} className="flex w-full flex-wrap items-center gap-2">
+                                <span className="w-24 shrink-0 text-xs font-medium text-slate-500">
+                                  {equipe}
                                 </span>
-                              ))}
+                                {membros.map((c) => (
+                                  <span
+                                    key={c.id}
+                                    draggable
+                                    onDragStart={(e) => {
+                                      e.dataTransfer.setData('text/colaborador-id', c.id);
+                                    }}
+                                    className="cursor-grab rounded-full border border-slate-300 bg-white px-3 py-1 text-xs font-medium text-tinta active:cursor-grabbing"
+                                    title="Arraste para um turno"
+                                  >
+                                    {c.nome_completo}
+                                  </span>
+                                ))}
+                              </div>
+                            ))}
                           </div>
                         )}
                         <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
                         {turnosDisponiveisNesseDia.map((turno) => {
-                          const escalados = escaladosEm(data, turno.id);
+                          // Em ordem de equipe e, dentro dela, de nome.
+                          const escalados = [...escaladosEm(data, turno.id)].sort(
+                            (a, b) =>
+                              compararEquipe(equipeNomePorId(a.colaborador_id), equipeNomePorId(b.colaborador_id)) ||
+                              nomePorId(a.colaborador_id).localeCompare(nomePorId(b.colaborador_id))
+                          );
                           const cor = corTurno(turno.nome);
 
                           const disponiveis = colaboradores.filter(
@@ -793,7 +819,9 @@ export function VisaoAdminPage() {
 
                               {escalados.length > 0 && (
                                 <div className="mt-3 flex flex-wrap gap-1.5">
-                                  {Object.entries(contagemPorEquipe).map(
+                                  {Object.entries(contagemPorEquipe)
+                                    .sort(([a], [b]) => compararEquipe(a, b))
+                                    .map(
                                     ([nomeEquipe, contagem]) => (
                                       <span
                                         key={nomeEquipe}
