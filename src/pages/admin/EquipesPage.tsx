@@ -2,17 +2,21 @@ import { useState, type FormEvent } from 'react';
 import { useEquipes } from '../../features/teams/useEquipes';
 import { useVagasEquipe } from '../../features/teams/useVagasEquipe';
 import { useTurnos } from '../../features/shifts/useTurnos';
+import { useDuplasFimDeSemana } from '../../features/teams/useDuplasFimDeSemana';
+import { DuplasEquipeEditor } from '../../components/DuplasEquipeEditor';
 
 export function EquipesPage() {
   const { equipes, carregando, erro, processando, criar, renomear, alternarAtivo } = useEquipes();
   const { turnos } = useTurnos();
   const { vagasDe, definirVagas, salvando } = useVagasEquipe();
+  const duplas = useDuplasFimDeSemana();
 
   const [novoNome, setNovoNome] = useState('');
   const [erroForm, setErroForm] = useState<string | null>(null);
   const [editandoId, setEditandoId] = useState<string | null>(null);
   const [nomeEditado, setNomeEditado] = useState('');
   const [equipeExpandida, setEquipeExpandida] = useState<string | null>(null);
+  const [duplasExpandidas, setDuplasExpandidas] = useState<string | null>(null);
 
   async function handleCriar(event: FormEvent) {
     event.preventDefault();
@@ -49,8 +53,10 @@ export function EquipesPage() {
 
   return (
     <div>
-      {erro && (
-        <p className="mb-4 rounded-md bg-red-50 px-4 py-3 text-sm text-red-700">{erro}</p>
+      {(erro || duplas.erro) && (
+        <p className="mb-4 rounded-md bg-red-50 px-4 py-3 text-sm text-red-700">
+          {erro ?? duplas.erro}
+        </p>
       )}
 
       <div className="rounded-lg border border-slate-200 bg-white p-6">
@@ -136,6 +142,14 @@ export function EquipesPage() {
                   ) : (
                     <>
                       <button
+                        onClick={() =>
+                          setDuplasExpandidas((atual) => (atual === equipe.id ? null : equipe.id))
+                        }
+                        className="text-sm font-medium text-ceruleo hover:text-ceruleo/80"
+                      >
+                        {duplasExpandidas === equipe.id ? 'Ocultar duplas' : 'Duplas'}
+                      </button>
+                      <button
                         onClick={() => alternarExpansao(equipe.id)}
                         className="text-sm font-medium text-ceruleo hover:text-ceruleo/80"
                       >
@@ -158,6 +172,17 @@ export function EquipesPage() {
                   )}
                 </div>
               </div>
+
+              {duplasExpandidas === equipe.id && !duplas.carregando && (
+                <div className="border-t border-slate-100 bg-slate-50 px-4 py-4">
+                  <DuplasEquipeEditor
+                    duplas={duplas.duplasDaEquipe(equipe.id)}
+                    membros={duplas.membrosDaEquipe(equipe.id)}
+                    salvando={duplas.salvando}
+                    onSalvar={(novas) => duplas.salvarDuplasDaEquipe(equipe.id, novas)}
+                  />
+                </div>
+              )}
 
               {expandida && (
                 <div className="border-t border-slate-100 bg-slate-50 px-4 py-4">

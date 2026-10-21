@@ -72,7 +72,6 @@ export function VisaoAdminPage() {
     recarregar: recarregarEscala,
   } = useEscala(periodo?.id ?? null);
   const { gerarMes, gerarFimDeSemana, gerando: gerandoMensal } = useGerarEscalaMensal();
-  const [maxFinsDeSemana, setMaxFinsDeSemana] = useState('');
   const { session } = useAuth();
   const toast = useToast();
   const confirmar = useConfirm();
@@ -92,30 +91,34 @@ export function VisaoAdminPage() {
     return turnos.filter((t) => (ehSabado ? t.ativo_sabado : t.ativo_domingo));
   }
 
-  function limiteMensal() {
-    const valor = Number(maxFinsDeSemana);
-    return maxFinsDeSemana.trim() !== '' && Number.isInteger(valor) && valor > 0 ? valor : null;
-  }
-
   function colaboradoresParaGeracao() {
     return colaboradores.map((c) => ({
       id: c.id,
-      nome_completo: c.nome_completo,
       equipe_id: c.equipe_id,
-      turno_semana_id: c.turno_semana_id,
+      equipe_nome: c.equipe_nome,
     }));
+  }
+
+  // Avisos da geração: equipes sem duplas montadas e posições sem pessoa.
+  function avisosDaGeracao(resultado: { posicoesVazias: number; equipesSemDuplas: string[] }) {
+    let texto = '';
+    if (resultado.equipesSemDuplas.length > 0) {
+      texto += ` Sem duplas montadas (em Equipes): ${resultado.equipesSemDuplas.join(', ')}.`;
+    }
+    if (resultado.posicoesVazias > 0) {
+      texto += ` ${resultado.posicoesVazias} posição(ões) de dupla sem pessoa ativa.`;
+    }
+    return texto;
   }
 
   async function handleGerarMes(ano: number, mes: number) {
     if (!session?.user) return;
     setMensagemGeracao(null);
 
-    const limite = limiteMensal();
     const confirmou = await confirmar(
-      `Gerar a escala de todos os fins de semana de ${nomesMeses[mes - 1]}/${ano}?\n\n` +
+      `Gerar a escala de todos os fins de semana de ${nomesMeses[mes - 1]}/${ano} pelas duplas?\n\n` +
         'Os fins de semana que ainda não existem serão criados. Escalas já montadas ' +
-        'e fins de semana já confirmados não serão alterados.' +
-        (limite ? `\n\nLimite: ${limite} fim(ns) de semana por pessoa no mês.` : '')
+        'e fins de semana já confirmados não serão alterados.'
     );
     if (!confirmou) return;
 
@@ -125,7 +128,6 @@ export function VisaoAdminPage() {
       adminId: session.user.id,
       colaboradores: colaboradoresParaGeracao(),
       turnos,
-      maxFinsDeSemanaNoMes: limite,
     });
 
     if (resultado.erro) {
@@ -137,9 +139,8 @@ export function VisaoAdminPage() {
       resultado.finsDeSemana === 0
         ? 'Nenhum fim de semana em organização para preencher neste mês.'
         : `${resultado.finsDeSemana} fim(ns) de semana preparado(s), ${resultado.adicionadas} turno(s) escalado(s).` +
-            (resultado.duplasSemGente > 0
-              ? ` ${resultado.duplasSemGente} dupla(s) ficaram sem pessoa disponível.`
-              : '')
+            avisosDaGeracao(resultado),
+      resultado.equipesSemDuplas.length > 0 || resultado.posicoesVazias > 0 ? 'erro' : undefined
     );
 
     await recarregar();
@@ -254,8 +255,8 @@ export function VisaoAdminPage() {
 
     if (!session?.user) return;
     const confirmou = await confirmar(
-      'Isso vai preencher as duplas ainda vazias deste fim de semana pelo histórico ' +
-        '(Manhã + Tarde e Tarde + Noite, por equipe). Escalas já montadas não serão ' +
+      'Isso vai preencher este fim de semana pelas duplas de cada equipe (a dupla do ' +
+        'sábado e a do domingo, conforme o rodízio). Escalas já montadas não serão ' +
         'alteradas. Deseja continuar?'
     );
     if (!confirmou) return;
@@ -265,7 +266,6 @@ export function VisaoAdminPage() {
       adminId: session.user.id,
       colaboradores: colaboradoresParaGeracao(),
       turnos,
-      maxFinsDeSemanaNoMes: limiteMensal(),
     });
 
     if (resultado.erro) {
@@ -276,10 +276,8 @@ export function VisaoAdminPage() {
     setMensagemGeracao(
       (resultado.adicionadas > 0
         ? `${resultado.adicionadas} turno(s) escalado(s) automaticamente.`
-        : 'Nenhuma dupla vazia para preencher.') +
-        (resultado.duplasSemGente > 0
-          ? ` ${resultado.duplasSemGente} dupla(s) ficaram sem pessoa disponível.`
-          : '')
+        : 'Nada a preencher: os turnos das duplas já estão escalados.') +
+        avisosDaGeracao(resultado)
     );
     await recarregarEscala();
   }
@@ -337,8 +335,6 @@ export function VisaoAdminPage() {
 
       <div className="mb-8">
         <GerarEscalaMesForm
-          maxFinsDeSemana={maxFinsDeSemana}
-          onMudarMaxFinsDeSemana={setMaxFinsDeSemana}
           onGerar={handleGerarMes}
           gerando={gerandoMensal}
         />

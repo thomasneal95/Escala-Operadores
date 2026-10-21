@@ -1,27 +1,21 @@
 import { useState } from 'react';
 import { supabase } from '../../lib/supabase/client';
+import { papelDaDupla } from '../../lib/rodizioDuplas';
 import type { PeriodoOperacao } from '../../types/database';
 
-// Esquema de fim de semana: por equipe e por dia trabalham 2 pessoas, sem
-// formulário de disponibilidade — quem trabalha sai do histórico.
-//   - Dupla A: Manhã + Tarde
-//   - Dupla B: Tarde + Noite
-// Prioridade para quem MAIS trabalhou fins de semana (dias trabalhados em
-// escalas confirmadas, sem contar faltas). Cada pessoa trabalha no máximo
-// 1 dia por fim de semana e tem pelo menos 1 fim de semana de folga no mês
-// (além de um limite mensal opcional, menor).
-// Domingo é home office: entre os escalados do fim de semana, o domingo vai
-// para quem fez menos domingos no mês (e, no empate, no histórico), para
-// que todos passem por ele.
+// Escala do fim de semana pelas duplas fixas de cada equipe (tabela
+// duplas_fim_de_semana). A cada fim de semana, uma dupla trabalha no
+// sábado, outra no domingo (home office) e a terceira folga, girando no
+// ciclo Sábado → Domingo → Folga (ver lib/rodizioDuplas). Na dupla, uma
+// pessoa faz Manhã + Tarde e a outra Tarde + Noite.
 //
 // As escalas continuam sendo linhas normais de `escalas` (uma por turno), então
 // histórico, assiduidade, trocas e comissionamento seguem funcionando iguais.
 
 interface ColaboradorParaGeracao {
   id: string;
-  nome_completo: string;
   equipe_id: string | null;
-  turno_semana_id: string | null;
+  equipe_nome: string | null;
 }
 
 interface TurnoParaGeracao {
@@ -31,13 +25,19 @@ interface TurnoParaGeracao {
   ordem_exibicao: number | null;
 }
 
-type Dupla = 'A' | 'B';
+interface Dupla {
+  equipe_id: string;
+  numero: number;
+  manha_tarde_id: string | null;
+  tarde_noite_id: string | null;
+}
 
-interface LinhaEscala {
-  colaborador_id: string;
-  periodo_id: string;
-  data: string;
-  turno_id: string;
+interface ResultadoDistribuicao {
+  erro: string | null;
+  adicionadas: number;
+  // Posições de dupla sem pessoa ativa (dupla incompleta ou pessoa desativada).
+  posicoesVazias: number;
+  equipesSemDuplas: string[];
 }
 
 function paraIso(data: Date) {
@@ -67,282 +67,119 @@ export function finsDeSemanaDoMes(ano: number, mes: number) {
   return fins;
 }
 
+const SEM_RESULTADO = { adicionadas: 0, posicoesVazias: 0, equipesSemDuplas: [] as string[] };
+
 export function useGerarEscalaMensal() {
   const [gerando, setGerando] = useState(false);
 
-  // Preenche as duplas ainda vazias dos períodos informados (em ordem de
-  // data), sem mexer no que já está escalado.
+  // Preenche os fins de semana informados pelas duplas, sem mexer no que já
+  // está escalado.
   async function distribuir({
     periodos,
-    periodosDoMes,
     adminId,
     colaboradores,
     turnos,
-    maxFinsDeSemanaNoMes,
-    finsDeSemanaNoMes,
   }: {
     periodos: PeriodoOperacao[];
-    periodosDoMes: PeriodoOperacao[];
     adminId: string;
     colaboradores: ColaboradorParaGeracao[];
     turnos: TurnoParaGeracao[];
-    maxFinsDeSemanaNoMes: number | null;
-    finsDeSemanaNoMes: number;
-  }): Promise<{ erro: string | null; adicionadas: number; duplasSemGente: number }> {
+  }): Promise<ResultadoDistribuicao> {
     const ordenados = [...turnos].sort(
       (a, b) => (a.ordem_exibicao ?? 999) - (b.ordem_exibicao ?? 999)
     );
     if (ordenados.length < 3) {
       return {
         erro: 'São necessários 3 turnos ativos (Manhã, Tarde e Noite) para gerar a escala.',
-        adicionadas: 0,
-        duplasSemGente: 0,
+        ...SEM_RESULTADO,
       };
     }
     const [manha, tarde, noite] = ordenados;
-    const turnosDaDupla: Record<Dupla, TurnoParaGeracao[]> = {
-      A: [manha, tarde],
-      B: [tarde, noite],
-    };
-    // O turno que identifica a dupla (Tarde é compartilhada pelas duas).
-    const turnoMarcador: Record<Dupla, TurnoParaGeracao> = { A: manha, B: noite };
 
-    // Histórico: dias de fim de semana trabalhados em escalas confirmadas,
-    // ignorando faltas (compareceu = false). Paginado, porque o Supabase
-    // devolve no máximo 1000 linhas por consulta.
-    const historico: {
-      colaborador_id: string;
-      data: string;
-      turno_id: string;
-      compareceu: boolean | null;
-      periodos_operacao: unknown;
-    }[] = [];
-    const TAMANHO_PAGINA = 1000;
-    for (let inicio = 0; ; inicio += TAMANHO_PAGINA) {
-      const { data: pagina, error: erroHistorico } = await supabase
-        .from('escalas')
-        .select('colaborador_id, data, turno_id, compareceu, periodos_operacao!inner(data_inicio, status)')
-        .in('periodos_operacao.status', ['confirmado', 'encerrado'])
-        .order('id')
-        .range(inicio, inicio + TAMANHO_PAGINA - 1);
+    const { data: duplasData, error: erroDuplas } = await supabase
+      .from('duplas_fim_de_semana')
+      .select('equipe_id, numero, manha_tarde_id, tarde_noite_id');
 
-      if (erroHistorico) {
-        return { erro: 'Não foi possível carregar o histórico de escalas.', adicionadas: 0, duplasSemGente: 0 };
-      }
-      historico.push(...(pagina ?? []));
-      if ((pagina ?? []).length < TAMANHO_PAGINA) break;
+    if (erroDuplas) {
+      return { erro: 'Não foi possível carregar as duplas das equipes.', ...SEM_RESULTADO };
     }
+    const duplas: Dupla[] = duplasData ?? [];
 
-    const diasTrabalhados = new Map<string, Set<string>>();
-    const preferenciaDia = new Map<string, number>(); // `${colab}|sab` / `${colab}|dom`
-    const preferenciaTurno = new Map<string, number>(); // `${colab}|${turno}`
-
-    function somar(mapa: Map<string, number>, chave: string) {
-      mapa.set(chave, (mapa.get(chave) ?? 0) + 1);
-    }
-
-    for (const e of historico) {
-      if (e.compareceu === false) continue;
-      const periodo = e.periodos_operacao as unknown as { data_inicio: string };
-      const dias = diasTrabalhados.get(e.colaborador_id) ?? new Set<string>();
-      if (!dias.has(e.data)) {
-        dias.add(e.data);
-        somar(preferenciaDia, `${e.colaborador_id}|${e.data === periodo.data_inicio ? 'sab' : 'dom'}`);
-      }
-      diasTrabalhados.set(e.colaborador_id, dias);
-      somar(preferenciaTurno, `${e.colaborador_id}|${e.turno_id}`);
-    }
-
-    function pontuacao(colaboradorId: string) {
-      return diasTrabalhados.get(colaboradorId)?.size ?? 0;
-    }
-
-    // Escalas já existentes nos fins de semana do mês: contam para o limite
-    // mensal, para o "1 dia por fim de semana" e para as duplas já ocupadas.
-    const idsDoMes = periodosDoMes.map((p) => p.id);
-    const { data: existentes, error: erroExistentes } = idsDoMes.length
+    const ids = periodos.map((p) => p.id);
+    const { data: existentes, error: erroExistentes } = ids.length
       ? await supabase
           .from('escalas')
-          .select('colaborador_id, periodo_id, data, turno_id')
-          .in('periodo_id', idsDoMes)
+          .select('colaborador_id, data, turno_id')
+          .in('periodo_id', ids)
       : { data: [], error: null };
 
     if (erroExistentes) {
-      return { erro: 'Não foi possível carregar as escalas do mês.', adicionadas: 0, duplasSemGente: 0 };
+      return { erro: 'Não foi possível carregar as escalas do mês.', ...SEM_RESULTADO };
     }
 
-    // Pelo menos 1 fim de semana de folga no mês.
-    const limiteNoMes = Math.min(maxFinsDeSemanaNoMes ?? Infinity, finsDeSemanaNoMes - 1);
-
-    const domingoDoPeriodo = new Map(
-      [...periodosDoMes, ...periodos].map((p) => [p.id, p.data_fim])
+    const turnosOcupados = new Set(
+      (existentes ?? []).map((e) => `${e.data}|${e.turno_id}|${e.colaborador_id}`)
     );
-    const domingosNoMes = new Map<string, Set<string>>();
+    const ativos = new Map(colaboradores.map((c) => [c.id, c]));
 
-    const finsDeSemanaPorColaborador = new Map<string, Set<string>>();
-    const escaladoNoPeriodo = new Set<string>(); // `${periodo}|${colab}`
-    const turnosOcupados = new Set<string>(); // `${data}|${turno}|${colab}`
-
-    function registrar(e: LinhaEscala) {
-      const fins = finsDeSemanaPorColaborador.get(e.colaborador_id) ?? new Set<string>();
-      fins.add(e.periodo_id);
-      finsDeSemanaPorColaborador.set(e.colaborador_id, fins);
-      if (domingoDoPeriodo.get(e.periodo_id) === e.data) {
-        const domingos = domingosNoMes.get(e.colaborador_id) ?? new Set<string>();
-        domingos.add(e.data);
-        domingosNoMes.set(e.colaborador_id, domingos);
-      }
-      escaladoNoPeriodo.add(`${e.periodo_id}|${e.colaborador_id}`);
-      turnosOcupados.add(`${e.data}|${e.turno_id}|${e.colaborador_id}`);
+    const equipes = new Map<string, string>();
+    for (const c of colaboradores) {
+      if (c.equipe_id) equipes.set(c.equipe_id, c.equipe_nome ?? 'Equipe');
     }
+    const equipesSemDuplas = [...equipes]
+      .filter(([id]) => !duplas.some((d) => d.equipe_id === id))
+      .map(([, nome]) => nome)
+      .sort();
 
-    for (const e of existentes ?? []) registrar(e);
+    const novasLinhas: {
+      colaborador_id: string;
+      periodo_id: string;
+      data: string;
+      turno_id: string;
+      created_by: string;
+    }[] = [];
+    let posicoesVazias = 0;
 
-    const equipeIds = Array.from(
-      new Set(colaboradores.map((c) => c.equipe_id).filter((id): id is string => !!id))
-    );
+    for (const periodo of periodos) {
+      for (const dupla of duplas) {
+        if (!equipes.has(dupla.equipe_id)) continue;
 
-    const novasLinhas: (LinhaEscala & { created_by: string })[] = [];
-    let duplasSemGente = 0;
+        const papel = papelDaDupla(dupla.numero, periodo.data_inicio);
+        if (papel === 'folga') continue;
 
-    const periodosEmOrdem = [...periodos].sort((a, b) => a.data_inicio.localeCompare(b.data_inicio));
+        const ehSabado = papel === 'sabado';
+        const data = ehSabado ? periodo.data_inicio : periodo.data_fim;
+        const membros = colaboradores.filter((c) => c.equipe_id === dupla.equipe_id);
 
-    // Quantas duplas um fim de semana completo tem (pelos turnos que funcionam
-    // no sábado e no domingo).
-    const duplasPorFimDeSemana = (['A', 'B'] as Dupla[]).reduce(
-      (total, dupla) =>
-        total +
-        (turnoMarcador[dupla].ativo_sabado ? 1 : 0) +
-        (turnoMarcador[dupla].ativo_domingo ? 1 : 0),
-      0
-    );
+        const posicoes = [
+          { pessoaId: dupla.manha_tarde_id, marcador: manha, turnosDaPosicao: [manha, tarde] },
+          { pessoaId: dupla.tarde_noite_id, marcador: noite, turnosDaPosicao: [tarde, noite] },
+        ];
 
-    for (const [indicePeriodo, periodo] of periodosEmOrdem.entries()) {
-      const finsDeSemanaSeguintes = periodosEmOrdem.length - indicePeriodo - 1;
-      const dias = [
-        { data: periodo.data_inicio, chave: 'sab' as const },
-        { data: periodo.data_fim, chave: 'dom' as const },
-      ];
+        for (const { pessoaId, marcador, turnosDaPosicao } of posicoes) {
+          if (!(ehSabado ? marcador.ativo_sabado : marcador.ativo_domingo)) continue;
 
-      for (const equipeId of equipeIds) {
-        const membros = colaboradores.filter((c) => c.equipe_id === equipeId);
+          // Posição já coberta por alguém da equipe (ex.: ajuste manual).
+          if (membros.some((m) => turnosOcupados.has(`${data}|${marcador.id}|${m.id}`))) continue;
 
-        function duplaOcupada(data: string, dupla: Dupla) {
-          const marcador = turnoMarcador[dupla].id;
-          return membros.some((m) => turnosOcupados.has(`${data}|${marcador}|${m.id}`));
-        }
-
-        // Duplas vazias deste fim de semana, só nos dias em que o turno
-        // marcador da dupla funciona.
-        const vagas: { data: string; chave: 'sab' | 'dom'; dupla: Dupla }[] = [];
-        for (const dia of dias) {
-          for (const dupla of ['A', 'B'] as Dupla[]) {
-            const marcador = turnoMarcador[dupla];
-            const funciona = dia.chave === 'sab' ? marcador.ativo_sabado : marcador.ativo_domingo;
-            if (funciona && !duplaOcupada(dia.data, dupla)) vagas.push({ ...dia, dupla });
+          const pessoa = pessoaId ? ativos.get(pessoaId) : undefined;
+          if (!pessoa) {
+            posicoesVazias++;
+            continue;
           }
-        }
-        if (vagas.length === 0) continue;
 
-        // Candidatos: ainda não trabalham neste fim de semana e não
-        // passaram do limite do mês. Quem mais trabalhou vem primeiro.
-        const candidatos = membros
-          .filter((m) => !escaladoNoPeriodo.has(`${periodo.id}|${m.id}`))
-          .filter((m) => (finsDeSemanaPorColaborador.get(m.id)?.size ?? 0) < limiteNoMes)
-          .sort(
-            (a, b) =>
-              pontuacao(b.id) - pontuacao(a.id) || a.nome_completo.localeCompare(b.nome_completo)
-          );
-
-        const escolhidos = candidatos.slice(0, vagas.length);
-        duplasSemGente += vagas.length - escolhidos.length;
-
-        // Espalha as folgas: se escalar só quem mais vem deixar os próximos
-        // fins de semana sem gente suficiente (porque essas pessoas esgotam o
-        // limite do mês), troca o escolhido de menor prioridade que tem pouca
-        // capacidade sobrando por quem ainda tem mais capacidade do que fins
-        // de semana pela frente.
-        function capacidade(c: ColaboradorParaGeracao) {
-          return limiteNoMes - (finsDeSemanaPorColaborador.get(c.id)?.size ?? 0);
-        }
-        function viavel() {
-          const demanda = duplasPorFimDeSemana * finsDeSemanaSeguintes;
-          const oferta = membros.reduce((soma, m) => {
-            if (escaladoNoPeriodo.has(`${periodo.id}|${m.id}`) && !escolhidos.includes(m)) {
-              return soma + Math.min(capacidade(m), finsDeSemanaSeguintes);
-            }
-            const restante = capacidade(m) - (escolhidos.includes(m) ? 1 : 0);
-            return soma + Math.min(Math.max(restante, 0), finsDeSemanaSeguintes);
-          }, 0);
-          return oferta >= demanda;
-        }
-        while (!viavel()) {
-          const sai = [...escolhidos].reverse().find((c) => capacidade(c) <= finsDeSemanaSeguintes);
-          const entra = candidatos.find(
-            (c) => !escolhidos.includes(c) && capacidade(c) > finsDeSemanaSeguintes
-          );
-          if (!sai || !entra) break;
-          escolhidos.splice(escolhidos.indexOf(sai), 1, entra);
-        }
-
-        // Domingo primeiro, para quem fez menos domingos no mês (depois
-        // menos domingos no histórico; depois quem mais trabalhou).
-        const vagasDomingo = vagas.filter((v) => v.chave === 'dom');
-        const vagasSabado = vagas.filter((v) => v.chave === 'sab');
-        const porDomingos = [...escolhidos].sort(
-          (a, b) =>
-            (domingosNoMes.get(a.id)?.size ?? 0) - (domingosNoMes.get(b.id)?.size ?? 0) ||
-            (preferenciaDia.get(`${a.id}|dom`) ?? 0) - (preferenciaDia.get(`${b.id}|dom`) ?? 0) ||
-            pontuacao(b.id) - pontuacao(a.id)
-        );
-        const doDomingo = porDomingos.slice(0, vagasDomingo.length);
-        const doSabado = porDomingos.slice(vagasDomingo.length);
-
-        // Dentro do dia, a dupla vai pela afinidade: dupla do turno da
-        // semana e, depois, a dupla que a pessoa mais fez.
-        function afinidade(c: ColaboradorParaGeracao, vaga: (typeof vagas)[number]) {
-          const marcador = turnoMarcador[vaga.dupla].id;
-          return (
-            (c.turno_semana_id === marcador ? 1000 : 0) +
-            (preferenciaTurno.get(`${c.id}|${marcador}`) ?? 0)
-          );
-        }
-
-        const atribuicoes: { colaborador: ColaboradorParaGeracao; vaga: (typeof vagas)[number] }[] =
-          [];
-        for (const [pessoas, vagasDoDia] of [
-          [doDomingo, vagasDomingo],
-          [doSabado, vagasSabado],
-        ] as const) {
-          const restantes = [...pessoas];
-          const vagasRestantes = [...vagasDoDia];
-          while (restantes.length > 0 && vagasRestantes.length > 0) {
-            let melhor = { colaborador: 0, vaga: 0, valor: -1 };
-            restantes.forEach((c, i) => {
-              vagasRestantes.forEach((v, j) => {
-                const valor = afinidade(c, v);
-                if (valor > melhor.valor) melhor = { colaborador: i, vaga: j, valor };
-              });
-            });
-            atribuicoes.push({
-              colaborador: restantes.splice(melhor.colaborador, 1)[0],
-              vaga: vagasRestantes.splice(melhor.vaga, 1)[0],
-            });
-          }
-        }
-
-        for (const { colaborador, vaga } of atribuicoes) {
-          for (const turno of turnosDaDupla[vaga.dupla]) {
-            const funciona = vaga.chave === 'sab' ? turno.ativo_sabado : turno.ativo_domingo;
-            if (!funciona || turnosOcupados.has(`${vaga.data}|${turno.id}|${colaborador.id}`)) continue;
-            const linha = {
-              colaborador_id: colaborador.id,
+          for (const turno of turnosDaPosicao) {
+            if (!(ehSabado ? turno.ativo_sabado : turno.ativo_domingo)) continue;
+            const chave = `${data}|${turno.id}|${pessoa.id}`;
+            if (turnosOcupados.has(chave)) continue;
+            turnosOcupados.add(chave);
+            novasLinhas.push({
+              colaborador_id: pessoa.id,
               periodo_id: periodo.id,
-              data: vaga.data,
+              data,
               turno_id: turno.id,
-            };
-            registrar(linha);
-            novasLinhas.push({ ...linha, created_by: adminId });
+              created_by: adminId,
+            });
           }
         }
       }
@@ -351,19 +188,15 @@ export function useGerarEscalaMensal() {
     if (novasLinhas.length > 0) {
       const { error } = await supabase.from('escalas').insert(novasLinhas);
       if (error) {
-        return {
-          erro: 'Não foi possível salvar a escala gerada. Tente novamente.',
-          adicionadas: 0,
-          duplasSemGente: 0,
-        };
+        return { erro: 'Não foi possível salvar a escala gerada. Tente novamente.', ...SEM_RESULTADO };
       }
     }
 
-    return { erro: null, adicionadas: novasLinhas.length, duplasSemGente };
+    return { erro: null, adicionadas: novasLinhas.length, posicoesVazias, equipesSemDuplas };
   }
 
   // Cria (se ainda não existirem) os períodos de todos os fins de semana do
-  // mês, já "em organização", e preenche as duplas. Fins de semana já
+  // mês, já "em organização", e preenche pelas duplas. Fins de semana já
   // confirmados ou que já passaram não são alterados.
   async function gerarMes({
     ano,
@@ -371,28 +204,30 @@ export function useGerarEscalaMensal() {
     adminId,
     colaboradores,
     turnos,
-    maxFinsDeSemanaNoMes,
   }: {
     ano: number;
     mes: number;
     adminId: string;
     colaboradores: ColaboradorParaGeracao[];
     turnos: TurnoParaGeracao[];
-    maxFinsDeSemanaNoMes: number | null;
   }) {
     setGerando(true);
     try {
       const fins = finsDeSemanaDoMes(ano, mes);
       const hoje = hojeIso();
+      const falha = (erro: string) => ({
+        erro,
+        ...SEM_RESULTADO,
+        finsDeSemana: 0,
+        primeiroPeriodoId: null,
+      });
 
       const { data: existentes, error: erroPeriodos } = await supabase
         .from('periodos_operacao')
         .select('id, data_inicio, data_fim, status')
         .in('data_inicio', fins.map((f) => f.sabado));
 
-      if (erroPeriodos) {
-        return { erro: 'Não foi possível carregar os fins de semana do mês.', adicionadas: 0, duplasSemGente: 0, finsDeSemana: 0, primeiroPeriodoId: null };
-      }
+      if (erroPeriodos) return falha('Não foi possível carregar os fins de semana do mês.');
 
       const periodosDoMes: PeriodoOperacao[] = [...(existentes ?? [])];
       const aCriar = fins.filter(
@@ -412,9 +247,7 @@ export function useGerarEscalaMensal() {
           )
           .select('id, data_inicio, data_fim, status');
 
-        if (erroCriacao) {
-          return { erro: 'Não foi possível criar os fins de semana do mês.', adicionadas: 0, duplasSemGente: 0, finsDeSemana: 0, primeiroPeriodoId: null };
-        }
+        if (erroCriacao) return falha('Não foi possível criar os fins de semana do mês.');
         periodosDoMes.push(...(criados ?? []));
       }
 
@@ -425,73 +258,42 @@ export function useGerarEscalaMensal() {
           .from('periodos_operacao')
           .update({ status: 'em_organizacao' })
           .in('id', abertos.map((p) => p.id));
-        if (error) {
-          return { erro: 'Não foi possível atualizar os fins de semana do mês.', adicionadas: 0, duplasSemGente: 0, finsDeSemana: 0, primeiroPeriodoId: null };
-        }
+        if (error) return falha('Não foi possível atualizar os fins de semana do mês.');
         for (const p of abertos) p.status = 'em_organizacao';
       }
 
-      const aPreencher = periodosDoMes.filter(
-        (p) => p.status === 'em_organizacao' && p.data_fim >= hoje
-      );
+      const aPreencher = periodosDoMes
+        .filter((p) => p.status === 'em_organizacao' && p.data_fim >= hoje)
+        .sort((a, b) => a.data_inicio.localeCompare(b.data_inicio));
 
-      const resultado = await distribuir({
-        periodos: aPreencher,
-        periodosDoMes,
-        adminId,
-        colaboradores,
-        turnos,
-        maxFinsDeSemanaNoMes,
-        finsDeSemanaNoMes: fins.length,
-      });
+      const resultado = await distribuir({ periodos: aPreencher, adminId, colaboradores, turnos });
 
-      const primeiroPeriodoId =
-        [...aPreencher].sort((a, b) => a.data_inicio.localeCompare(b.data_inicio))[0]?.id ?? null;
-
-      return { ...resultado, finsDeSemana: aPreencher.length, primeiroPeriodoId };
+      return {
+        ...resultado,
+        finsDeSemana: aPreencher.length,
+        primeiroPeriodoId: aPreencher[0]?.id ?? null,
+      };
     } finally {
       setGerando(false);
     }
   }
 
-  // Preenche as duplas vazias de um único fim de semana (ex.: depois de o
-  // admin tirar alguém), respeitando o limite mensal do mês do sábado.
+  // Preenche um único fim de semana pelas duplas (ex.: depois de excluir a
+  // escala para remontar).
   async function gerarFimDeSemana({
     periodo,
     adminId,
     colaboradores,
     turnos,
-    maxFinsDeSemanaNoMes,
   }: {
     periodo: PeriodoOperacao;
     adminId: string;
     colaboradores: ColaboradorParaGeracao[];
     turnos: TurnoParaGeracao[];
-    maxFinsDeSemanaNoMes: number | null;
   }) {
     setGerando(true);
     try {
-      const [ano, mes] = periodo.data_inicio.split('-').map(Number);
-      const sabados = finsDeSemanaDoMes(ano, mes).map((f) => f.sabado);
-
-      const { data: periodosDoMes, error } = await supabase
-        .from('periodos_operacao')
-        .select('id, data_inicio, data_fim, status')
-        .in('data_inicio', sabados);
-
-      if (error) {
-        return { erro: 'Não foi possível carregar os fins de semana do mês.', adicionadas: 0, duplasSemGente: 0 };
-      }
-
-      return await distribuir({
-        periodos: [periodo],
-        periodosDoMes: periodosDoMes ?? [periodo],
-        adminId,
-        colaboradores,
-        turnos,
-        maxFinsDeSemanaNoMes,
-        finsDeSemanaNoMes: sabados.length,
-      });
+      return await distribuir({ periodos: [periodo], adminId, colaboradores, turnos });
     } finally {
       setGerando(false);
     }
