@@ -18,9 +18,17 @@ interface DisponibilidadeResposta {
   disponivel: boolean;
 }
 
+function hojeIso() {
+  const agora = new Date();
+  const mes = String(agora.getMonth() + 1).padStart(2, '0');
+  const dia = String(agora.getDate()).padStart(2, '0');
+  return `${agora.getFullYear()}-${mes}-${dia}`;
+}
+
 export function useVisaoAdmin() {
   const { session } = useAuth();
-  const [periodo, setPeriodo] = useState<PeriodoOperacao | null>(null);
+  const [periodos, setPeriodos] = useState<PeriodoOperacao[]>([]);
+  const [periodoId, setPeriodoId] = useState<string | null>(null);
   const [turnos, setTurnos] = useState<Turno[]>([]);
   const [colaboradores, setColaboradores] = useState<ColaboradorComPerfil[]>([]);
   const [respostas, setRespostas] = useState<DisponibilidadeResposta[]>([]);
@@ -33,12 +41,11 @@ export function useVisaoAdmin() {
     setCarregando(true);
     setErro(null);
 
-    const { data: periodoData, error: erroPeriodo } = await supabase
+    const { data: periodosData, error: erroPeriodo } = await supabase
       .from('periodos_operacao')
       .select('id, data_inicio, data_fim, status')
       .order('data_inicio', { ascending: false })
-      .limit(1)
-      .maybeSingle();
+      .limit(60);
 
     if (erroPeriodo) {
       setErro('Não foi possível carregar o período de operação.');
@@ -46,7 +53,17 @@ export function useVisaoAdmin() {
       return;
     }
 
-    setPeriodo(periodoData ?? null);
+    const lista = periodosData ?? [];
+    setPeriodos(lista);
+
+    // Mantém o fim de semana já selecionado; senão abre o próximo que ainda
+    // não passou (ou, se não houver, o mais recente).
+    setPeriodoId((atual) => {
+      if (atual && lista.some((p) => p.id === atual)) return atual;
+      const hoje = hojeIso();
+      const proximos = lista.filter((p) => p.data_fim >= hoje);
+      return (proximos[proximos.length - 1] ?? lista[0])?.id ?? null;
+    });
 
     const { data: turnosData, error: erroTurnos } = await supabase
       .from('turnos')
@@ -97,29 +114,44 @@ export function useVisaoAdmin() {
     colaboradoresFormatados.sort((a, b) => a.nome_completo.localeCompare(b.nome_completo));
     setColaboradores(colaboradoresFormatados);
 
-    if (periodoData) {
-      const { data: disponibilidadesData, error: erroDisponibilidades } = await supabase
-        .from('disponibilidades')
-        .select('colaborador_id, data, turno_id, disponivel')
-        .eq('periodo_id', periodoData.id);
-
-      if (erroDisponibilidades) {
-        setErro('Não foi possível carregar as disponibilidades.');
-        setCarregando(false);
-        return;
-      }
-
-      setRespostas(disponibilidadesData ?? []);
-    } else {
-      setRespostas([]);
-    }
-
     setCarregando(false);
   }, []);
 
-    useEffect(() => {
+  useEffect(() => {
     carregar();
   }, [carregar]);
+
+  const periodo = periodos.find((p) => p.id === periodoId) ?? null;
+
+  function atualizarStatusLocal(ids: string[], status: PeriodoOperacao['status']) {
+    setPeriodos((atual) => atual.map((p) => (ids.includes(p.id) ? { ...p, status } : p)));
+  }
+
+  useEffect(() => {
+    if (!periodoId) {
+      setRespostas([]);
+      return;
+    }
+
+    let cancelado = false;
+    setRespostas([]);
+    supabase
+      .from('disponibilidades')
+      .select('colaborador_id, data, turno_id, disponivel')
+      .eq('periodo_id', periodoId)
+      .then(({ data, error }) => {
+        if (cancelado) return;
+        if (error) {
+          setErro('Não foi possível carregar as disponibilidades.');
+          return;
+        }
+        setRespostas(data ?? []);
+      });
+
+    return () => {
+      cancelado = true;
+    };
+  }, [periodoId]);
 
   // Escuta mudanças em tempo real na tabela de disponibilidades deste
   // período, para que o admin veja quem enviou sem precisar recarregar.
@@ -198,7 +230,7 @@ export function useVisaoAdmin() {
       return { erro: 'Não foi possível encerrar o recebimento de disponibilidade.' };
     }
 
-    setPeriodo({ ...periodo, status: 'em_organizacao' });
+    atualizarStatusLocal([periodo.id], 'em_organizacao');
     return { erro: null };
   }
 
@@ -220,32 +252,33 @@ export function useVisaoAdmin() {
       return { erro: 'Não foi possível confirmar a escala.' };
     }
 
-    setPeriodo({ ...periodo, status: 'confirmado' });
+    atualizarStatusLocal([periodo.id], 'confirmado');
     return { erro: null };
   }
 
-  async function criarNovoPeriodo(dataInicio: string, dataFim: string) {
+  // Confirma de uma vez todos os fins de semana "em organização" informados
+  // (ex.: todos os do mês gerado).
+  async function confirmarVarios(ids: string[]) {
     if (!session?.user) return { erro: 'Sessão inválida.' };
+    if (ids.length === 0) return { erro: null };
 
     setAtualizandoStatus(true);
-    const { error } = await supabase.from('periodos_operacao').insert({
-      data_inicio: dataInicio,
-      data_fim: dataFim,
-      created_by: session.user.id,
-    });
+    const { error } = await supabase
+      .from('periodos_operacao')
+      .update({
+        status: 'confirmado',
+        confirmed_at: new Date().toISOString(),
+        confirmed_by: session.user.id,
+      })
+      .in('id', ids)
+      .eq('status', 'em_organizacao');
     setAtualizandoStatus(false);
 
     if (error) {
-      let mensagem = 'Não foi possível criar o período.';
-      if (error.code === '23505') {
-        mensagem = 'Já existe um período com essas datas.';
-      } else if (error.code === '23514') {
-        mensagem = 'A data final não pode ser anterior à data inicial.';
-      }
-      return { erro: mensagem };
+      return { erro: 'Não foi possível confirmar as escalas do mês.' };
     }
 
-    await carregar();
+    atualizarStatusLocal(ids, 'confirmado');
     return { erro: null };
   }
 
@@ -291,7 +324,7 @@ export function useVisaoAdmin() {
       return { erro: 'Não foi possível atualizar o status do período.' };
     }
 
-    setPeriodo({ ...periodo, status: novoStatus });
+    atualizarStatusLocal([periodo.id], novoStatus);
     if (apagarDisponibilidades) {
       setRespostas([]);
     }
@@ -338,12 +371,16 @@ export function useVisaoAdmin() {
       return { erro: 'Não foi possível reabrir o recebimento.' };
     }
 
-    setPeriodo({ ...periodo, status: 'aberto' });
+    atualizarStatusLocal([periodo.id], 'aberto');
     return { erro: null };
   }
 
   return {
     periodo,
+    periodos,
+    selecionarPeriodo: setPeriodoId,
+    temDisponibilidades: respostas.length > 0,
+    confirmarVarios,
     turnos,
     colaboradores,
     carregando,
@@ -353,7 +390,6 @@ export function useVisaoAdmin() {
     recarregar: carregar,
     encerrarRecebimento,
     confirmarEscala,
-    criarNovoPeriodo,
     resetarPeriodo,
     excluirDisponibilidadeDoColaborador,
     excluindoDisponibilidade,

@@ -7,7 +7,8 @@ import { useEscala } from '../../features/schedules/useEscala';
 import { useGerarEscalaAutomatica } from '../../features/schedules/useGerarEscalaAutomatica';
 import { useVagasEquipe } from '../../features/teams/useVagasEquipe';
 import { SeletorColaborador } from '../../features/schedules/SeletorColaborador';
-import { NovoPeriodoForm } from '../../features/schedules/NovoPeriodoForm';
+import { GerarEscalaMesForm } from '../../features/schedules/GerarEscalaMesForm';
+import { useGerarEscalaMensal } from '../../features/schedules/useGerarEscalaMensal';
 import { corTurno } from '../../lib/turnoColors';
 import { useToast } from '../../components/FeedbackProvider';
 import { useConfirm } from '../../components/FeedbackProvider';
@@ -28,6 +29,11 @@ const rotuloStatus: Record<string, string> = {
   encerrado: 'Encerrado',
 };
 
+const nomesMeses = [
+  'janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho',
+  'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro',
+];
+
 const corStatus: Record<string, string> = {
   aberto: 'bg-esmeralda-light text-esmeralda-dark',
   em_organizacao: 'bg-ceruleo-light text-ceruleo',
@@ -38,6 +44,10 @@ const corStatus: Record<string, string> = {
 export function VisaoAdminPage() {
   const {
     periodo,
+    periodos,
+    selecionarPeriodo,
+    temDisponibilidades,
+    confirmarVarios,
     turnos,
     colaboradores,
     carregando,
@@ -46,12 +56,12 @@ export function VisaoAdminPage() {
     temAlgumaResposta,
     encerrarRecebimento,
     confirmarEscala,
-    criarNovoPeriodo,
     resetarPeriodo,
     excluirDisponibilidadeDoColaborador,
     excluindoDisponibilidade,
     reabrirRecebimento,
     atualizandoStatus,
+    recarregar,
   } = useVisaoAdmin();
   const {
     carregando: carregandoEscala,
@@ -64,6 +74,8 @@ export function VisaoAdminPage() {
     recarregar: recarregarEscala,
   } = useEscala(periodo?.id ?? null);
   const { gerar, gerando } = useGerarEscalaAutomatica();
+  const { gerarMes, gerarFimDeSemana, gerando: gerandoMensal } = useGerarEscalaMensal();
+  const [maxFinsDeSemana, setMaxFinsDeSemana] = useState('');
   const { vagas } = useVagasEquipe();
   const { session } = useAuth();
   const toast = useToast();
@@ -83,6 +95,88 @@ export function VisaoAdminPage() {
     if (!periodo) return [];
     const ehSabado = data === periodo.data_inicio;
     return turnos.filter((t) => (ehSabado ? t.ativo_sabado : t.ativo_domingo));
+  }
+
+  // Fins de semana do esquema mensal não têm disponibilidade: qualquer pessoa
+  // pode ser escalada. Nos antigos, só quem marcou disponível.
+  function podeSerEscalado(colaboradorId: string, data: string, turnoId: string) {
+    if (!temDisponibilidades) return true;
+    return respostaDe(colaboradorId, data, turnoId)?.disponivel === true;
+  }
+
+  function limiteMensal() {
+    const valor = Number(maxFinsDeSemana);
+    return maxFinsDeSemana.trim() !== '' && Number.isInteger(valor) && valor > 0 ? valor : null;
+  }
+
+  function colaboradoresParaGeracao() {
+    return colaboradores.map((c) => ({
+      id: c.id,
+      nome_completo: c.nome_completo,
+      equipe_id: c.equipe_id,
+      turno_semana_id: c.turno_semana_id,
+    }));
+  }
+
+  async function handleGerarMes(ano: number, mes: number) {
+    if (!session?.user) return;
+    setMensagemGeracao(null);
+
+    const limite = limiteMensal();
+    const confirmou = await confirmar(
+      `Gerar a escala de todos os fins de semana de ${nomesMeses[mes - 1]}/${ano}?\n\n` +
+        'Os fins de semana que ainda não existem serão criados. Escalas já montadas ' +
+        'e fins de semana já confirmados não serão alterados.' +
+        (limite ? `\n\nLimite: ${limite} fim(ns) de semana por pessoa no mês.` : '')
+    );
+    if (!confirmou) return;
+
+    const resultado = await gerarMes({
+      ano,
+      mes,
+      adminId: session.user.id,
+      colaboradores: colaboradoresParaGeracao(),
+      turnos,
+      maxFinsDeSemanaNoMes: limite,
+    });
+
+    if (resultado.erro) {
+      toast(resultado.erro, 'erro');
+      return;
+    }
+
+    toast(
+      resultado.finsDeSemana === 0
+        ? 'Nenhum fim de semana em organização para preencher neste mês.'
+        : `${resultado.finsDeSemana} fim(ns) de semana preparado(s), ${resultado.adicionadas} turno(s) escalado(s).` +
+            (resultado.duplasSemGente > 0
+              ? ` ${resultado.duplasSemGente} dupla(s) ficaram sem pessoa disponível.`
+              : '')
+    );
+
+    await recarregar();
+    if (resultado.primeiroPeriodoId) selecionarPeriodo(resultado.primeiroPeriodoId);
+  }
+
+  // Fins de semana "em organização" do mesmo mês do fim de semana aberto.
+  const periodosEmOrganizacaoDoMes = periodo
+    ? periodos.filter(
+        (p) =>
+          p.status === 'em_organizacao' && p.data_inicio.slice(0, 7) === periodo.data_inicio.slice(0, 7)
+      )
+    : [];
+
+  async function handleConfirmarMes() {
+    if (!periodo) return;
+    const [ano, mes] = periodo.data_inicio.split('-').map(Number);
+    const confirmou = await confirmar(
+      `Confirmar os ${periodosEmOrganizacaoDoMes.length} fins de semana em organização de ` +
+        `${nomesMeses[mes - 1]}/${ano}? Os colaboradores passarão a ver suas escalas.`
+    );
+    if (!confirmou) return;
+
+    const resultado = await confirmarVarios(periodosEmOrganizacaoDoMes.map((p) => p.id));
+    if (resultado.erro) toast(resultado.erro, 'erro');
   }
 
   function nomePorId(colaboradorId: string) {
@@ -213,6 +307,40 @@ export function VisaoAdminPage() {
     if (!periodo) return;
     setMensagemGeracao(null);
 
+    if (!temDisponibilidades) {
+      if (!session?.user) return;
+      const confirmou = await confirmar(
+        'Isso vai preencher as duplas ainda vazias deste fim de semana pelo histórico ' +
+          '(Manhã + Tarde e Tarde + Noite, por equipe). Escalas já montadas não serão ' +
+          'alteradas. Deseja continuar?'
+      );
+      if (!confirmou) return;
+
+      const resultado = await gerarFimDeSemana({
+        periodo,
+        adminId: session.user.id,
+        colaboradores: colaboradoresParaGeracao(),
+        turnos,
+        maxFinsDeSemanaNoMes: limiteMensal(),
+      });
+
+      if (resultado.erro) {
+        setMensagemGeracao(resultado.erro);
+        return;
+      }
+
+      setMensagemGeracao(
+        (resultado.adicionadas > 0
+          ? `${resultado.adicionadas} turno(s) escalado(s) automaticamente.`
+          : 'Nenhuma dupla vazia para preencher.') +
+          (resultado.duplasSemGente > 0
+            ? ` ${resultado.duplasSemGente} dupla(s) ficaram sem pessoa disponível.`
+            : '')
+      );
+      await recarregarEscala();
+      return;
+    }
+
     const confirmou = await confirmar(
       'Isso vai preencher automaticamente as vagas ainda vazias, priorizando quem ' +
         'trabalha aquele turno durante a semana. Escalas já feitas manualmente não ' +
@@ -296,9 +424,6 @@ export function VisaoAdminPage() {
     );
   }
 
-  const podeSeCriarNovoPeriodo =
-    !periodo || periodo.status === 'confirmado' || periodo.status === 'encerrado';
-
   const escalaEstaTrancada =
     periodo != null &&
     (periodo.status === 'confirmado' || periodo.status === 'encerrado') &&
@@ -313,11 +438,14 @@ export function VisaoAdminPage() {
         <p className="mb-4 rounded-md bg-red-50 px-4 py-3 text-sm text-red-700">{erroEscala}</p>
       )}
 
-      {podeSeCriarNovoPeriodo && (
-        <div className="mb-8">
-          <NovoPeriodoForm onCriar={criarNovoPeriodo} processando={atualizandoStatus} />
-        </div>
-      )}
+      <div className="mb-8">
+        <GerarEscalaMesForm
+          maxFinsDeSemana={maxFinsDeSemana}
+          onMudarMaxFinsDeSemana={setMaxFinsDeSemana}
+          onGerar={handleGerarMes}
+          gerando={gerandoMensal}
+        />
+      </div>
 
       {!periodo ? (
         <div className="rounded-lg border border-slate-200 bg-white p-8 text-center">
@@ -325,6 +453,36 @@ export function VisaoAdminPage() {
         </div>
       ) : (
         <div>
+          <div className="mb-4 flex flex-wrap items-end gap-3">
+            <div>
+              <label htmlFor="seletor_fim_semana" className="block text-sm font-medium text-slate-700">
+                Fim de semana
+              </label>
+              <select
+                id="seletor_fim_semana"
+                value={periodo.id}
+                onChange={(e) => selecionarPeriodo(e.target.value)}
+                className="mt-1 rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-esmeralda focus:outline-none focus:ring-1 focus:ring-esmeralda"
+              >
+                {periodos.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {formatarData(p.data_inicio)} – {formatarData(p.data_fim)} · {rotuloStatus[p.status]}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {periodosEmOrganizacaoDoMes.length > 1 && (
+              <button
+                onClick={handleConfirmarMes}
+                disabled={atualizandoStatus}
+                className="rounded-md bg-esmeralda px-4 py-2 text-sm font-medium text-white hover:bg-esmeralda-dark disabled:opacity-60"
+              >
+                Confirmar todos do mês ({periodosEmOrganizacaoDoMes.length})
+              </button>
+            )}
+          </div>
+
           <div className="flex flex-wrap items-center gap-3">
             <h1 className="font-display text-2xl font-semibold text-tinta">
               {formatarData(periodo.data_inicio)} – {formatarData(periodo.data_fim)}
@@ -357,7 +515,8 @@ export function VisaoAdminPage() {
               </button>
             )}
 
-            {(periodo.status === 'em_organizacao' || periodo.status === 'confirmado') && (
+            {temDisponibilidades &&
+              (periodo.status === 'em_organizacao' || periodo.status === 'confirmado') && (
               <button
                 onClick={handleReabrirRecebimento}
                 disabled={atualizandoStatus}
@@ -377,7 +536,8 @@ export function VisaoAdminPage() {
             )}
           </div>
 
-          {/* Tabela de disponibilidades */}
+          {/* Tabela de disponibilidades (só fins de semana do esquema antigo) */}
+          {temDisponibilidades && (
           <div className="mt-6">
             <SecaoRecolhivel titulo="Disponibilidade informada">
               <div className="-mx-5 -mb-5 overflow-x-auto rounded-b-lg">
@@ -463,6 +623,7 @@ export function VisaoAdminPage() {
               </div>
             </SecaoRecolhivel>
           </div>
+          )}
 
           {/* Montagem da escala */}
           <div className="mt-10 flex flex-wrap items-center justify-between gap-3">
@@ -497,10 +658,10 @@ export function VisaoAdminPage() {
               {periodo.status === 'em_organizacao' && (
                 <button
                   onClick={handleGerarAutomatico}
-                  disabled={gerando}
+                  disabled={gerando || gerandoMensal}
                   className="rounded-md bg-profundo px-3 py-1.5 text-sm font-medium text-white hover:bg-profundo/90 disabled:opacity-60"
                 >
-                  {gerando ? 'Gerando...' : 'Gerar escala automaticamente'}
+                  {gerando || gerandoMensal ? 'Gerando...' : 'Gerar escala automaticamente'}
                 </button>
               )}
             </div>
@@ -643,8 +804,8 @@ export function VisaoAdminPage() {
                           <div className="mt-4 hidden flex-wrap gap-2 rounded-md border border-dashed border-slate-300 bg-slate-50 p-3 sm:flex">
                             {colaboradores
                               .filter((c) =>
-                                turnosDisponiveisNesseDia.some(
-                                  (t) => respostaDe(c.id, data, t.id)?.disponivel
+                                turnosDisponiveisNesseDia.some((t) =>
+                                  podeSerEscalado(c.id, data, t.id)
                                 )
                               )
                               .map((c) => (
@@ -669,7 +830,7 @@ export function VisaoAdminPage() {
 
                           const disponiveis = colaboradores.filter(
                             (c) =>
-                              respostaDe(c.id, data, turno.id)?.disponivel &&
+                              podeSerEscalado(c.id, data, turno.id) &&
                               !colaboradorJaEscalado(c.id, data, turno.id)
                           );
 
@@ -693,7 +854,7 @@ export function VisaoAdminPage() {
                                 if (!colaboradorId) return;
 
                                 const podeEscalar =
-                                  respostaDe(colaboradorId, data, turno.id)?.disponivel &&
+                                  podeSerEscalado(colaboradorId, data, turno.id) &&
                                   !colaboradorJaEscalado(colaboradorId, data, turno.id);
 
                                 if (!podeEscalar) {
@@ -793,6 +954,7 @@ export function VisaoAdminPage() {
                 processo deste período.
               </p>
               <div className="mt-4 flex flex-wrap gap-3">
+                {temDisponibilidades && (
                 <button
                   onClick={handleResetarComDisponibilidades}
                   disabled={atualizandoStatus}
@@ -800,6 +962,7 @@ export function VisaoAdminPage() {
                 >
                   Excluir escala e disponibilidades
                 </button>
+                )}
                 <button
                   onClick={handleResetarSoEscala}
                   disabled={atualizandoStatus}

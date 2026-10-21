@@ -46,7 +46,7 @@ function SecaoCalendario() {
 }
 
 export function AreaColaboradorPage() {
-  const { colaboradorId, periodo, carregando, erro } = useAreaColaborador();
+  const { colaboradorId, periodo, periodosPublicados, carregando, erro } = useAreaColaborador();
 
   if (carregando) {
     return <p className="text-sm text-slate-400">Carregando...</p>;
@@ -58,7 +58,21 @@ export function AreaColaboradorPage() {
 
   let conteudo: ReactNode;
 
-  if (periodo && (periodo.status === 'confirmado' || periodo.status === 'encerrado') && colaboradorId) {
+  // Fim de semana do resumo: o próximo já publicado; senão, o mais recente.
+  const periodoDoResumo = periodosPublicados[0] ?? periodo;
+
+  if (periodosPublicados.length > 0 && colaboradorId) {
+    conteudo = (
+      <div className="space-y-12">
+        {periodosPublicados.map((p) => (
+          <div key={p.id}>
+            <TermoAceiteModal periodoId={p.id} dataInicio={p.data_inicio} dataFim={p.data_fim} />
+            <MinhaEscalaPage colaboradorId={colaboradorId} periodo={p} />
+          </div>
+        ))}
+      </div>
+    );
+  } else if (periodo && (periodo.status === 'confirmado' || periodo.status === 'encerrado') && colaboradorId) {
     conteudo = (
       <>
         <TermoAceiteModal
@@ -84,12 +98,15 @@ export function AreaColaboradorPage() {
 
   return (
     <div>
-      {colaboradorId && periodo && (
+      {colaboradorId && periodoDoResumo && (
         <ErrorBoundary fallback={null}>
-          <ResumoOperador colaboradorId={colaboradorId} periodo={periodo} />
+          <ResumoOperador colaboradorId={colaboradorId} periodo={periodoDoResumo} />
         </ErrorBoundary>
       )}
-      <ErrorBoundary key={periodo?.status ?? 'sem-periodo'} fallback={<FallbackErroTela />}>
+      <ErrorBoundary
+        key={`${periodo?.status ?? 'sem-periodo'}-${periodosPublicados.length}`}
+        fallback={<FallbackErroTela />}
+      >
         {conteudo}
       </ErrorBoundary>
       <SecaoCalendario />

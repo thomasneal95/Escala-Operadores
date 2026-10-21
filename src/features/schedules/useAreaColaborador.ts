@@ -3,10 +3,20 @@ import { supabase } from '../../lib/supabase/client';
 import { useAuth } from '../auth/AuthContext';
 import type { PeriodoOperacao } from '../../types/database';
 
+function hojeIso() {
+  const agora = new Date();
+  const mes = String(agora.getMonth() + 1).padStart(2, '0');
+  const dia = String(agora.getDate()).padStart(2, '0');
+  return `${agora.getFullYear()}-${mes}-${dia}`;
+}
+
 export function useAreaColaborador() {
   const { session } = useAuth();
   const [colaboradorId, setColaboradorId] = useState<string | null>(null);
   const [periodo, setPeriodo] = useState<PeriodoOperacao | null>(null);
+  // Fins de semana já confirmados que ainda não passaram — com a escala
+  // gerada por mês, podem ser vários de uma vez.
+  const [periodosPublicados, setPeriodosPublicados] = useState<PeriodoOperacao[]>([]);
   const [carregando, setCarregando] = useState(true);
   const [erro, setErro] = useState<string | null>(null);
 
@@ -31,12 +41,11 @@ export function useAreaColaborador() {
 
       setColaboradorId(colaborador.id);
 
-      const { data: periodoData, error: erroPeriodo } = await supabase
+      const { data: periodosData, error: erroPeriodo } = await supabase
         .from('periodos_operacao')
         .select('id, data_inicio, data_fim, status')
         .order('data_inicio', { ascending: false })
-        .limit(1)
-        .maybeSingle();
+        .limit(12);
 
       if (erroPeriodo) {
         setErro('Não foi possível carregar o período de operação.');
@@ -44,12 +53,21 @@ export function useAreaColaborador() {
         return;
       }
 
-      setPeriodo(periodoData ?? null);
+      const lista = periodosData ?? [];
+      const hoje = hojeIso();
+      setPeriodo(lista[0] ?? null);
+      setPeriodosPublicados(
+        lista
+          .filter(
+            (p) => (p.status === 'confirmado' || p.status === 'encerrado') && p.data_fim >= hoje
+          )
+          .reverse()
+      );
       setCarregando(false);
     }
 
     carregar();
   }, [session]);
 
-  return { colaboradorId, periodo, carregando, erro };
+  return { colaboradorId, periodo, periodosPublicados, carregando, erro };
 }
