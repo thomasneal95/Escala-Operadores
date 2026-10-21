@@ -1,14 +1,8 @@
 import { useCallback, useEffect, useId, useState } from 'react';
 import { supabase } from '../../lib/supabase/client';
 import { useAuth } from '../auth/AuthContext';
+import { blocoDaEscala, type BlocoDeTrabalho, type EscalaDoBloco } from '../../lib/blocosDeTrabalho';
 
-interface EscalaResumo {
-  id: string;
-  data: string;
-  turno_nome_snapshot: string;
-  turno_hora_inicio_snapshot: string;
-  turno_hora_fim_snapshot: string;
-}
 
 interface SolicitacaoTroca {
   id: string;
@@ -23,26 +17,26 @@ interface SolicitacaoTroca {
   criado_em: string;
   souSolicitante: boolean;
   outraPessoaNome: string;
-  minhaEscala: EscalaResumo | null;
-  escalaOutraPessoa: EscalaResumo | null;
+  meuBloco: BlocoDeTrabalho | null;
+  blocoOutraPessoa: BlocoDeTrabalho | null;
 }
 
-function formatarEscala(row: unknown): EscalaResumo | null {
-  const e = row as {
-    id: string;
-    data: string;
-    turno_nome_snapshot: string;
-    turno_hora_inicio_snapshot: string;
-    turno_hora_fim_snapshot: string;
-  } | null;
-  if (!e) return null;
-  return {
-    id: e.id,
-    data: e.data,
-    turno_nome_snapshot: e.turno_nome_snapshot,
-    turno_hora_inicio_snapshot: e.turno_hora_inicio_snapshot,
-    turno_hora_fim_snapshot: e.turno_hora_fim_snapshot,
-  };
+function formatarEscala(row: unknown): EscalaDoBloco | null {
+  return (row as EscalaDoBloco | null) ?? null;
+}
+
+// Busca todas as linhas dos blocos (pessoa + data) das escalas referenciadas.
+async function carregarBlocos(referencias: (EscalaDoBloco | null)[]) {
+  const validas = referencias.filter((e): e is EscalaDoBloco => !!e);
+  if (validas.length === 0) return [];
+  const { data } = await supabase
+    .from('escalas')
+    .select(
+      'id, colaborador_id, data, turno_nome_snapshot, turno_hora_inicio_snapshot, turno_hora_fim_snapshot'
+    )
+    .in('colaborador_id', [...new Set(validas.map((e) => e.colaborador_id as string))])
+    .in('data', [...new Set(validas.map((e) => e.data))]);
+  return data ?? [];
 }
 
 export function useSolicitacoesTroca() {
@@ -82,8 +76,8 @@ export function useSolicitacoesTroca() {
       .from('solicitacoes_troca')
       .select(
         `id, periodo_id, status, criado_em, solicitante_id, colega_id,
-         escala_solicitante:escalas!solicitacoes_troca_escala_solicitante_id_fkey(id, data, turno_nome_snapshot, turno_hora_inicio_snapshot, turno_hora_fim_snapshot),
-         escala_colega:escalas!solicitacoes_troca_escala_colega_id_fkey(id, data, turno_nome_snapshot, turno_hora_inicio_snapshot, turno_hora_fim_snapshot),
+         escala_solicitante:escalas!solicitacoes_troca_escala_solicitante_id_fkey(id, colaborador_id, data, turno_nome_snapshot, turno_hora_inicio_snapshot, turno_hora_fim_snapshot),
+         escala_colega:escalas!solicitacoes_troca_escala_colega_id_fkey(id, colaborador_id, data, turno_nome_snapshot, turno_hora_inicio_snapshot, turno_hora_fim_snapshot),
          solicitante:colaboradores!solicitacoes_troca_solicitante_id_fkey(perfis(nome_completo)),
          colega:colaboradores!solicitacoes_troca_colega_id_fkey(perfis(nome_completo))`
       )
@@ -96,7 +90,13 @@ export function useSolicitacoesTroca() {
       return;
     }
 
+    const blocos = await carregarBlocos(
+      (data ?? []).flatMap((s) => [formatarEscala(s.escala_solicitante), formatarEscala(s.escala_colega)])
+    );
+
     const lista: SolicitacaoTroca[] = (data ?? []).map((s) => {
+      const blocoSolicitante = blocoDaEscala(formatarEscala(s.escala_solicitante), blocos);
+      const blocoColega = blocoDaEscala(formatarEscala(s.escala_colega), blocos);
       const souSolicitante = s.solicitante_id === colaborador.id;
       const solicitantePerfil = (
         s.solicitante as unknown as { perfis: { nome_completo: string } | null }
@@ -113,12 +113,8 @@ export function useSolicitacoesTroca() {
         outraPessoaNome: souSolicitante
           ? colegaPerfil?.nome_completo ?? '(desconhecido)'
           : solicitantePerfil?.nome_completo ?? '(desconhecido)',
-        minhaEscala: souSolicitante
-          ? formatarEscala(s.escala_solicitante)
-          : formatarEscala(s.escala_colega),
-        escalaOutraPessoa: souSolicitante
-          ? formatarEscala(s.escala_colega)
-          : formatarEscala(s.escala_solicitante),
+        meuBloco: souSolicitante ? blocoSolicitante : blocoColega,
+        blocoOutraPessoa: souSolicitante ? blocoColega : blocoSolicitante,
       };
     });
 

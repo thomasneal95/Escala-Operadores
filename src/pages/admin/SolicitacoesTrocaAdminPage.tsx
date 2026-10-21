@@ -1,10 +1,6 @@
 import { useSolicitacoesTrocaAdmin } from '../../features/schedules/useSolicitacoesTrocaAdmin';
-import { useConfirm } from '../../components/FeedbackProvider';
-
-function formatarData(data: string) {
-  const [ano, mes, dia] = data.split('-');
-  return `${dia}/${mes}/${ano}`;
-}
+import { useConfirm, useToast } from '../../components/FeedbackProvider';
+import { rotuloBloco } from '../../lib/blocosDeTrabalho';
 
 const rotuloStatus: Record<string, string> = {
   pendente: 'Aguardando colega',
@@ -28,6 +24,7 @@ export function SolicitacoesTrocaAdminPage() {
   const { solicitacoes, carregando, erro, processando, aprovar, rejeitar } =
     useSolicitacoesTrocaAdmin();
   const confirmar = useConfirm();
+  const toast = useToast();
 
   if (carregando) {
     return <p className="text-sm text-slate-400">Carregando...</p>;
@@ -37,15 +34,16 @@ export function SolicitacoesTrocaAdminPage() {
   const outras = solicitacoes.filter((s) => s.status !== 'aceito_pelo_colega');
 
   async function handleAprovar(s: (typeof solicitacoes)[number]) {
-    if (!s.escalaSolicitante || !s.escalaColega) return;
+    if (!s.blocoSolicitante || !s.blocoColega) return;
 
         const confirmou = await confirmar(
       `Aprovar a troca entre ${s.solicitanteNome} e ${s.colegaNome}? ` +
-        'Os dois turnos vão trocar de dono imediatamente na escala.'
+        'Os dois dias de trabalho vão trocar de dono imediatamente na escala.'
     );
     if (!confirmou) return;
 
-    await aprovar(s.id, s.escalaSolicitante.id, s.escalaColega.id);
+    const resultado = await aprovar(s.id);
+    if (resultado.erro) toast(resultado.erro, 'erro');
   }
 
   async function handleRejeitar(id: string) {
@@ -86,25 +84,16 @@ export function SolicitacoesTrocaAdminPage() {
                     <p className="text-xs font-medium uppercase tracking-wide text-slate-500">
                       {s.solicitanteNome} vai trabalhar
                     </p>
-                    {s.escalaColega && (
-                      <p className="mt-1 text-sm text-tinta">
-                        {formatarData(s.escalaColega.data)} · {s.escalaColega.turno_nome_snapshot}{' '}
-                        ({s.escalaColega.turno_hora_inicio_snapshot.slice(0, 5)}–
-                        {s.escalaColega.turno_hora_fim_snapshot.slice(0, 5)})
-                      </p>
+                    {s.blocoColega && (
+                      <p className="mt-1 text-sm text-tinta">{rotuloBloco(s.blocoColega)}</p>
                     )}
                   </div>
                   <div>
                     <p className="text-xs font-medium uppercase tracking-wide text-slate-500">
                       {s.colegaNome} vai trabalhar
                     </p>
-                    {s.escalaSolicitante && (
-                      <p className="mt-1 text-sm text-tinta">
-                        {formatarData(s.escalaSolicitante.data)} ·{' '}
-                        {s.escalaSolicitante.turno_nome_snapshot} (
-                        {s.escalaSolicitante.turno_hora_inicio_snapshot.slice(0, 5)}–
-                        {s.escalaSolicitante.turno_hora_fim_snapshot.slice(0, 5)})
-                      </p>
+                    {s.blocoSolicitante && (
+                      <p className="mt-1 text-sm text-tinta">{rotuloBloco(s.blocoSolicitante)}</p>
                     )}
                   </div>
                 </div>
@@ -144,9 +133,9 @@ export function SolicitacoesTrocaAdminPage() {
                             <thead className="border-b border-slate-200 bg-slate-50 text-slate-500">
                 <tr>
                   <th className="px-4 py-3 font-medium">Solicitante</th>
-                  <th className="px-4 py-3 font-medium">Turno oferecido</th>
+                  <th className="px-4 py-3 font-medium">Dia oferecido</th>
                   <th className="px-4 py-3 font-medium">Colega</th>
-                  <th className="px-4 py-3 font-medium">Turno oferecido</th>
+                  <th className="px-4 py-3 font-medium">Dia oferecido</th>
                   <th className="px-4 py-3 font-medium">Status</th>
                 </tr>
               </thead>
@@ -155,24 +144,11 @@ export function SolicitacoesTrocaAdminPage() {
                   <tr key={s.id}>
                     <td className="px-4 py-3 text-tinta">{s.solicitanteNome}</td>
                     <td className="px-4 py-3 text-slate-500">
-                      {s.escalaSolicitante ? (
-                        <>
-                          {formatarData(s.escalaSolicitante.data)} ·{' '}
-                          {s.escalaSolicitante.turno_nome_snapshot}
-                        </>
-                      ) : (
-                        '—'
-                      )}
+                      {s.blocoSolicitante ? rotuloBloco(s.blocoSolicitante) : '—'}
                     </td>
                     <td className="px-4 py-3 text-tinta">{s.colegaNome}</td>
                     <td className="px-4 py-3 text-slate-500">
-                      {s.escalaColega ? (
-                        <>
-                          {formatarData(s.escalaColega.data)} · {s.escalaColega.turno_nome_snapshot}
-                        </>
-                      ) : (
-                        '—'
-                      )}
+                      {s.blocoColega ? rotuloBloco(s.blocoColega) : '—'}
                     </td>
                     <td className="px-4 py-3">
                       <span

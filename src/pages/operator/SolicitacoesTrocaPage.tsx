@@ -4,27 +4,7 @@ import { useColegasEquipe } from '../../features/teams/useColegasEquipe';
 import { useAreaColaborador } from '../../features/schedules/useAreaColaborador';
 import { useMinhasEscalasDosPeriodos } from '../../features/schedules/useMinhasEscalasDosPeriodos';
 import { corTurno } from '../../lib/turnoColors';
-
-function formatarData(data: string) {
-  const [ano, mes, dia] = data.split('-');
-  return `${dia}/${mes}/${ano}`;
-}
-
-const diasDaSemana = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
-
-function rotuloTurno(e: {
-  data: string;
-  turno_nome_snapshot: string;
-  turno_hora_inicio_snapshot: string;
-  turno_hora_fim_snapshot: string;
-}) {
-  const [ano, mes, dia] = e.data.split('-').map(Number);
-  const diaDaSemana = diasDaSemana[new Date(ano, mes - 1, dia).getDay()];
-  return (
-    `${diaDaSemana} ${formatarData(e.data)} · ${e.turno_nome_snapshot} ` +
-    `(${e.turno_hora_inicio_snapshot.slice(0, 5)}–${e.turno_hora_fim_snapshot.slice(0, 5)})`
-  );
-}
+import { agruparEmBlocos, rotuloBloco } from '../../lib/blocosDeTrabalho';
 
 const rotuloStatus: Record<string, string> = {
   pendente: 'Aguardando colega',
@@ -62,6 +42,8 @@ export function SolicitacoesTrocaPage() {
   const { escalas: minhasEscalas } = useMinhasEscalasDosPeriodos(
     periodosPublicados.map((p) => p.id)
   );
+  // Troca por bloco de trabalho: todos os turnos do dia juntos.
+  const meusBlocos = agruparEmBlocos(minhasEscalas);
 
   const [minhaEscalaId, setMinhaEscalaId] = useState('');
   const [colegaId, setColegaId] = useState('');
@@ -133,7 +115,7 @@ export function SolicitacoesTrocaPage() {
             Você só pode solicitar troca depois que a escala dos próximos fins de semana
             estiver confirmada.
           </p>
-        ) : minhasEscalas.length === 0 ? (
+        ) : meusBlocos.length === 0 ? (
           <p className="mt-2 text-sm text-slate-500">
             Você não está escalado nos próximos fins de semana confirmados, então não há
             turno para trocar.
@@ -141,16 +123,16 @@ export function SolicitacoesTrocaPage() {
         ) : (
           <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div>
-              <label className="block text-sm font-medium text-slate-700">Seu turno</label>
+              <label className="block text-sm font-medium text-slate-700">Seu dia de trabalho</label>
               <select
                 value={minhaEscalaId}
                 onChange={(e) => setMinhaEscalaId(e.target.value)}
                 className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-tinta focus:border-esmeralda focus:outline-none focus:ring-1 focus:ring-esmeralda"
               >
                 <option value="">Selecione</option>
-                {minhasEscalas.map((e) => (
-                  <option key={e.id} value={e.id}>
-                    {rotuloTurno(e)}
+                {meusBlocos.map((b) => (
+                  <option key={b.id} value={b.id}>
+                    {rotuloBloco(b)}
                   </option>
                 ))}
               </select>
@@ -205,14 +187,14 @@ export function SolicitacoesTrocaPage() {
         ) : (
           <div className="mt-3 space-y-3">
             {recebidas.map((s) => {
-              const cor = s.escalaOutraPessoa ? corTurno(s.escalaOutraPessoa.turno_nome_snapshot) : null;
+              const cor = s.blocoOutraPessoa ? corTurno(s.blocoOutraPessoa.turnos[0]) : null;
 
               return (
                                             <div key={s.id} className="rounded-lg border border-slate-200 bg-white p-4">
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <p className="text-sm text-slate-600">
                       <span className="font-medium text-tinta">{s.outraPessoaNome}</span> quer
-                      trocar um turno com você.
+                      trocar um dia de trabalho com você.
                     </p>
                     <span
                       className={`rounded-full px-2 py-0.5 text-xs font-medium ${corStatus[s.status]}`}
@@ -224,12 +206,11 @@ export function SolicitacoesTrocaPage() {
                   <div className="mt-2 grid grid-cols-1 gap-2 text-xs text-slate-500 sm:grid-cols-2">
                     <div>
                       <p className="font-medium uppercase tracking-wide text-slate-400">
-                        Turno de {s.outraPessoaNome}
+                        Dia de {s.outraPessoaNome}
                       </p>
-                      {s.escalaOutraPessoa ? (
+                      {s.blocoOutraPessoa ? (
                         <p className={`mt-0.5 font-medium ${cor?.text ?? 'text-slate-700'}`}>
-                          {formatarData(s.escalaOutraPessoa.data)} ·{' '}
-                          {s.escalaOutraPessoa.turno_nome_snapshot}
+                          {rotuloBloco(s.blocoOutraPessoa)}
                         </p>
                       ) : (
                         <p className="mt-0.5">—</p>
@@ -237,12 +218,10 @@ export function SolicitacoesTrocaPage() {
                     </div>
                     <div>
                       <p className="font-medium uppercase tracking-wide text-slate-400">
-                        Seu turno (a oferecer)
+                        Seu dia (a oferecer)
                       </p>
-                      {s.minhaEscala ? (
-                        <p className="mt-0.5 text-slate-700">
-                          {formatarData(s.minhaEscala.data)} · {s.minhaEscala.turno_nome_snapshot}
-                        </p>
+                      {s.meuBloco ? (
+                        <p className="mt-0.5 text-slate-700">{rotuloBloco(s.meuBloco)}</p>
                       ) : (
                         <p className="mt-0.5 italic">Você escolhe ao aceitar</p>
                       )}
@@ -258,10 +237,10 @@ export function SolicitacoesTrocaPage() {
                             onChange={(e) => setEscalaParaOferecer(e.target.value)}
                             className="rounded-md border border-slate-300 px-2 py-1.5 text-sm"
                           >
-                            <option value="">Qual turno seu você oferece?</option>
-                            {minhasEscalas.map((e) => (
-                              <option key={e.id} value={e.id}>
-                                {rotuloTurno(e)}
+                            <option value="">Qual dia seu você oferece?</option>
+                            {meusBlocos.map((b) => (
+                              <option key={b.id} value={b.id}>
+                                {rotuloBloco(b)}
                               </option>
                             ))}
                           </select>
@@ -330,25 +309,20 @@ export function SolicitacoesTrocaPage() {
                 <div className="mt-2 grid grid-cols-1 gap-2 text-xs text-slate-500 sm:grid-cols-2">
                   <div>
                     <p className="font-medium uppercase tracking-wide text-slate-400">
-                      Seu turno oferecido
+                      Seu dia oferecido
                     </p>
-                    {s.minhaEscala ? (
-                      <p className="mt-0.5 text-slate-700">
-                        {formatarData(s.minhaEscala.data)} · {s.minhaEscala.turno_nome_snapshot}
-                      </p>
+                    {s.meuBloco ? (
+                      <p className="mt-0.5 text-slate-700">{rotuloBloco(s.meuBloco)}</p>
                     ) : (
                       <p className="mt-0.5">—</p>
                     )}
                   </div>
                   <div>
                     <p className="font-medium uppercase tracking-wide text-slate-400">
-                      Turno de {s.outraPessoaNome}
+                      Dia de {s.outraPessoaNome}
                     </p>
-                    {s.escalaOutraPessoa ? (
-                      <p className="mt-0.5 text-slate-700">
-                        {formatarData(s.escalaOutraPessoa.data)} ·{' '}
-                        {s.escalaOutraPessoa.turno_nome_snapshot}
-                      </p>
+                    {s.blocoOutraPessoa ? (
+                      <p className="mt-0.5 text-slate-700">{rotuloBloco(s.blocoOutraPessoa)}</p>
                     ) : (
                       <p className="mt-0.5 italic">Ainda não escolhido</p>
                     )}
