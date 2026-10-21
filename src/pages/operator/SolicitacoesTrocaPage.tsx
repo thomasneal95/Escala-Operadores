@@ -2,12 +2,28 @@ import { useState } from 'react';
 import { useSolicitacoesTroca } from '../../features/schedules/useSolicitacoesTroca';
 import { useColegasEquipe } from '../../features/teams/useColegasEquipe';
 import { useAreaColaborador } from '../../features/schedules/useAreaColaborador';
-import { useMinhaEscalaDoPeriodo } from '../../features/schedules/useMinhaEscalaDoPeriodo';
+import { useMinhasEscalasDosPeriodos } from '../../features/schedules/useMinhasEscalasDosPeriodos';
 import { corTurno } from '../../lib/turnoColors';
 
 function formatarData(data: string) {
   const [ano, mes, dia] = data.split('-');
   return `${dia}/${mes}/${ano}`;
+}
+
+const diasDaSemana = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
+
+function rotuloTurno(e: {
+  data: string;
+  turno_nome_snapshot: string;
+  turno_hora_inicio_snapshot: string;
+  turno_hora_fim_snapshot: string;
+}) {
+  const [ano, mes, dia] = e.data.split('-').map(Number);
+  const diaDaSemana = diasDaSemana[new Date(ano, mes - 1, dia).getDay()];
+  return (
+    `${diaDaSemana} ${formatarData(e.data)} · ${e.turno_nome_snapshot} ` +
+    `(${e.turno_hora_inicio_snapshot.slice(0, 5)}–${e.turno_hora_fim_snapshot.slice(0, 5)})`
+  );
 }
 
 const rotuloStatus: Record<string, string> = {
@@ -29,7 +45,9 @@ const corStatus: Record<string, string> = {
 };
 
 export function SolicitacoesTrocaPage() {
-  const { periodo } = useAreaColaborador();
+  // Todos os fins de semana confirmados que ainda não passaram — com a
+  // escala gerada por mês, a pessoa pode ter turnos em vários.
+  const { periodosPublicados } = useAreaColaborador();
   const {
     solicitacoes,
     carregando,
@@ -41,7 +59,9 @@ export function SolicitacoesTrocaPage() {
     cancelarSolicitacao,
   } = useSolicitacoesTroca();
   const { colegas } = useColegasEquipe();
-  const { escalas: minhasEscalas } = useMinhaEscalaDoPeriodo(periodo?.id ?? null);
+  const { escalas: minhasEscalas } = useMinhasEscalasDosPeriodos(
+    periodosPublicados.map((p) => p.id)
+  );
 
   const [minhaEscalaId, setMinhaEscalaId] = useState('');
   const [colegaId, setColegaId] = useState('');
@@ -51,8 +71,7 @@ export function SolicitacoesTrocaPage() {
   const [aceitandoId, setAceitandoId] = useState<string | null>(null);
   const [escalaParaOferecer, setEscalaParaOferecer] = useState('');
 
-  const podeSolicitar =
-    periodo && (periodo.status === 'confirmado' || periodo.status === 'encerrado');
+  const podeSolicitar = periodosPublicados.length > 0;
 
   const colegasParaSolicitar = colegas.filter((c) => !c.souEu);
 
@@ -60,12 +79,13 @@ export function SolicitacoesTrocaPage() {
     setErroForm(null);
     setSucesso(null);
 
-    if (!periodo || !minhaEscalaId || !colegaId) {
+    const escala = minhasEscalas.find((e) => e.id === minhaEscalaId);
+    if (!escala || !colegaId) {
       setErroForm('Selecione o seu turno e o colega para solicitar a troca.');
       return;
     }
 
-    const resultado = await criarSolicitacao(periodo.id, minhaEscalaId, colegaId);
+    const resultado = await criarSolicitacao(escala.periodo_id, escala.id, colegaId);
     if (resultado.erro) {
       setErroForm(resultado.erro);
       return;
@@ -110,12 +130,13 @@ export function SolicitacoesTrocaPage() {
 
         {!podeSolicitar ? (
           <p className="mt-2 text-sm text-slate-500">
-            Você só pode solicitar troca depois que a escala do fim de semana atual estiver
-            confirmada.
+            Você só pode solicitar troca depois que a escala dos próximos fins de semana
+            estiver confirmada.
           </p>
         ) : minhasEscalas.length === 0 ? (
           <p className="mt-2 text-sm text-slate-500">
-            Você não está escalado neste período, então não há turno para trocar.
+            Você não está escalado nos próximos fins de semana confirmados, então não há
+            turno para trocar.
           </p>
         ) : (
           <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -129,9 +150,7 @@ export function SolicitacoesTrocaPage() {
                 <option value="">Selecione</option>
                 {minhasEscalas.map((e) => (
                   <option key={e.id} value={e.id}>
-                    {formatarData(e.data)} · {e.turno_nome_snapshot} (
-                    {e.turno_hora_inicio_snapshot.slice(0, 5)}–
-                    {e.turno_hora_fim_snapshot.slice(0, 5)})
+                    {rotuloTurno(e)}
                   </option>
                 ))}
               </select>
@@ -242,7 +261,7 @@ export function SolicitacoesTrocaPage() {
                             <option value="">Qual turno seu você oferece?</option>
                             {minhasEscalas.map((e) => (
                               <option key={e.id} value={e.id}>
-                                {formatarData(e.data)} · {e.turno_nome_snapshot}
+                                {rotuloTurno(e)}
                               </option>
                             ))}
                           </select>
