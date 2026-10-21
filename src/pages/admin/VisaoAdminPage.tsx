@@ -9,6 +9,7 @@ import { useVagasEquipe } from '../../features/teams/useVagasEquipe';
 import { SeletorColaborador } from '../../features/schedules/SeletorColaborador';
 import { GerarEscalaMesForm } from '../../features/schedules/GerarEscalaMesForm';
 import { useGerarEscalaMensal } from '../../features/schedules/useGerarEscalaMensal';
+import { lacunasDeCobertura } from '../../features/schedules/coberturaEquipes';
 import { corTurno } from '../../lib/turnoColors';
 import { useToast } from '../../components/FeedbackProvider';
 import { useConfirm } from '../../components/FeedbackProvider';
@@ -242,7 +243,8 @@ export function VisaoAdminPage() {
       'Ao confirmar a escala, os colaboradores poderão visualizar suas respectivas escalas. Deseja continuar?'
     );
     if (confirmou) {
-      await confirmarEscala();
+      const resultado = await confirmarEscala();
+      if (resultado.erro) toast(resultado.erro, 'erro');
     }
   }
 
@@ -424,6 +426,25 @@ export function VisaoAdminPage() {
     );
   }
 
+  // Turnos em que alguma equipe ficou sem ninguém neste fim de semana.
+  const lacunas =
+    periodo && !carregandoEscala
+      ? lacunasDeCobertura(
+          periodo,
+          turnos,
+          colaboradores,
+          [periodo.data_inicio, periodo.data_fim].flatMap((data) =>
+            turnos.flatMap((t) =>
+              escaladosEm(data, t.id).map((e) => ({
+                colaborador_id: e.colaborador_id,
+                data,
+                turno_id: t.id,
+              }))
+            )
+          )
+        )
+      : [];
+
   const escalaEstaTrancada =
     periodo != null &&
     (periodo.status === 'confirmado' || periodo.status === 'encerrado') &&
@@ -508,7 +529,8 @@ export function VisaoAdminPage() {
             {periodo.status === 'em_organizacao' && (
               <button
                 onClick={handleConfirmarEscala}
-                disabled={atualizandoStatus}
+                disabled={atualizandoStatus || lacunas.length > 0}
+                title={lacunas.length > 0 ? 'Há turnos sem ninguém de alguma equipe' : undefined}
                 className="w-full rounded-md bg-esmeralda px-4 py-2.5 text-sm font-medium text-white hover:bg-esmeralda-dark disabled:opacity-60 sm:w-auto"
               >
                 {atualizandoStatus ? 'Confirmando...' : 'Confirmar escala'}
@@ -666,6 +688,26 @@ export function VisaoAdminPage() {
               )}
             </div>
           </div>
+
+          {lacunas.length > 0 &&
+            (periodo.status === 'em_organizacao' || edicaoHabilitada) && (
+            <div className="mt-3 rounded-md bg-amber-50 px-4 py-3 text-sm text-amber-800">
+              <p className="font-medium">
+                Toda equipe precisa ter alguém em todos os turnos. Faltam {lacunas.length}:
+              </p>
+              <ul className="mt-1 list-disc pl-5">
+                {lacunas.map((l) => (
+                  <li key={`${l.data}-${l.equipe}-${l.turno}`}>
+                    {nomeDoDia(l.data, periodo.data_inicio)} ({formatarData(l.data)}) — {l.equipe},{' '}
+                    {l.turno}
+                  </li>
+                ))}
+              </ul>
+              {periodo.status === 'em_organizacao' && (
+                <p className="mt-1">A escala só pode ser confirmada depois que todos forem cobertos.</p>
+              )}
+            </div>
+          )}
 
           {mensagemGeracao && (
             <p className="mt-2 text-sm text-slate-600">{mensagemGeracao}</p>

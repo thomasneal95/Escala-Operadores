@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { supabase } from '../../lib/supabase/client';
 import { useAuth } from '../auth/AuthContext';
 import type { PeriodoOperacao, Turno } from '../../types/database';
+import { lacunasDeCobertura } from './coberturaEquipes';
 
 interface ColaboradorComPerfil {
   id: string;
@@ -234,10 +235,51 @@ export function useVisaoAdmin() {
     return { erro: null };
   }
 
+  function formatarData(data: string) {
+    const [, mes, dia] = data.split('-');
+    return `${dia}/${mes}`;
+  }
+
+  // Confere no banco se toda equipe tem alguém em todos os turnos dos fins
+  // de semana informados. Devolve a mensagem de erro, ou null se estiver ok.
+  async function verificarCobertura(lista: PeriodoOperacao[]) {
+    const { data: escalas, error } = await supabase
+      .from('escalas')
+      .select('colaborador_id, data, turno_id, periodo_id')
+      .in('periodo_id', lista.map((p) => p.id));
+
+    if (error) return 'Não foi possível verificar a cobertura das equipes.';
+
+    const lacunas = lista.flatMap((p) =>
+      lacunasDeCobertura(
+        p,
+        turnos,
+        colaboradores,
+        (escalas ?? []).filter((e) => e.periodo_id === p.id)
+      )
+    );
+    if (lacunas.length === 0) return null;
+
+    const exemplos = lacunas
+      .slice(0, 5)
+      .map((l) => `${formatarData(l.data)} ${l.equipe} – ${l.turno}`)
+      .join('; ');
+    return (
+      `Não é possível confirmar: ${lacunas.length} turno(s) sem ninguém da equipe ` +
+      `(${exemplos}${lacunas.length > 5 ? '…' : ''}).`
+    );
+  }
+
   async function confirmarEscala() {
     if (!periodo || !session?.user) return { erro: 'Nenhum período carregado.' };
 
     setAtualizandoStatus(true);
+    const erroCobertura = await verificarCobertura([periodo]);
+    if (erroCobertura) {
+      setAtualizandoStatus(false);
+      return { erro: erroCobertura };
+    }
+
     const { error } = await supabase
       .from('periodos_operacao')
       .update({
@@ -263,6 +305,12 @@ export function useVisaoAdmin() {
     if (ids.length === 0) return { erro: null };
 
     setAtualizandoStatus(true);
+    const erroCobertura = await verificarCobertura(periodos.filter((p) => ids.includes(p.id)));
+    if (erroCobertura) {
+      setAtualizandoStatus(false);
+      return { erro: erroCobertura };
+    }
+
     const { error } = await supabase
       .from('periodos_operacao')
       .update({
