@@ -6,7 +6,6 @@ import { ResumoOperador } from '../../components/ResumoOperador';
 import { ErrorBoundary } from '../../components/ErrorBoundary';
 import { FallbackErroTela } from '../../components/FallbackErroTela';
 import { useToast } from '../../components/FeedbackProvider';
-import { DisponibilidadePage } from './DisponibilidadePage';
 import { MinhaEscalaPage } from './MinhaEscalaPage';
 
 function SecaoCalendario() {
@@ -83,17 +82,15 @@ export function AreaColaboradorPage() {
         <MinhaEscalaPage colaboradorId={colaboradorId} periodo={periodo} />
       </>
     );
-  } else if (periodo && periodo.status === 'em_organizacao') {
+  } else {
     conteudo = (
       <div className="rounded-lg border border-slate-200 bg-white p-8 text-center">
-        <p className="text-slate-600">O recebimento de disponibilidade foi encerrado.</p>
+        <p className="text-slate-600">Ainda não há escala publicada para os próximos fins de semana.</p>
         <p className="mt-1 text-sm text-slate-400">
-          A escala esta sendo organizada. Volte em breve para consultar seus turnos.
+          A escala está sendo organizada. Volte em breve para consultar seus turnos.
         </p>
       </div>
     );
-  } else {
-    conteudo = <DisponibilidadePage />;
   }
 
   return (

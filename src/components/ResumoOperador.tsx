@@ -1,6 +1,5 @@
 import { useMinhaEscala } from '../features/schedules/useMinhaEscala';
 import { useSolicitacoesTroca } from '../features/schedules/useSolicitacoesTroca';
-import { useDisponibilidadeRespondida } from '../features/availability/useDisponibilidadeRespondida';
 import type { PeriodoOperacao } from '../types/database';
 
 interface ResumoOperadorProps {
@@ -13,23 +12,13 @@ interface ItemResumo {
   tom: 'ok' | 'alerta' | 'neutro';
 }
 
-function formatarData(data: string) {
-  const [, mes, dia] = data.split('-');
-  return `${dia}/${mes}`;
-}
-
 function nomeDoDia(data: string, dataInicio: string) {
   return data === dataInicio ? 'Sábado' : 'Domingo';
 }
 
 export function ResumoOperador({ colaboradorId, periodo }: ResumoOperadorProps) {
-  const periodoAberto = periodo.status === 'aberto';
   const escalaAtiva = periodo.status === 'confirmado' || periodo.status === 'encerrado';
 
-  const { respondida } = useDisponibilidadeRespondida(
-    periodoAberto ? colaboradorId : null,
-    periodoAberto ? periodo.id : null
-  );
   const { escalas } = useMinhaEscala(
     escalaAtiva ? colaboradorId : null,
     escalaAtiva ? periodo.id : null
@@ -42,20 +31,6 @@ export function ResumoOperador({ colaboradorId, periodo }: ResumoOperadorProps) 
   ).length;
 
   const itens: ItemResumo[] = [];
-
-  if (periodoAberto) {
-    const janela = `${formatarData(periodo.data_inicio)}–${formatarData(periodo.data_fim)}`;
-    if (respondida === null) {
-      itens.push({ texto: 'Verificando sua disponibilidade...', tom: 'neutro' });
-    } else if (respondida) {
-      itens.push({ texto: `Disponibilidade de ${janela} enviada ✓`, tom: 'ok' });
-    } else {
-      itens.push({
-        texto: `Você ainda não enviou sua disponibilidade para ${janela}`,
-        tom: 'alerta',
-      });
-    }
-  }
 
   if (escalaAtiva) {
     if (proximoTurno) {

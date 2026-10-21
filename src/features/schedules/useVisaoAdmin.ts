@@ -12,13 +12,6 @@ interface ColaboradorComPerfil {
   turno_semana_id: string | null;
 }
 
-interface DisponibilidadeResposta {
-  colaborador_id: string;
-  data: string;
-  turno_id: string;
-  disponivel: boolean;
-}
-
 function hojeIso() {
   const agora = new Date();
   const mes = String(agora.getMonth() + 1).padStart(2, '0');
@@ -32,11 +25,9 @@ export function useVisaoAdmin() {
   const [periodoId, setPeriodoId] = useState<string | null>(null);
   const [turnos, setTurnos] = useState<Turno[]>([]);
   const [colaboradores, setColaboradores] = useState<ColaboradorComPerfil[]>([]);
-  const [respostas, setRespostas] = useState<DisponibilidadeResposta[]>([]);
   const [carregando, setCarregando] = useState(true);
   const [erro, setErro] = useState<string | null>(null);
   const [atualizandoStatus, setAtualizandoStatus] = useState(false);
-  const [excluindoDisponibilidade, setExcluindoDisponibilidade] = useState<string | null>(null);
 
   const carregar = useCallback(async () => {
     setCarregando(true);
@@ -128,113 +119,6 @@ export function useVisaoAdmin() {
     setPeriodos((atual) => atual.map((p) => (ids.includes(p.id) ? { ...p, status } : p)));
   }
 
-  useEffect(() => {
-    if (!periodoId) {
-      setRespostas([]);
-      return;
-    }
-
-    let cancelado = false;
-    setRespostas([]);
-    supabase
-      .from('disponibilidades')
-      .select('colaborador_id, data, turno_id, disponivel')
-      .eq('periodo_id', periodoId)
-      .then(({ data, error }) => {
-        if (cancelado) return;
-        if (error) {
-          setErro('Não foi possível carregar as disponibilidades.');
-          return;
-        }
-        setRespostas(data ?? []);
-      });
-
-    return () => {
-      cancelado = true;
-    };
-  }, [periodoId]);
-
-  // Escuta mudanças em tempo real na tabela de disponibilidades deste
-  // período, para que o admin veja quem enviou sem precisar recarregar.
-  useEffect(() => {
-    if (!periodo) return;
-
-    const canal = supabase
-      .channel(`disponibilidades-periodo-${periodo.id}`)
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'disponibilidades',
-          filter: `periodo_id=eq.${periodo.id}`,
-        },
-        (payload) => {
-          setRespostas((atual) => {
-            if (payload.eventType === 'DELETE') {
-              const antiga = payload.old as {
-                colaborador_id: string;
-                data: string;
-                turno_id: string;
-              };
-              return atual.filter(
-                (r) =>
-                  !(
-                    r.colaborador_id === antiga.colaborador_id &&
-                    r.data === antiga.data &&
-                    r.turno_id === antiga.turno_id
-                  )
-              );
-            }
-
-            const nova = payload.new as DisponibilidadeResposta;
-            const semAAntiga = atual.filter(
-              (r) =>
-                !(
-                  r.colaborador_id === nova.colaborador_id &&
-                  r.data === nova.data &&
-                  r.turno_id === nova.turno_id
-                )
-            );
-            return [...semAAntiga, nova];
-          });
-        }
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(canal);
-    };
-  }, [periodo?.id]);
-
-  function respostaDe(colaboradorId: string, data: string, turnoId: string) {
-    return respostas.find(
-      (r) => r.colaborador_id === colaboradorId && r.data === data && r.turno_id === turnoId
-    );
-  }
-
-  function temAlgumaResposta(colaboradorId: string) {
-    return respostas.some((r) => r.colaborador_id === colaboradorId);
-  }
-
-  async function encerrarRecebimento() {
-    if (!periodo) return { erro: 'Nenhum período carregado.' };
-
-    setAtualizandoStatus(true);
-    const { error } = await supabase
-      .from('periodos_operacao')
-      .update({ status: 'em_organizacao' })
-      .eq('id', periodo.id);
-    setAtualizandoStatus(false);
-
-    if (error) {
-      return { erro: 'Não foi possível encerrar o recebimento de disponibilidade.' };
-    }
-
-    atualizarStatusLocal([periodo.id], 'em_organizacao');
-    return { erro: null };
-  }
-
   function formatarData(data: string) {
     const [, mes, dia] = data.split('-');
     return `${dia}/${mes}`;
@@ -319,7 +203,7 @@ export function useVisaoAdmin() {
         confirmed_by: session.user.id,
       })
       .in('id', ids)
-      .eq('status', 'em_organizacao');
+      .in('status', ['aberto', 'em_organizacao']);
     setAtualizandoStatus(false);
 
     if (error) {
@@ -330,9 +214,9 @@ export function useVisaoAdmin() {
     return { erro: null };
   }
 
-  // Reseta o período para um estado anterior: apaga a escala (e, opcionalmente,
-  // as disponibilidades) e volta o status para 'em_organizacao' ou 'aberto'.
-  async function resetarPeriodo(apagarDisponibilidades: boolean) {
+  // Apaga a escala montada do fim de semana e volta o status para
+  // 'em_organizacao', para remontar.
+  async function resetarEscala() {
     if (!periodo) return { erro: 'Nenhum período carregado.' };
 
     setAtualizandoStatus(true);
@@ -347,23 +231,9 @@ export function useVisaoAdmin() {
       return { erro: 'Não foi possível excluir a escala.' };
     }
 
-    if (apagarDisponibilidades) {
-      const { error: erroDisponibilidades } = await supabase
-        .from('disponibilidades')
-        .delete()
-        .eq('periodo_id', periodo.id);
-
-      if (erroDisponibilidades) {
-        setAtualizandoStatus(false);
-        return { erro: 'Não foi possível excluir as disponibilidades.' };
-      }
-    }
-
-    const novoStatus = apagarDisponibilidades ? 'aberto' : 'em_organizacao';
-
     const { error: erroStatus } = await supabase
       .from('periodos_operacao')
-      .update({ status: novoStatus, confirmed_at: null, confirmed_by: null })
+      .update({ status: 'em_organizacao', confirmed_at: null, confirmed_by: null })
       .eq('id', periodo.id);
 
     setAtualizandoStatus(false);
@@ -372,54 +242,7 @@ export function useVisaoAdmin() {
       return { erro: 'Não foi possível atualizar o status do período.' };
     }
 
-    atualizarStatusLocal([periodo.id], novoStatus);
-    if (apagarDisponibilidades) {
-      setRespostas([]);
-    }
-
-    return { erro: null };
-  }
-
-  // Exclui a disponibilidade de UM único colaborador neste período, sem
-  // afetar as respostas de ninguém mais. Não altera o status do período.
-  async function excluirDisponibilidadeDoColaborador(colaboradorId: string) {
-    if (!periodo) return { erro: 'Nenhum período carregado.' };
-
-    setExcluindoDisponibilidade(colaboradorId);
-
-    const { error } = await supabase
-      .from('disponibilidades')
-      .delete()
-      .eq('periodo_id', periodo.id)
-      .eq('colaborador_id', colaboradorId);
-
-    setExcluindoDisponibilidade(null);
-
-    if (error) {
-      return { erro: 'Não foi possível excluir a disponibilidade deste colaborador.' };
-    }
-
-    setRespostas((atual) => atual.filter((r) => r.colaborador_id !== colaboradorId));
-    return { erro: null };
-  }
-
-  // Reabre o recebimento de disponibilidade sem apagar nada — nem
-  // disponibilidades já enviadas, nem escalas já montadas.
-  async function reabrirRecebimento() {
-    if (!periodo) return { erro: 'Nenhum período carregado.' };
-
-    setAtualizandoStatus(true);
-    const { error } = await supabase
-      .from('periodos_operacao')
-      .update({ status: 'aberto', confirmed_at: null, confirmed_by: null })
-      .eq('id', periodo.id);
-    setAtualizandoStatus(false);
-
-    if (error) {
-      return { erro: 'Não foi possível reabrir o recebimento.' };
-    }
-
-    atualizarStatusLocal([periodo.id], 'aberto');
+    atualizarStatusLocal([periodo.id], 'em_organizacao');
     return { erro: null };
   }
 
@@ -427,21 +250,14 @@ export function useVisaoAdmin() {
     periodo,
     periodos,
     selecionarPeriodo: setPeriodoId,
-    temDisponibilidades: respostas.length > 0,
     confirmarVarios,
     turnos,
     colaboradores,
     carregando,
     erro,
-    respostaDe,
-    temAlgumaResposta,
     recarregar: carregar,
-    encerrarRecebimento,
     confirmarEscala,
-    resetarPeriodo,
-    excluirDisponibilidadeDoColaborador,
-    excluindoDisponibilidade,
-    reabrirRecebimento,
+    resetarEscala,
     atualizandoStatus,
   };
 }
