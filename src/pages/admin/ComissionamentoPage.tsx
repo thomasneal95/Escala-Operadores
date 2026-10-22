@@ -13,6 +13,7 @@ import { HistoricoComissoes } from './HistoricoComissoes';
 import { PaineisComissao } from './PaineisComissao';
 import { InfoprodutosComissao } from './InfoprodutosComissao';
 import { ResumoJoao } from './ResumoJoao';
+import { DesligamentosComissao } from './DesligamentosComissao';
 
 function mesAtualFormatoInput() {
   const hoje = new Date();
@@ -68,7 +69,9 @@ export function ComissionamentoPage() {
   const { session } = useAuth();
   const toast = useToast();
   const confirmar = useConfirm();
-  const [aba, setAba] = useState<'fechamento' | 'painel' | 'infoprodutos' | 'resumo-joao' | 'historico'>(
+  const [aba, setAba] = useState<
+    'fechamento' | 'painel' | 'infoprodutos' | 'resumo-joao' | 'desligamentos' | 'historico'
+  >(
     'fechamento'
   );
   const historico = useHistoricoComissoes();
@@ -148,6 +151,7 @@ export function ComissionamentoPage() {
   const total = (campo: keyof LinhaFechamento) =>
     linhas.reduce((soma, l) => soma + (typeof l[campo] === 'number' ? (l[campo] as number) : 0), 0);
   const colaboradoresSemNome = cadastros.colaboradores.filter((c) => !c.nome_base);
+  const temJaPago = linhas.some((l) => l.ja_pago > 0);
 
   return (
     <div>
@@ -168,6 +172,7 @@ export function ComissionamentoPage() {
             ['painel', 'Painel'],
             ['infoprodutos', 'Infoprodutos'],
             ['resumo-joao', 'Resumo João'],
+            ['desligamentos', 'Desligamentos'],
             ['historico', 'Histórico'],
           ] as const
         ).map(([id, rotulo]) => (
@@ -272,6 +277,16 @@ export function ComissionamentoPage() {
             onAlterou={recalcular}
           />
         </div>
+      ) : aba === 'desligamentos' ? (
+        dados && (
+          <div className="mt-6">
+            <DesligamentosComissao
+              dados={dados}
+              taxa={cadastros.config?.taxa_total_a_pagar ?? 0.02}
+              onAlterou={recalcular}
+            />
+          </div>
+        )
       ) : aba === 'resumo-joao' ? (
         dados && (
           <div className="mt-6">
@@ -371,6 +386,7 @@ export function ComissionamentoPage() {
                     'Com. FDS',
                     'Com. infoprodutos',
                     'Adiantamento',
+                    ...(temJaPago ? ['Já pago (acerto)'] : []),
                     'Salário',
                     'FTDs',
                     'Total a pagar',
@@ -384,7 +400,7 @@ export function ComissionamentoPage() {
               <tbody className="divide-y divide-slate-100">
                 {linhas.length === 0 ? (
                   <tr>
-                    <td colSpan={12} className="px-4 py-6 text-center text-slate-400">
+                    <td colSpan={13} className="px-4 py-6 text-center text-slate-400">
                       Nenhum valor calculado para este mês.
                     </td>
                   </tr>
@@ -393,6 +409,11 @@ export function ComissionamentoPage() {
                     <tr key={l.chave}>
                       <td className="whitespace-nowrap px-3 py-2 font-medium text-tinta">
                         {l.nome}
+                        {l.desligado_em && l.desligado_em.slice(0, 7) === mesInput && (
+                          <span className="ml-2 rounded-full bg-red-50 px-2 py-0.5 text-[11px] font-medium text-red-700">
+                            Saiu em {formatarData(l.desligado_em)}
+                          </span>
+                        )}
                         {rotuloTipo[l.tipo] && (
                           <span className="ml-2 rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-500">
                             {rotuloTipo[l.tipo]}
@@ -425,6 +446,11 @@ export function ComissionamentoPage() {
                           formatarMoeda(l.adiantamento)
                         )}
                       </td>
+                      {temJaPago && (
+                        <td className="whitespace-nowrap px-3 py-2 text-slate-500">
+                          {l.ja_pago ? formatarMoeda(l.ja_pago) : '—'}
+                        </td>
+                      )}
                       <td className="whitespace-nowrap px-3 py-2 font-semibold text-tinta">
                         {formatarMoeda(l.salario_total)}
                       </td>
@@ -448,6 +474,9 @@ export function ComissionamentoPage() {
                     <td className="whitespace-nowrap px-3 py-2">{formatarMoeda(total('comissao_fds'))}</td>
                     <td className="whitespace-nowrap px-3 py-2">{formatarMoeda(total('comissao_infoprodutos'))}</td>
                     <td className="whitespace-nowrap px-3 py-2">{formatarMoeda(total('adiantamento'))}</td>
+                    {temJaPago && (
+                      <td className="whitespace-nowrap px-3 py-2">{formatarMoeda(total('ja_pago'))}</td>
+                    )}
                     <td className="whitespace-nowrap px-3 py-2">{formatarMoeda(total('salario_total'))}</td>
                     <td className="px-3 py-2">{total('ftds')}</td>
                     <td className="whitespace-nowrap px-3 py-2 text-esmeralda-dark">{formatarMoeda(total('total_a_pagar'))}</td>

@@ -4,6 +4,8 @@ import { withSupabase } from "@supabase/server";
 interface Body {
   colaborador_id: string;
   acao: "desativar" | "reativar";
+  // Último dia ativo (YYYY-MM-DD). Sem ele, a data é hoje.
+  data_desligamento?: string;
 }
 
 // Desativa ou reativa um colaborador. A parte de banco (remover escalas e
@@ -42,6 +44,7 @@ export default {
     if (body.acao === "desativar") {
       const { data, error } = await ctx.supabase.rpc("desativar_colaborador", {
         p_colaborador_id: body.colaborador_id,
+        p_data_desligamento: body.data_desligamento || null,
       });
 
       if (error) {

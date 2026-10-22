@@ -143,10 +143,11 @@ export function useColaboradores() {
 
   // Desativa (tira de tudo que é atual/futuro, bloqueia o login, preserva o
   // histórico) ou reativa — ver edge function desativar-colaborador.
-  async function alterarAtivo(id: string, acao: 'desativar' | 'reativar') {
+  // dataDesligamento: último dia ativo (só ao desativar; sem ela, hoje).
+  async function alterarAtivo(id: string, acao: 'desativar' | 'reativar', dataDesligamento?: string) {
     setProcessando(true);
     const { error } = await supabase.functions.invoke('desativar-colaborador', {
-      body: { colaborador_id: id, acao },
+      body: { colaborador_id: id, acao, data_desligamento: dataDesligamento },
     });
     setProcessando(false);
 
@@ -158,6 +159,19 @@ export function useColaboradores() {
       return { erro: await mensagemDeErroDaFuncao(error, padrao) };
     }
 
+    await carregar();
+    return { erro: null };
+  }
+
+  // Corrige a data de desligamento de quem já foi desativado.
+  async function ajustarDesligamento(id: string, dataDesligamento: string) {
+    setProcessando(true);
+    const { error } = await supabase.rpc('ajustar_desligamento', {
+      p_colaborador_id: id,
+      p_data_desligamento: dataDesligamento,
+    });
+    setProcessando(false);
+    if (error) return { erro: error.message || 'Não foi possível alterar a data de desligamento.' };
     await carregar();
     return { erro: null };
   }
@@ -214,6 +228,7 @@ export function useColaboradores() {
     atualizarEquipe,
     previaDesativacao,
     alterarAtivo,
+    ajustarDesligamento,
     atualizarCadastro,
   };
 }

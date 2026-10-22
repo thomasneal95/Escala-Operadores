@@ -14,7 +14,10 @@
 //     entre quem da equipe teve pelo menos 1 FTD naquele dia.
 //   - Auxílio: cheio para quem foi admitido até o 1º dia útil do mês; senão
 //     proporcional (dias desde a admissão ÷ dias desde o 1º dia útil).
-//   - Salário = Auxílio + Com. Equipe + Com. FDS − Adiantamento.
+//   - Desligado no mês: auxílio proporcional até o último dia e sai da
+//     divisão da equipe a partir do dia seguinte. O acerto já pago a ele é
+//     descontado no fechamento ("já pago").
+//   - Salário = Auxílio + Com. Equipe + Com. FDS − Adiantamento − Já pago.
 //   - Total a pagar = Salário × (1 + taxa).
 //   - "Comissão própria" (FTDs da pessoa em dias úteis × valor) é só
 //     informativa — não entra no salário.
@@ -99,6 +102,9 @@ export interface LinhaFechamento {
   comissao_fds: number;
   comissao_infoprodutos: number;
   adiantamento: number;
+  // Acerto de desligamento já pago neste mês (descontado do salário).
+  ja_pago: number;
+  desligado_em: string | null;
   salario_total: number;
   ftds: number;
   total_a_pagar: number;
@@ -122,6 +128,11 @@ export interface PaineisFechamento {
   rejeitadosPorOperador: { operador: string; equipe: string | null; qtd: number }[];
   rejeitadosNoMes: number;
   ativos: number;
+  // Detalhe dia a dia de quem foi desligado no mês (demonstrativo do acerto).
+  detalheDesligados: {
+    colaborador_id: string;
+    dias: { dia: string; ftds: number; comissao_equipe: number; comissao_fds: number; comissao_infoprodutos: number }[];
+  }[];
   // Resumo dos operadores externos pagos por FTD (aba "Resumo João"):
   // registros por dia e etapa (sem os rejeitados).
   resumoExternos: {
@@ -201,7 +212,7 @@ function proporcional(valor: number, admissao: string | null, desativacao: strin
   return (valor * (diferencaDias(inicioAtivo, fimAtivo) + 1)) / dias;
 }
 
-const arredondar = (v: number) => Math.round(v * 100) / 100;
+const arredondar = (v: number) => Math.round(v * 100) / 100 || 0;
 
 export function calcularFechamento(entrada: {
   mes: string; // YYYY-MM-01
@@ -213,6 +224,8 @@ export function calcularFechamento(entrada: {
   externos: OperadorExterno[];
   fixos: PagamentoFixo[];
   infoprodutos?: VendaInfoproduto[];
+  // Acertos de desligamento já pagos no mês: colaborador_id -> valor pago.
+  acertosPagos?: Map<string, number>;
   config: ConfiguracaoComissao;
 }): ResultadoFechamento {
   const { mes, colaboradores, vigencias, equipes, adiantamentos, externos, fixos, config } = entrada;
@@ -311,21 +324,32 @@ export function calcularFechamento(entrada: {
 
   const comissaoEquipe = new Map<string, number>();
   const comissaoFds = new Map<string, number>();
-  const somar = (mapa: Map<string, number>, id: string, valor: number) =>
+  // Também guarda o valor por pessoa e dia (detalhe dos desligados).
+  const porDia = new Map<string, { equipe: number; fds: number; info: number }>();
+  const somarNoDia = (id: string, dia: string, campo: 'equipe' | 'fds' | 'info', valor: number) => {
+    const chave = `${id}|${dia}`;
+    const atual = porDia.get(chave) ?? { equipe: 0, fds: 0, info: 0 };
+    atual[campo] += valor;
+    porDia.set(chave, atual);
+  };
+  const somar = (mapa: Map<string, number>, id: string, valor: number, dia?: string) => {
     mapa.set(id, (mapa.get(id) ?? 0) + valor);
+    if (dia) somarNoDia(id, dia, mapa === comissaoFds ? 'fds' : 'equipe', valor);
+  };
 
   for (const [k, qtd] of ftdsPorEquipeEDia) {
     const [equipe, dia] = k.split('|');
     const bolo = qtd * valorDoDia(dia);
     if (ehFimDeSemana(dia)) {
       const quem = [...(quemTeveFtdPorEquipeEDia.get(k) ?? [])];
-      for (const id of quem) somar(comissaoFds, id, bolo / quem.length);
+      for (const id of quem) somar(comissaoFds, id, bolo / quem.length, dia);
     } else {
       const ativos = deEquipe.filter((c) => {
         const inicio = primeiroLancamento.get(c.id);
-        return inicio !== undefined && inicio <= dia && equipeNoDia(c, dia) === equipe;
+        const aindaAtivo = !c.desativado_em || dia <= c.desativado_em;
+        return inicio !== undefined && inicio <= dia && aindaAtivo && equipeNoDia(c, dia) === equipe;
       });
-      for (const c of ativos) somar(comissaoEquipe, c.id, bolo / ativos.length);
+      for (const c of ativos) somar(comissaoEquipe, c.id, bolo / ativos.length, dia);
     }
   }
 
@@ -347,7 +371,10 @@ export function calcularFechamento(entrada: {
         ? colaboradores.filter((x) => ativosNaData(x) && equipeNoDia(x, venda.data) === equipe)
         : [c];
       const quem = membros.length > 0 ? membros : [c];
-      for (const m of quem) infoPorChave.set(m.id, (infoPorChave.get(m.id) ?? 0) + comissao / quem.length);
+      for (const m of quem) {
+        infoPorChave.set(m.id, (infoPorChave.get(m.id) ?? 0) + comissao / quem.length);
+        somarNoDia(m.id, venda.data, 'info', comissao / quem.length);
+      }
     } else if (externo && externo.valor_por_ftd !== null) {
       const chave = `externo:${nome}`;
       infoPorChave.set(chave, (infoPorChave.get(chave) ?? 0) + comissao);
@@ -360,17 +387,23 @@ export function calcularFechamento(entrada: {
   const linhas: LinhaFechamento[] = [];
   const taxa = 1 + config.taxa_total_a_pagar;
 
+  const desligadoEm = new Map(colaboradores.map((c) => [c.id, c.desativado_em]));
+
   function linha(
-    semInfo: Omit<LinhaFechamento, 'total_a_pagar' | 'comissao_infoprodutos'>
+    semInfo: Omit<LinhaFechamento, 'total_a_pagar' | 'comissao_infoprodutos' | 'ja_pago' | 'desligado_em'>
   ): LinhaFechamento {
     const comissaoInfo = infoPorChave.get(semInfo.chave) ?? 0;
+    const jaPago = semInfo.colaborador_id ? entrada.acertosPagos?.get(semInfo.colaborador_id) ?? 0 : 0;
     const base = {
       ...semInfo,
       comissao_infoprodutos: comissaoInfo,
-      salario_total: semInfo.salario_total + comissaoInfo,
+      ja_pago: jaPago,
+      desligado_em: semInfo.colaborador_id ? desligadoEm.get(semInfo.colaborador_id) ?? null : null,
+      salario_total: semInfo.salario_total + comissaoInfo - jaPago,
     };
     const arred = {
       ...base,
+      ja_pago: arredondar(base.ja_pago),
       comissao_infoprodutos: arredondar(base.comissao_infoprodutos),
       auxilio: arredondar(base.auxilio),
       comissao_propria: arredondar(base.comissao_propria),
@@ -399,7 +432,9 @@ export function calcularFechamento(entrada: {
     }
     const auxilio = proporcional(c.auxilio_mensal, c.data_admissao, c.desativado_em, mes);
     const adiantamento = adiantamentos.get(c.id) ?? 0;
-    const equipeId = equipeNoDia(c, ultimoDia);
+    // Quem saiu no mês aparece com a equipe em que estava no último dia.
+    const diaDaEquipe = c.desativado_em && c.desativado_em < ultimoDia ? c.desativado_em : ultimoDia;
+    const equipeId = equipeNoDia(c, diaDaEquipe);
     const equipe = equipeId ? equipes.get(equipeId) ?? null : null;
 
     if (c.comissionamento_individual) {
@@ -539,6 +574,41 @@ export function calcularFechamento(entrada: {
     rejeitadosPorOperadorMapa.set(nome, r);
   }
 
+  const desligadosNoMes = colaboradores.filter(
+    (c) => c.desativado_em && c.desativado_em >= mes && c.desativado_em <= fimDoMes
+  );
+  const detalheDesligados = desligadosNoMes.map((c) => {
+    const dias = new Map<string, { dia: string; ftds: number; comissao_equipe: number; comissao_fds: number; comissao_infoprodutos: number }>();
+    const doDia = (dia: string) => {
+      const atual = dias.get(dia) ?? { dia, ftds: 0, comissao_equipe: 0, comissao_fds: 0, comissao_infoprodutos: 0 };
+      dias.set(dia, atual);
+      return atual;
+    };
+    for (const [chave, qtd] of ftdsPorColaboradorEDia) {
+      const [id, dia] = chave.split('|');
+      if (id === c.id) doDia(dia).ftds += qtd;
+    }
+    for (const [chave, v] of porDia) {
+      const [id, dia] = chave.split('|');
+      if (id !== c.id) continue;
+      const d = doDia(dia);
+      d.comissao_equipe += v.equipe;
+      d.comissao_fds += v.fds;
+      d.comissao_infoprodutos += v.info;
+    }
+    return {
+      colaborador_id: c.id,
+      dias: [...dias.values()]
+        .map((d) => ({
+          ...d,
+          comissao_equipe: arredondar(d.comissao_equipe),
+          comissao_fds: arredondar(d.comissao_fds),
+          comissao_infoprodutos: arredondar(d.comissao_infoprodutos),
+        }))
+        .sort((a, b) => a.dia.localeCompare(b.dia)),
+    };
+  });
+
   const paineis: PaineisFechamento = {
     ftdsPorDia: [...ftdsPorDiaMapa]
       .map(([dia, ftds]) => ({ dia, ftds }))
@@ -550,6 +620,7 @@ export function calcularFechamento(entrada: {
     rejeitadosPorOperador: [...rejeitadosPorOperadorMapa.values()].sort((a, b) => b.qtd - a.qtd),
     rejeitadosNoMes,
     ativos,
+    detalheDesligados,
     resumoExternos: externos
       .filter((e) => e.valor_por_ftd !== null)
       .map((e) => {

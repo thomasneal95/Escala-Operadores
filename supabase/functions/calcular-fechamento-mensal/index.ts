@@ -82,7 +82,7 @@ export default {
       if ((data ?? []).length < 1000) break;
     }
 
-    const [colaboradoresRes, vigenciasRes, equipesRes, adiantamentosRes, externosRes, fixosRes, infoprodutosRes] =
+    const [colaboradoresRes, vigenciasRes, equipesRes, adiantamentosRes, externosRes, fixosRes, infoprodutosRes, acertosRes] =
       await Promise.all([
         db
           .from("colaboradores")
@@ -100,9 +100,10 @@ export default {
           .select("data, operador, valor")
           .gte("data", mes)
           .lte("data", ultimoDiaDoMes(mes)),
+        db.from("acertos_desligamento").select("colaborador_id, valor_pago").eq("mes", mes),
       ]);
 
-    const falha = [colaboradoresRes, vigenciasRes, equipesRes, adiantamentosRes, externosRes, fixosRes, infoprodutosRes].find(
+    const falha = [colaboradoresRes, vigenciasRes, equipesRes, adiantamentosRes, externosRes, fixosRes, infoprodutosRes, acertosRes].find(
       (r) => r.error
     );
     if (falha) {
@@ -145,6 +146,9 @@ export default {
         data_inicio: f.data_inicio,
         adiantamento: Number(f.adiantamento),
       })),
+      acertosPagos: new Map(
+        (acertosRes.data ?? []).map((a) => [a.colaborador_id, Number(a.valor_pago)])
+      ),
       infoprodutos: (infoprodutosRes.data ?? []).map((v) => ({
         data: v.data,
         operador: v.operador,

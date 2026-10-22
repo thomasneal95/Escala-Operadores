@@ -1,6 +1,7 @@
 ﻿import { useState, type FormEvent } from 'react';
 import { SkeletonLinhaTabela } from '../../components/Skeleton';
 import { SecaoRecolhivel } from '../../components/SecaoRecolhivel';
+import { DataDesligamentoModal } from '../../components/DataDesligamentoModal';
 import { useCriarColaborador } from '../../features/employees/useCriarColaborador';
 import { useColaboradores } from '../../features/employees/useColaboradores';
 import { useEquipes } from '../../features/teams/useEquipes';
@@ -55,8 +56,16 @@ export function ColaboradoresPage() {
     atualizarEquipe,
     previaDesativacao,
     alterarAtivo,
+    ajustarDesligamento,
     atualizarCadastro,
   } = useColaboradores();
+  // Janela da data de desligamento (ao desativar ou ao corrigir a data).
+  const [desligamento, setDesligamento] = useState<{
+    id: string;
+    nome: string;
+    modo: 'desativar' | 'ajustar';
+    data: string | null;
+  } | null>(null);
   const { equipes } = useEquipes();
   const { turnos } = useTurnos();
 
@@ -89,7 +98,17 @@ export function ColaboradoresPage() {
       c.nome_completo.toLowerCase().includes(busca.toLowerCase())
   );
 
-  async function handleDesativar(colaboradorId: string, nome: string) {
+  async function handleAjustarDesligamento(colaboradorId: string, nome: string, data: string) {
+    setErroLinha((atual) => ({ ...atual, [colaboradorId]: '' }));
+    const resultado = await ajustarDesligamento(colaboradorId, data);
+    if (resultado.erro) {
+      setErroLinha((atual) => ({ ...atual, [colaboradorId]: resultado.erro as string }));
+      return;
+    }
+    mostrarToast(`Data de desligamento de ${nome} alterada para ${formatarDataExibicao(data)}.`);
+  }
+
+  async function handleDesativar(colaboradorId: string, nome: string, dataDesligamento: string) {
     const previa = await previaDesativacao(colaboradorId);
 
     const remocoes: string[] = [];
@@ -104,7 +123,7 @@ export function ColaboradoresPage() {
     }
 
     const confirmou = await confirmar({
-      titulo: `Desativar ${nome}?`,
+      titulo: `Desativar ${nome} (último dia: ${formatarDataExibicao(dataDesligamento)})?`,
       mensagem:
         'A pessoa perde o acesso ao sistema, sai da equipe e deixa de aparecer nas ' +
         'escalas, disponibilidades, multas e faltas daqui pra frente.\n\n' +
@@ -117,7 +136,7 @@ export function ColaboradoresPage() {
     if (!confirmou) return;
 
     setErroLinha((atual) => ({ ...atual, [colaboradorId]: '' }));
-    const resultado = await alterarAtivo(colaboradorId, 'desativar');
+    const resultado = await alterarAtivo(colaboradorId, 'desativar', dataDesligamento);
     if (resultado.erro) {
       setErroLinha((atual) => ({ ...atual, [colaboradorId]: resultado.erro as string }));
       return;
@@ -217,6 +236,22 @@ export function ColaboradoresPage() {
 
   return (
     <div>
+      {desligamento && (
+        <DataDesligamentoModal
+          aberto
+          nome={desligamento.nome}
+          titulo={desligamento.modo === 'desativar' ? `Desativar ${desligamento.nome}` : 'Data de desligamento'}
+          textoConfirmar={desligamento.modo === 'desativar' ? 'Continuar' : 'Salvar data'}
+          dataInicial={desligamento.data}
+          onFechar={() => setDesligamento(null)}
+          onConfirmar={(data) => {
+            const atual = desligamento;
+            setDesligamento(null);
+            if (atual.modo === 'desativar') handleDesativar(atual.id, atual.nome, data);
+            else handleAjustarDesligamento(atual.id, atual.nome, data);
+          }}
+        />
+      )}
       <SecaoRecolhivel
         titulo="Novo colaborador"
         padraoAberta={false}
@@ -565,7 +600,12 @@ export function ColaboradoresPage() {
                           <button
                             onClick={() =>
                               colaborador.ativo
-                                ? handleDesativar(colaborador.id, colaborador.nome_completo)
+                                ? setDesligamento({
+                                    id: colaborador.id,
+                                    nome: colaborador.nome_completo,
+                                    modo: 'desativar',
+                                    data: null,
+                                  })
                                 : handleReativar(colaborador.id, colaborador.nome_completo)
                             }
                             disabled={atualizando}
@@ -573,6 +613,22 @@ export function ColaboradoresPage() {
                           >
                             {colaborador.ativo ? 'Desativar' : 'Ativar'}
                           </button>
+                          {!colaborador.ativo && (
+                            <button
+                              onClick={() =>
+                                setDesligamento({
+                                  id: colaborador.id,
+                                  nome: colaborador.nome_completo,
+                                  modo: 'ajustar',
+                                  data: colaborador.desativado_em,
+                                })
+                              }
+                              disabled={atualizando}
+                              className="text-sm font-medium text-slate-600 hover:text-tinta"
+                            >
+                              Data de saída
+                            </button>
+                          )}
                         </div>
                       )}
 
