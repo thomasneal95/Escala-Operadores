@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ChangeEvent } from 'react';
+import { Fragment, useEffect, useRef, useState, type ChangeEvent } from 'react';
 import { useAuth } from '../../features/auth/AuthContext';
 import { useFechamentoMensal, type LinhaFechamento } from '../../features/schedules/useFechamentoMensal';
 import {
@@ -151,7 +151,6 @@ export function ComissionamentoPage() {
   const total = (campo: keyof LinhaFechamento) =>
     linhas.reduce((soma, l) => soma + (typeof l[campo] === 'number' ? (l[campo] as number) : 0), 0);
   const colaboradoresSemNome = cadastros.colaboradores.filter((c) => !c.nome_base);
-  const temJaPago = linhas.some((l) => l.ja_pago > 0);
 
   return (
     <div>
@@ -374,125 +373,13 @@ export function ComissionamentoPage() {
 
           {linhas.length > 0 && <ResumoPorEquipe linhas={linhas} />}
 
-          <div className="mt-4 overflow-x-auto rounded-lg border border-slate-200 bg-white">
-            <table className="w-full text-left text-sm">
-              <thead className="border-b border-slate-200 bg-slate-50 text-slate-500">
-                <tr>
-                  {[
-                    'Nome',
-                    'Equipe',
-                    'Início',
-                    'Auxílio',
-                    'Com. própria*',
-                    'Com. equipe',
-                    'Com. FDS',
-                    'Com. infoprodutos',
-                    'Adiantamento',
-                    ...(temJaPago ? ['Já pago (acerto)'] : []),
-                    'Salário',
-                    'FTDs',
-                    'Total a pagar',
-                  ].map((t) => (
-                    <th key={t} className="whitespace-nowrap px-3 py-3 font-medium">
-                      {t}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {linhas.length === 0 ? (
-                  <tr>
-                    <td colSpan={13} className="px-4 py-6 text-center text-slate-400">
-                      Nenhum valor calculado para este mês.
-                    </td>
-                  </tr>
-                ) : (
-                  linhas.map((l) => (
-                    <tr key={l.chave}>
-                      <td className="whitespace-nowrap px-3 py-2 font-medium text-tinta">
-                        {l.nome}
-                        {l.desligado_em && l.desligado_em.slice(0, 7) === mesInput && (
-                          <span className="ml-2 rounded-full bg-red-50 px-2 py-0.5 text-[11px] font-medium text-red-700">
-                            Saiu em {formatarData(l.desligado_em)}
-                          </span>
-                        )}
-                        {rotuloTipo[l.tipo] && (
-                          <span className="ml-2 rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-500">
-                            {rotuloTipo[l.tipo]}
-                          </span>
-                        )}
-                      </td>
-                      <td className="px-3 py-2 text-slate-600">{l.equipe ?? '—'}</td>
-                      <td className="whitespace-nowrap px-3 py-2 text-slate-600">{formatarData(l.data_inicio)}</td>
-                      <td className="whitespace-nowrap px-3 py-2">{formatarMoeda(l.auxilio)}</td>
-                      <td className="whitespace-nowrap px-3 py-2 text-slate-400">{formatarMoeda(l.comissao_propria)}</td>
-                      <td className="whitespace-nowrap px-3 py-2">{formatarMoeda(l.comissao_equipe)}</td>
-                      <td className="whitespace-nowrap px-3 py-2">{formatarMoeda(l.comissao_fds)}</td>
-                      <td className="whitespace-nowrap px-3 py-2">{formatarMoeda(l.comissao_infoprodutos)}</td>
-                      <td className="whitespace-nowrap px-3 py-2">
-                        {l.colaborador_id ? (
-                          <input
-                            type="number"
-                            step="0.01"
-                            defaultValue={l.adiantamento}
-                            key={`${l.chave}-${l.adiantamento}`}
-                            onBlur={(e) => {
-                              const valor = Number(e.target.value) || 0;
-                              if (adminId && valor !== l.adiantamento) {
-                                editarAdiantamento(mes, l.colaborador_id as string, valor);
-                              }
-                            }}
-                            className="w-24 rounded-md border border-slate-300 px-2 py-1 text-sm"
-                          />
-                        ) : (
-                          formatarMoeda(l.adiantamento)
-                        )}
-                      </td>
-                      {temJaPago && (
-                        <td className="whitespace-nowrap px-3 py-2 text-slate-500">
-                          {l.ja_pago ? formatarMoeda(l.ja_pago) : '—'}
-                        </td>
-                      )}
-                      <td className="whitespace-nowrap px-3 py-2 font-semibold text-tinta">
-                        {formatarMoeda(l.salario_total)}
-                      </td>
-                      <td className="px-3 py-2 text-slate-600">{l.ftds}</td>
-                      <td className="whitespace-nowrap px-3 py-2 font-semibold text-esmeralda-dark">
-                        {formatarMoeda(l.total_a_pagar)}
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-              {linhas.length > 0 && (
-                <tfoot className="border-t border-slate-200 bg-slate-50 font-semibold text-tinta">
-                  <tr>
-                    <td className="px-3 py-2" colSpan={3}>
-                      Total
-                    </td>
-                    <td className="whitespace-nowrap px-3 py-2">{formatarMoeda(total('auxilio'))}</td>
-                    <td className="whitespace-nowrap px-3 py-2 text-slate-400">{formatarMoeda(total('comissao_propria'))}</td>
-                    <td className="whitespace-nowrap px-3 py-2">{formatarMoeda(total('comissao_equipe'))}</td>
-                    <td className="whitespace-nowrap px-3 py-2">{formatarMoeda(total('comissao_fds'))}</td>
-                    <td className="whitespace-nowrap px-3 py-2">{formatarMoeda(total('comissao_infoprodutos'))}</td>
-                    <td className="whitespace-nowrap px-3 py-2">{formatarMoeda(total('adiantamento'))}</td>
-                    {temJaPago && (
-                      <td className="whitespace-nowrap px-3 py-2">{formatarMoeda(total('ja_pago'))}</td>
-                    )}
-                    <td className="whitespace-nowrap px-3 py-2">{formatarMoeda(total('salario_total'))}</td>
-                    <td className="px-3 py-2">{total('ftds')}</td>
-                    <td className="whitespace-nowrap px-3 py-2 text-esmeralda-dark">{formatarMoeda(total('total_a_pagar'))}</td>
-                  </tr>
-                </tfoot>
-              )}
-            </table>
-          </div>
-
-          <p className="mt-2 text-xs text-slate-400">
-            * Com. própria: FTDs da pessoa em dias úteis × valor — só informativa, não entra no
-            salário (exceto Individual e Externo, que recebem por FTD). Adiantamentos são salvos ao
-            sair do campo.
-          </p>
+          <TabelaPorPessoa
+            linhas={linhas}
+            mesInput={mesInput}
+            onAdiantamento={(colaboradorId, valor) => {
+              if (adminId) editarAdiantamento(mes, colaboradorId, valor);
+            }}
+          />
         </>
       )}
 
@@ -559,6 +446,154 @@ export function ComissionamentoPage() {
       )}
       </>
       )}
+    </div>
+  );
+}
+
+// Tabela por pessoa: só o essencial nas colunas; o resto abre ao clicar na
+// linha (detalhe das comissões, início, acerto já pago, saída).
+function TabelaPorPessoa({
+  linhas,
+  mesInput,
+  onAdiantamento,
+}: {
+  linhas: LinhaFechamento[];
+  mesInput: string;
+  onAdiantamento: (colaboradorId: string, valor: number) => void;
+}) {
+  const [aberta, setAberta] = useState<string | null>(null);
+  const comissoes = (l: LinhaFechamento) => l.comissao_equipe + l.comissao_fds + l.comissao_infoprodutos;
+  const soma = (f: (l: LinhaFechamento) => number) => linhas.reduce((s, l) => s + f(l), 0);
+  const direita = 'whitespace-nowrap px-3 py-2 text-right tabular-nums';
+
+  return (
+    <div className="mt-4 overflow-x-auto rounded-lg border border-slate-200 bg-white">
+      <table className="w-full text-left text-sm">
+        <thead className="border-b border-slate-200 bg-slate-50 text-slate-500">
+          <tr>
+            <th className="px-3 py-3 font-medium">Nome</th>
+            {['FTDs', 'Comissões', 'Auxílio', 'Adiantamento', 'Salário', 'Total a pagar'].map((t) => (
+              <th key={t} className="whitespace-nowrap px-3 py-3 text-right font-medium">
+                {t}
+              </th>
+            ))}
+            <th className="w-8" />
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-slate-100">
+          {linhas.length === 0 ? (
+            <tr>
+              <td colSpan={8} className="px-4 py-6 text-center text-slate-400">
+                Nenhum valor calculado para este mês.
+              </td>
+            </tr>
+          ) : (
+            linhas.map((l) => {
+              const estaAberta = aberta === l.chave;
+              const saiuNoMes = !!l.desligado_em && l.desligado_em.slice(0, 7) === mesInput;
+              return (
+                <Fragment key={l.chave}>
+                  <tr
+                    onClick={() => setAberta(estaAberta ? null : l.chave)}
+                    className={`cursor-pointer hover:bg-slate-50 ${estaAberta ? 'bg-slate-50' : ''}`}
+                  >
+                    <td className="px-3 py-2">
+                      <p className="font-medium text-tinta">
+                        {l.nome}
+                        {saiuNoMes && (
+                          <span className="ml-2 rounded-full bg-red-50 px-2 py-0.5 text-[11px] font-medium text-red-700">
+                            Saiu em {formatarData(l.desligado_em)}
+                          </span>
+                        )}
+                        {rotuloTipo[l.tipo] && (
+                          <span className="ml-2 rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-500">
+                            {rotuloTipo[l.tipo]}
+                          </span>
+                        )}
+                      </p>
+                      <p className="text-xs text-slate-400">{l.equipe ? `Equipe ${l.equipe}` : 'Sem equipe'}</p>
+                    </td>
+                    <td className={`${direita} text-slate-600`}>{l.ftds || '—'}</td>
+                    <td className={direita}>{comissoes(l) ? formatarMoeda(comissoes(l)) : '—'}</td>
+                    <td className={direita}>{l.auxilio ? formatarMoeda(l.auxilio) : '—'}</td>
+                    <td className={direita} onClick={(e) => e.stopPropagation()}>
+                      {l.colaborador_id ? (
+                        <input
+                          type="number"
+                          step="0.01"
+                          defaultValue={l.adiantamento}
+                          key={`${l.chave}-${l.adiantamento}`}
+                          onBlur={(e) => {
+                            const valor = Number(e.target.value) || 0;
+                            if (valor !== l.adiantamento) onAdiantamento(l.colaborador_id as string, valor);
+                          }}
+                          aria-label={`Adiantamento de ${l.nome}`}
+                          className="w-24 rounded-md border border-slate-300 px-2 py-1 text-right text-sm"
+                        />
+                      ) : l.adiantamento ? (
+                        formatarMoeda(l.adiantamento)
+                      ) : (
+                        '—'
+                      )}
+                    </td>
+                    <td className={`${direita} font-semibold text-tinta`}>{formatarMoeda(l.salario_total)}</td>
+                    <td className={`${direita} font-semibold text-esmeralda-dark`}>{formatarMoeda(l.total_a_pagar)}</td>
+                    <td className="px-2 text-center text-slate-400" aria-hidden>
+                      {estaAberta ? '▴' : '▾'}
+                    </td>
+                  </tr>
+                  {estaAberta && (
+                    <tr className="bg-slate-50">
+                      <td colSpan={8} className="px-3 pb-4 pt-1">
+                        <dl className="grid grid-cols-2 gap-x-6 gap-y-2 text-sm sm:grid-cols-4 lg:grid-cols-7">
+                          <Detalhe rotulo="Início" valor={formatarData(l.data_inicio)} />
+                          <Detalhe rotulo="Com. equipe (dias úteis)" valor={formatarMoeda(l.comissao_equipe)} />
+                          <Detalhe rotulo="Com. fim de semana" valor={formatarMoeda(l.comissao_fds)} />
+                          <Detalhe rotulo="Com. infoprodutos" valor={formatarMoeda(l.comissao_infoprodutos)} />
+                          <Detalhe
+                            rotulo="Com. própria (informativa)"
+                            valor={formatarMoeda(l.comissao_propria)}
+                            dica="FTDs da pessoa em dias úteis × valor. Não entra no salário (exceto externos e individuais, que recebem por FTD)."
+                          />
+                          {l.ja_pago > 0 && <Detalhe rotulo="Já pago (acerto)" valor={formatarMoeda(l.ja_pago)} />}
+                          {l.desligado_em && <Detalhe rotulo="Último dia" valor={formatarData(l.desligado_em)} />}
+                        </dl>
+                      </td>
+                    </tr>
+                  )}
+                </Fragment>
+              );
+            })
+          )}
+        </tbody>
+        {linhas.length > 0 && (
+          <tfoot className="border-t border-slate-200 bg-slate-50 font-semibold text-tinta">
+            <tr>
+              <td className="px-3 py-2">Total</td>
+              <td className={direita}>{soma((l) => l.ftds)}</td>
+              <td className={direita}>{formatarMoeda(soma(comissoes))}</td>
+              <td className={direita}>{formatarMoeda(soma((l) => l.auxilio))}</td>
+              <td className={direita}>{formatarMoeda(soma((l) => l.adiantamento))}</td>
+              <td className={direita}>{formatarMoeda(soma((l) => l.salario_total))}</td>
+              <td className={`${direita} text-esmeralda-dark`}>{formatarMoeda(soma((l) => l.total_a_pagar))}</td>
+              <td />
+            </tr>
+          </tfoot>
+        )}
+      </table>
+      <p className="border-t border-slate-100 px-3 py-2 text-xs text-slate-400">
+        Clique numa linha para ver o detalhe. Comissões = equipe + fim de semana + infoprodutos. Adiantamentos são salvos ao
+        sair do campo.
+      </p>
+    </div>
+  );
+}
+
+function Detalhe({ rotulo, valor, dica }: { rotulo: string; valor: string; dica?: string }) {
+  return (
+    <div title={dica}>
+      <dt className="text-xs text-slate-400">{rotulo}</dt>
+      <dd className="font-medium text-tinta">{valor}</dd>
     </div>
   );
 }
