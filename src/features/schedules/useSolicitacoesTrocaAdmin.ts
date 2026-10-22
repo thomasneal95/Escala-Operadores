@@ -8,6 +8,7 @@ interface SolicitacaoTrocaAdmin {
   id: string;
   status: string;
   criado_em: string;
+  tipo: 'troca' | 'cobertura';
   solicitanteNome: string;
   colegaNome: string;
   blocoSolicitante: BlocoDeTrabalho | null;
@@ -46,7 +47,7 @@ export function useSolicitacoesTrocaAdmin() {
     const { data, error } = await supabase
       .from('solicitacoes_troca')
       .select(
-        `id, status, criado_em,
+        `id, status, criado_em, tipo,
          escala_solicitante:escalas!solicitacoes_troca_escala_solicitante_id_fkey(id, colaborador_id, data, turno_nome_snapshot, turno_hora_inicio_snapshot, turno_hora_fim_snapshot),
          escala_colega:escalas!solicitacoes_troca_escala_colega_id_fkey(id, colaborador_id, data, turno_nome_snapshot, turno_hora_inicio_snapshot, turno_hora_fim_snapshot),
          solicitante:colaboradores!solicitacoes_troca_solicitante_id_fkey(perfis(nome_completo)),
@@ -75,6 +76,7 @@ export function useSolicitacoesTrocaAdmin() {
         id: s.id,
         status: s.status,
         criado_em: s.criado_em,
+        tipo: s.tipo,
         solicitanteNome: solicitantePerfil?.nome_completo ?? '(desconhecido)',
         colegaNome: colegaPerfil?.nome_completo ?? '(desconhecido)',
         blocoSolicitante: blocoDaEscala(formatarEscala(s.escala_solicitante), blocos),
@@ -109,22 +111,28 @@ export function useSolicitacoesTrocaAdmin() {
   // Os dois blocos de trabalho trocam de dono numa única transação no banco
   // (função aprovar_troca); se algo falhar, nada é alterado.
   async function aprovar(solicitacaoId: string) {
-    if (!session?.user) return { erro: 'Sessão inválida.' };
+    if (!session?.user) return { erro: 'Sessão inválida.', turnosTrocados: 0 };
 
     setProcessando(solicitacaoId);
-    const { error } = await supabase.rpc('aprovar_troca', { p_solicitacao_id: solicitacaoId });
+    const { data, error } = await supabase.rpc('aprovar_troca', {
+      p_solicitacao_id: solicitacaoId,
+    });
     setProcessando(null);
 
     if (error) {
+      // Erros de regra da função (ex.: nenhum turno mudaria) vêm com mensagem
+      // própria; conflito de horário vem como erro de restrição.
+      const conflito = error.code === '23P01' || error.code === '23505';
       return {
-        erro:
-          'Não foi possível executar a troca. Nada foi alterado. ' +
-          '(Verifique se alguma das pessoas já trabalha no horário que receberia.)',
+        erro: conflito
+          ? 'Não foi possível executar a troca: alguém já trabalha no horário que receberia. Nada foi alterado.'
+          : `Não foi possível executar a troca. Nada foi alterado. ${error.message ?? ''}`.trim(),
+        turnosTrocados: 0,
       };
     }
 
     await carregar();
-    return { erro: null };
+    return { erro: null, turnosTrocados: (data as number | null) ?? 0 };
   }
 
   async function rejeitar(solicitacaoId: string) {

@@ -15,6 +15,9 @@ interface SolicitacaoTroca {
     | 'rejeitado_pelo_admin'
     | 'cancelado';
   criado_em: string;
+  // 'troca': os dois dias trocam de dono; 'cobertura': o colega só cobre o
+  // dia de quem pediu, sem devolver nenhum.
+  tipo: 'troca' | 'cobertura';
   souSolicitante: boolean;
   outraPessoaNome: string;
   meuBloco: BlocoDeTrabalho | null;
@@ -75,7 +78,7 @@ export function useSolicitacoesTroca() {
     const { data, error } = await supabase
       .from('solicitacoes_troca')
       .select(
-        `id, periodo_id, status, criado_em, solicitante_id, colega_id,
+        `id, periodo_id, status, criado_em, tipo, solicitante_id, colega_id,
          escala_solicitante:escalas!solicitacoes_troca_escala_solicitante_id_fkey(id, colaborador_id, data, turno_nome_snapshot, turno_hora_inicio_snapshot, turno_hora_fim_snapshot),
          escala_colega:escalas!solicitacoes_troca_escala_colega_id_fkey(id, colaborador_id, data, turno_nome_snapshot, turno_hora_inicio_snapshot, turno_hora_fim_snapshot),
          solicitante:colaboradores!solicitacoes_troca_solicitante_id_fkey(perfis(nome_completo)),
@@ -109,6 +112,7 @@ export function useSolicitacoesTroca() {
         periodo_id: s.periodo_id,
         status: s.status,
         criado_em: s.criado_em,
+        tipo: s.tipo,
         souSolicitante,
         outraPessoaNome: souSolicitante
           ? colegaPerfil?.nome_completo ?? '(desconhecido)'
@@ -159,7 +163,14 @@ export function useSolicitacoesTroca() {
     };
   }, [colaboradorId, carregar, idInstancia]);
 
-  async function criarSolicitacao(periodoId: string, escalaSolicitanteId: string, colegaId: string) {
+  // escalaColegaId: dia do colega que quem pede quer pegar (opcional; sem
+  // ele, o colega escolhe ao aceitar). Na cobertura não há dia de volta.
+  async function criarSolicitacao(
+    periodoId: string,
+    escalaSolicitanteId: string,
+    colegaId: string,
+    opcoes: { tipo: 'troca' | 'cobertura'; escalaColegaId: string | null }
+  ) {
     if (!colaboradorId) return { erro: 'Não foi possível identificar seus dados.' };
 
     setProcessando('nova');
@@ -168,6 +179,8 @@ export function useSolicitacoesTroca() {
       solicitante_id: colaboradorId,
       escala_solicitante_id: escalaSolicitanteId,
       colega_id: colegaId,
+      tipo: opcoes.tipo,
+      escala_colega_id: opcoes.tipo === 'troca' ? opcoes.escalaColegaId : null,
     });
     setProcessando(null);
 
@@ -179,12 +192,14 @@ export function useSolicitacoesTroca() {
     return { erro: null };
   }
 
-  async function aceitarSolicitacao(solicitacaoId: string, escalaColegaId: string) {
+  // escalaColegaId null: o dia de volta já foi escolhido por quem pediu,
+  // ou é uma cobertura (sem dia de volta).
+  async function aceitarSolicitacao(solicitacaoId: string, escalaColegaId: string | null) {
     setProcessando(solicitacaoId);
     const { error } = await supabase
       .from('solicitacoes_troca')
       .update({
-        escala_colega_id: escalaColegaId,
+        ...(escalaColegaId ? { escala_colega_id: escalaColegaId } : {}),
         status: 'aceito_pelo_colega',
         respondido_colega_em: new Date().toISOString(),
       })

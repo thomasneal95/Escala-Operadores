@@ -34,16 +34,23 @@ export function SolicitacoesTrocaAdminPage() {
   const outras = solicitacoes.filter((s) => s.status !== 'aceito_pelo_colega');
 
   async function handleAprovar(s: (typeof solicitacoes)[number]) {
-    if (!s.blocoSolicitante || !s.blocoColega) return;
+    if (!s.blocoSolicitante || (s.tipo === 'troca' && !s.blocoColega)) return;
 
         const confirmou = await confirmar(
-      `Aprovar a troca entre ${s.solicitanteNome} e ${s.colegaNome}? ` +
-        'Os dois dias de trabalho vão trocar de dono imediatamente na escala.'
+      s.tipo === 'cobertura'
+        ? `Aprovar que ${s.colegaNome} cubra o dia de ${s.solicitanteNome}? ` +
+            'O dia passa para o colega imediatamente na escala.'
+        : `Aprovar a troca entre ${s.solicitanteNome} e ${s.colegaNome}? ` +
+            'Os dois dias de trabalho vão trocar de dono imediatamente na escala.'
     );
     if (!confirmou) return;
 
     const resultado = await aprovar(s.id);
-    if (resultado.erro) toast(resultado.erro, 'erro');
+    if (resultado.erro) {
+      toast(resultado.erro, 'erro');
+      return;
+    }
+    toast(`Troca aprovada: ${resultado.turnosTrocados} turno(s) mudaram de dono na escala.`);
   }
 
   async function handleRejeitar(id: string) {
@@ -84,8 +91,12 @@ export function SolicitacoesTrocaAdminPage() {
                     <p className="text-xs font-medium uppercase tracking-wide text-slate-500">
                       {s.solicitanteNome} vai trabalhar
                     </p>
-                    {s.blocoColega && (
-                      <p className="mt-1 text-sm text-tinta">{rotuloBloco(s.blocoColega)}</p>
+                    {s.tipo === 'cobertura' ? (
+                      <p className="mt-1 text-sm text-slate-500">Nada — fica de folga (só cobertura)</p>
+                    ) : (
+                      s.blocoColega && (
+                        <p className="mt-1 text-sm text-tinta">{rotuloBloco(s.blocoColega)}</p>
+                      )
                     )}
                   </div>
                   <div>
@@ -148,7 +159,11 @@ export function SolicitacoesTrocaAdminPage() {
                     </td>
                     <td className="px-4 py-3 text-tinta">{s.colegaNome}</td>
                     <td className="px-4 py-3 text-slate-500">
-                      {s.blocoColega ? rotuloBloco(s.blocoColega) : '—'}
+                      {s.tipo === 'cobertura'
+                        ? 'Só cobre'
+                        : s.blocoColega
+                          ? rotuloBloco(s.blocoColega)
+                          : '—'}
                     </td>
                     <td className="px-4 py-3">
                       <span
