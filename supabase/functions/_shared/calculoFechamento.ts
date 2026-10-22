@@ -18,6 +18,9 @@
 //   - Total a pagar = Salário × (1 + taxa).
 //   - "Comissão própria" (FTDs da pessoa em dias úteis × valor) é só
 //     informativa — não entra no salário.
+//   - Infoprodutos: cada venda gera `percentual_infoproduto` do valor,
+//     dividido igualmente entre todos da equipe do vendedor na data (o
+//     externo pago por FTD, ex.: João, fica com tudo). Soma no salário.
 //   - Casos especiais: operador externo com valor fixo por FTD (ex.: João),
 //     colaborador de comissionamento individual, salário fixo e auxílio fixo.
 //
@@ -55,6 +58,12 @@ export interface OperadorExterno {
   valor_por_ftd: number | null;
 }
 
+export interface VendaInfoproduto {
+  data: string; // YYYY-MM-DD
+  operador: string;
+  valor: number;
+}
+
 export interface PagamentoFixo {
   id: string;
   nome: string;
@@ -71,6 +80,7 @@ export interface ConfiguracaoComissao {
   valor_antigo_fds: number;
   valor_ftd_individual: number;
   taxa_total_a_pagar: number;
+  percentual_infoproduto: number;
   hora_virada_dia: number;
 }
 
@@ -87,6 +97,7 @@ export interface LinhaFechamento {
   comissao_propria: number;
   comissao_equipe: number;
   comissao_fds: number;
+  comissao_infoprodutos: number;
   adiantamento: number;
   salario_total: number;
   ftds: number;
@@ -111,6 +122,13 @@ export interface PaineisFechamento {
   rejeitadosPorOperador: { operador: string; equipe: string | null; qtd: number }[];
   rejeitadosNoMes: number;
   ativos: number;
+  // Resumo dos operadores externos pagos por FTD (aba "Resumo João"):
+  // registros por dia e etapa (sem os rejeitados).
+  resumoExternos: {
+    nome: string;
+    valor_por_ftd: number;
+    registros: { dia: string; etapa: string; qtd: number }[];
+  }[];
 }
 
 export interface ResultadoFechamento {
@@ -121,6 +139,7 @@ export interface ResultadoFechamento {
   paineis: PaineisFechamento;
   avisos: {
     operadoresSemCadastro: { operador: string; ftds: number }[];
+    infoprodutosSemOperador: { operador: string; valor: number }[];
     colaboradoresSemNomeNaBase: string[];
     vendasForaDoMes: number;
   };
@@ -193,6 +212,7 @@ export function calcularFechamento(entrada: {
   adiantamentos: Map<string, number>; // colaborador_id -> valor
   externos: OperadorExterno[];
   fixos: PagamentoFixo[];
+  infoprodutos?: VendaInfoproduto[];
   config: ConfiguracaoComissao;
 }): ResultadoFechamento {
   const { mes, colaboradores, vigencias, equipes, adiantamentos, externos, fixos, config } = entrada;
@@ -309,13 +329,49 @@ export function calcularFechamento(entrada: {
     }
   }
 
+  // Comissão de infoprodutos (só vendas com data dentro do mês).
+  const infoPorChave = new Map<string, number>();
+  const infoprodutosSemOperador: { operador: string; valor: number }[] = [];
+  for (const venda of entrada.infoprodutos ?? []) {
+    if (venda.data < mes || venda.data > fimDoMes) continue;
+    const comissao = venda.valor * config.percentual_infoproduto;
+    const nome = normalizarNome(venda.operador);
+    const c = colaboradorPorNome.get(nome);
+    const externo = externoPorNome.get(nome);
+    if (c) {
+      const equipe = equipeNoDia(c, venda.data);
+      const ativosNaData = (x: ColaboradorFechamento) =>
+        (!x.data_admissao || x.data_admissao <= venda.data) &&
+        (!x.desativado_em || x.desativado_em >= venda.data);
+      const membros = equipe
+        ? colaboradores.filter((x) => ativosNaData(x) && equipeNoDia(x, venda.data) === equipe)
+        : [c];
+      const quem = membros.length > 0 ? membros : [c];
+      for (const m of quem) infoPorChave.set(m.id, (infoPorChave.get(m.id) ?? 0) + comissao / quem.length);
+    } else if (externo && externo.valor_por_ftd !== null) {
+      const chave = `externo:${nome}`;
+      infoPorChave.set(chave, (infoPorChave.get(chave) ?? 0) + comissao);
+    } else {
+      infoprodutosSemOperador.push({ operador: venda.operador, valor: venda.valor });
+    }
+  }
+
   // Monta as linhas.
   const linhas: LinhaFechamento[] = [];
   const taxa = 1 + config.taxa_total_a_pagar;
 
-  function linha(base: Omit<LinhaFechamento, 'total_a_pagar'>): LinhaFechamento {
+  function linha(
+    semInfo: Omit<LinhaFechamento, 'total_a_pagar' | 'comissao_infoprodutos'>
+  ): LinhaFechamento {
+    const comissaoInfo = infoPorChave.get(semInfo.chave) ?? 0;
+    const base = {
+      ...semInfo,
+      comissao_infoprodutos: comissaoInfo,
+      salario_total: semInfo.salario_total + comissaoInfo,
+    };
     const arred = {
       ...base,
+      comissao_infoprodutos: arredondar(base.comissao_infoprodutos),
       auxilio: arredondar(base.auxilio),
       comissao_propria: arredondar(base.comissao_propria),
       comissao_equipe: arredondar(base.comissao_equipe),
@@ -494,6 +550,23 @@ export function calcularFechamento(entrada: {
     rejeitadosPorOperador: [...rejeitadosPorOperadorMapa.values()].sort((a, b) => b.qtd - a.qtd),
     rejeitadosNoMes,
     ativos,
+    resumoExternos: externos
+      .filter((e) => e.valor_por_ftd !== null)
+      .map((e) => {
+        const contagem = new Map<string, { dia: string; etapa: string; qtd: number }>();
+        for (const v of validas) {
+          if (normalizarNome(v.operador) !== normalizarNome(e.nome_base)) continue;
+          const chave = `${v.dia}|${v.etapa}`;
+          const atual = contagem.get(chave) ?? { dia: v.dia, etapa: v.etapa, qtd: 0 };
+          atual.qtd++;
+          contagem.set(chave, atual);
+        }
+        return {
+          nome: e.nome_base,
+          valor_por_ftd: e.valor_por_ftd as number,
+          registros: [...contagem.values()].sort((a, b) => a.dia.localeCompare(b.dia)),
+        };
+      }),
   };
 
   return {
@@ -504,6 +577,7 @@ export function calcularFechamento(entrada: {
     paineis,
     avisos: {
       operadoresSemCadastro: [...ftdsPorOperadorDesconhecido.values()].sort((a, b) => b.ftds - a.ftds),
+      infoprodutosSemOperador,
       colaboradoresSemNomeNaBase: colaboradores.filter((c) => !c.nome_base).map((c) => c.nome),
       vendasForaDoMes,
     },

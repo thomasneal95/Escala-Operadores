@@ -26,6 +26,7 @@ export interface LinhaHistorico {
   comissao_propria: number;
   comissao_equipe: number;
   comissao_fds: number;
+  comissao_infoprodutos: number;
   adiantamento: number;
   salario_total: number;
   ftds: number | null;
@@ -90,6 +91,7 @@ export function useHistoricoComissoes() {
       comissao_propria: Number(l.comissao_propria),
       comissao_equipe: Number(l.comissao_equipe),
       comissao_fds: Number(l.comissao_fds),
+      comissao_infoprodutos: Number(l.comissao_infoprodutos),
       adiantamento: Number(l.adiantamento),
       salario_total: Number(l.salario_total),
       total_a_pagar: numero(l.total_a_pagar),

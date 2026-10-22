@@ -158,7 +158,7 @@ export function HistoricoComissoes({ historico }: { historico: ReturnType<typeof
             <table className="w-full text-left text-sm">
               <thead className="border-b border-slate-200 bg-slate-50 text-slate-500">
                 <tr>
-                  {['Nome', 'Equipe', 'Início', 'Auxílio', 'Com. própria', 'Com. equipe', 'Com. FDS', 'Adiantamento', 'Salário']
+                  {['Nome', 'Equipe', 'Início', 'Auxílio', 'Com. própria', 'Com. equipe', 'Com. FDS', 'Com. infoprodutos', 'Adiantamento', 'Salário']
                     .concat(temFtds ? ['FTDs'] : [])
                     .concat(temTotalAPagar ? ['Total a pagar'] : [])
                     .map((t) => (
@@ -178,6 +178,7 @@ export function HistoricoComissoes({ historico }: { historico: ReturnType<typeof
                     <td className="whitespace-nowrap px-3 py-2 text-slate-400">{formatarMoeda(l.comissao_propria)}</td>
                     <td className="whitespace-nowrap px-3 py-2">{formatarMoeda(l.comissao_equipe)}</td>
                     <td className="whitespace-nowrap px-3 py-2">{formatarMoeda(l.comissao_fds)}</td>
+                    <td className="whitespace-nowrap px-3 py-2">{formatarMoeda(l.comissao_infoprodutos)}</td>
                     <td className="whitespace-nowrap px-3 py-2">{formatarMoeda(l.adiantamento)}</td>
                     <td className="whitespace-nowrap px-3 py-2 font-semibold text-tinta">{formatarMoeda(l.salario_total)}</td>
                     {temFtds && <td className="px-3 py-2 text-slate-600">{l.ftds}</td>}
@@ -198,6 +199,7 @@ export function HistoricoComissoes({ historico }: { historico: ReturnType<typeof
                   <td className="whitespace-nowrap px-3 py-2 text-slate-400">{formatarMoeda(total('comissao_propria'))}</td>
                   <td className="whitespace-nowrap px-3 py-2">{formatarMoeda(total('comissao_equipe'))}</td>
                   <td className="whitespace-nowrap px-3 py-2">{formatarMoeda(total('comissao_fds'))}</td>
+                  <td className="whitespace-nowrap px-3 py-2">{formatarMoeda(total('comissao_infoprodutos'))}</td>
                   <td className="whitespace-nowrap px-3 py-2">{formatarMoeda(total('adiantamento'))}</td>
                   <td className="whitespace-nowrap px-3 py-2">{formatarMoeda(total('salario_total'))}</td>
                   {temFtds && <td className="px-3 py-2">{total('ftds')}</td>}

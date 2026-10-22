@@ -11,6 +11,8 @@ import { useConfirm, useToast } from '../../components/FeedbackProvider';
 import { useHistoricoComissoes } from '../../features/schedules/useHistoricoComissoes';
 import { HistoricoComissoes } from './HistoricoComissoes';
 import { PaineisComissao } from './PaineisComissao';
+import { InfoprodutosComissao } from './InfoprodutosComissao';
+import { ResumoJoao } from './ResumoJoao';
 
 function mesAtualFormatoInput() {
   const hoje = new Date();
@@ -66,7 +68,9 @@ export function ComissionamentoPage() {
   const { session } = useAuth();
   const toast = useToast();
   const confirmar = useConfirm();
-  const [aba, setAba] = useState<'fechamento' | 'painel' | 'historico'>('fechamento');
+  const [aba, setAba] = useState<'fechamento' | 'painel' | 'infoprodutos' | 'resumo-joao' | 'historico'>(
+    'fechamento'
+  );
   const historico = useHistoricoComissoes();
   const [mesInput, setMesInput] = useState(mesAtualFormatoInput()); // "YYYY-MM"
   const { dados, carregando, importando, erro, calcular, importar, editarAdiantamento } =
@@ -153,15 +157,17 @@ export function ComissionamentoPage() {
       <h1 className="mt-1 font-display text-2xl font-semibold text-tinta">Fechamento mensal</h1>
       <p className="mt-2 text-sm text-slate-500">
         Envie a base de vendas do Excel (aba "Base" da planilha de comissões). O fechamento soma
-        Auxílio + Comissão de equipe (dias úteis) + Comissão de fim de semana − Adiantamento, com
-        as regras e valores definidos em "Parâmetros das regras".
+        Auxílio + Comissão de equipe (dias úteis) + Comissão de fim de semana + Comissão de
+        infoprodutos − Adiantamento, com as regras e valores definidos em "Parâmetros das regras".
       </p>
 
-      <div className="mt-5 inline-flex rounded-md border border-slate-200 bg-slate-50 p-0.5 text-sm">
+      <div className="mt-5 inline-flex flex-wrap rounded-md border border-slate-200 bg-slate-50 p-0.5 text-sm">
         {(
           [
             ['fechamento', 'Fechamento do mês'],
             ['painel', 'Painel'],
+            ['infoprodutos', 'Infoprodutos'],
+            ['resumo-joao', 'Resumo João'],
             ['historico', 'Histórico'],
           ] as const
         ).map(([id, rotulo]) => (
@@ -254,7 +260,25 @@ export function ComissionamentoPage() {
 
       {carregando && !dados && <p className="mt-6 text-sm text-slate-400">Calculando...</p>}
 
-      {aba === 'painel' ? (
+      {aba === 'infoprodutos' ? (
+        <div className="mt-6">
+          <InfoprodutosComissao
+            mes={mes}
+            operadores={[
+              ...cadastros.colaboradores.map((c) => c.nome_base).filter((n): n is string => !!n),
+              ...cadastros.externos.filter((e) => e.valor_por_ftd !== null).map((e) => e.nome_base),
+            ].sort((a, b) => a.localeCompare(b, 'pt-BR'))}
+            percentual={cadastros.config?.percentual_infoproduto ?? 0.1}
+            onAlterou={recalcular}
+          />
+        </div>
+      ) : aba === 'resumo-joao' ? (
+        dados && (
+          <div className="mt-6">
+            <ResumoJoao dados={dados} />
+          </div>
+        )
+      ) : aba === 'painel' ? (
         dados && (
           <div className="mt-6">
             {dados.totalFtds === 0 ? (
@@ -283,8 +307,20 @@ export function ComissionamentoPage() {
             </p>
           )}
 
-          {(dados.avisos.operadoresSemCadastro.length > 0 || colaboradoresSemNome.length > 0) && (
+          {(dados.avisos.operadoresSemCadastro.length > 0 ||
+            colaboradoresSemNome.length > 0 ||
+            dados.avisos.infoprodutosSemOperador.length > 0) && (
             <div className="mt-4 space-y-3 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm">
+              {dados.avisos.infoprodutosSemOperador.length > 0 && (
+                <p className="text-amber-800">
+                  Vendas de infoprodutos com operador não reconhecido (sem comissão até corrigir na aba
+                  Infoprodutos):{' '}
+                  {dados.avisos.infoprodutosSemOperador
+                    .map((v) => `${v.operador} (${formatarMoeda(v.valor)})`)
+                    .join(', ')}
+                  .
+                </p>
+              )}
               {dados.avisos.operadoresSemCadastro.length > 0 && (
                 <div>
                   <p className="font-medium text-amber-800">
@@ -333,6 +369,7 @@ export function ComissionamentoPage() {
                     'Com. própria*',
                     'Com. equipe',
                     'Com. FDS',
+                    'Com. infoprodutos',
                     'Adiantamento',
                     'Salário',
                     'FTDs',
@@ -347,7 +384,7 @@ export function ComissionamentoPage() {
               <tbody className="divide-y divide-slate-100">
                 {linhas.length === 0 ? (
                   <tr>
-                    <td colSpan={11} className="px-4 py-6 text-center text-slate-400">
+                    <td colSpan={12} className="px-4 py-6 text-center text-slate-400">
                       Nenhum valor calculado para este mês.
                     </td>
                   </tr>
@@ -368,6 +405,7 @@ export function ComissionamentoPage() {
                       <td className="whitespace-nowrap px-3 py-2 text-slate-400">{formatarMoeda(l.comissao_propria)}</td>
                       <td className="whitespace-nowrap px-3 py-2">{formatarMoeda(l.comissao_equipe)}</td>
                       <td className="whitespace-nowrap px-3 py-2">{formatarMoeda(l.comissao_fds)}</td>
+                      <td className="whitespace-nowrap px-3 py-2">{formatarMoeda(l.comissao_infoprodutos)}</td>
                       <td className="whitespace-nowrap px-3 py-2">
                         {l.colaborador_id ? (
                           <input
@@ -408,6 +446,7 @@ export function ComissionamentoPage() {
                     <td className="whitespace-nowrap px-3 py-2 text-slate-400">{formatarMoeda(total('comissao_propria'))}</td>
                     <td className="whitespace-nowrap px-3 py-2">{formatarMoeda(total('comissao_equipe'))}</td>
                     <td className="whitespace-nowrap px-3 py-2">{formatarMoeda(total('comissao_fds'))}</td>
+                    <td className="whitespace-nowrap px-3 py-2">{formatarMoeda(total('comissao_infoprodutos'))}</td>
                     <td className="whitespace-nowrap px-3 py-2">{formatarMoeda(total('adiantamento'))}</td>
                     <td className="whitespace-nowrap px-3 py-2">{formatarMoeda(total('salario_total'))}</td>
                     <td className="px-3 py-2">{total('ftds')}</td>
@@ -605,6 +644,16 @@ function FormularioParametros({
           />
         </label>
         {numero('hora_virada_dia', 'Virada do dia (vendas antes desta hora contam no dia anterior)', '1')}
+        <label className="block text-sm text-slate-700">
+          Comissão sobre infoprodutos (%)
+          <input
+            type="number"
+            step="0.1"
+            value={Math.round(rascunho.percentual_infoproduto * 1000) / 10}
+            onChange={(e) => setRascunho({ ...rascunho, percentual_infoproduto: Number(e.target.value) / 100 })}
+            className={classeCampo}
+          />
+        </label>
       </div>
       <button
         onClick={() => onSalvar(rascunho)}

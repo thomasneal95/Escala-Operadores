@@ -54,7 +54,7 @@ export default {
     const { data: config, error: erroConfig } = await db
       .from("configuracao_comissao")
       .select(
-        "inicio_regra_nova, valor_regra_nova, valor_antigo_dia_util, valor_antigo_fds, valor_ftd_individual, taxa_total_a_pagar, hora_virada_dia"
+        "inicio_regra_nova, valor_regra_nova, valor_antigo_dia_util, valor_antigo_fds, valor_ftd_individual, taxa_total_a_pagar, hora_virada_dia, percentual_infoproduto"
       )
       .single();
 
@@ -82,7 +82,7 @@ export default {
       if ((data ?? []).length < 1000) break;
     }
 
-    const [colaboradoresRes, vigenciasRes, equipesRes, adiantamentosRes, externosRes, fixosRes] =
+    const [colaboradoresRes, vigenciasRes, equipesRes, adiantamentosRes, externosRes, fixosRes, infoprodutosRes] =
       await Promise.all([
         db
           .from("colaboradores")
@@ -95,9 +95,14 @@ export default {
         db.from("adiantamentos_mensais").select("colaborador_id, valor").eq("mes", mes),
         db.from("operadores_externos").select("nome_base, valor_por_ftd"),
         db.from("pagamentos_fixos").select("id, nome, tipo, valor, data_inicio, adiantamento").eq("ativo", true),
+        db
+          .from("vendas_infoprodutos")
+          .select("data, operador, valor")
+          .gte("data", mes)
+          .lte("data", ultimoDiaDoMes(mes)),
       ]);
 
-    const falha = [colaboradoresRes, vigenciasRes, equipesRes, adiantamentosRes, externosRes, fixosRes].find(
+    const falha = [colaboradoresRes, vigenciasRes, equipesRes, adiantamentosRes, externosRes, fixosRes, infoprodutosRes].find(
       (r) => r.error
     );
     if (falha) {
@@ -140,6 +145,11 @@ export default {
         data_inicio: f.data_inicio,
         adiantamento: Number(f.adiantamento),
       })),
+      infoprodutos: (infoprodutosRes.data ?? []).map((v) => ({
+        data: v.data,
+        operador: v.operador,
+        valor: Number(v.valor),
+      })),
       config: {
         inicio_regra_nova: config.inicio_regra_nova,
         valor_regra_nova: Number(config.valor_regra_nova),
@@ -148,6 +158,7 @@ export default {
         valor_ftd_individual: Number(config.valor_ftd_individual),
         taxa_total_a_pagar: Number(config.taxa_total_a_pagar),
         hora_virada_dia: Number(config.hora_virada_dia),
+        percentual_infoproduto: Number(config.percentual_infoproduto),
       } satisfies ConfiguracaoComissao,
     });
 

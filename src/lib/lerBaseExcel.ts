@@ -164,3 +164,54 @@ export async function lerHistoricoExcel(arquivo: File): Promise<LinhaHistoricoEx
   }
   return linhas;
 }
+
+// ---------------------------------------------------------------------------
+// Aba "Vendas Infoprodutos" da planilha de comissões (lançamentos manuais):
+// Data, Tipo do Produto, E-mail do Lead, Operador, Valor (US$).
+
+export interface LinhaInfoprodutoExcel {
+  data: string;
+  produto: string;
+  email_lead: string | null;
+  operador: string;
+  valor: number;
+}
+
+export async function lerInfoprodutosExcel(arquivo: File): Promise<LinhaInfoprodutoExcel[]> {
+  const pasta = read(await arquivo.arrayBuffer(), { type: 'array', dense: true });
+  const nomeAba = pasta.SheetNames.find((n) => normalizar(n) === 'vendas infoprodutos');
+  if (!nomeAba) throw new Error('O arquivo não tem a aba "Vendas Infoprodutos".');
+
+  const linhas = utils.sheet_to_json<unknown[]>(pasta.Sheets[nomeAba], { header: 1, defval: null, raw: true });
+  const indiceCabecalho = linhas.findIndex((l) => {
+    const nomes = (l ?? []).map(normalizar);
+    return nomes.includes('data') && nomes.includes('operador') && nomes.some((n) => n.startsWith('valor'));
+  });
+  if (indiceCabecalho < 0) throw new Error('Não encontrei o cabeçalho (Data, Operador, Valor) na aba "Vendas Infoprodutos".');
+
+  const cabecalho = linhas[indiceCabecalho].map(normalizar);
+  // Só as primeiras colunas de cada nome (a aba tem um resumo ao lado).
+  const coluna = (teste: (n: string) => boolean) => cabecalho.findIndex(teste);
+  const cData = coluna((n) => n === 'data');
+  const cProduto = coluna((n) => n.includes('produto'));
+  const cEmail = coluna((n) => n.includes('e-mail') || n.includes('email'));
+  const cOperador = coluna((n) => n === 'operador');
+  const cValor = coluna((n) => n.startsWith('valor'));
+
+  const resultado: LinhaInfoprodutoExcel[] = [];
+  for (const l of linhas.slice(indiceCabecalho + 1)) {
+    const data = paraData(l[cData]);
+    const operador = String(l[cOperador] ?? '').trim();
+    const valor = typeof l[cValor] === 'number' ? (l[cValor] as number) : Number(l[cValor]);
+    if (!data || !operador || !Number.isFinite(valor)) continue;
+    const email = cEmail >= 0 ? String(l[cEmail] ?? '').trim() : '';
+    resultado.push({
+      data,
+      produto: String(l[cProduto] ?? '').trim() || 'Sem produto',
+      email_lead: email || null,
+      operador,
+      valor,
+    });
+  }
+  return resultado;
+}

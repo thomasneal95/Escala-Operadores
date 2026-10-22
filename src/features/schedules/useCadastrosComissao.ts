@@ -13,6 +13,7 @@ export interface ConfiguracaoComissao {
   valor_ftd_individual: number;
   taxa_total_a_pagar: number;
   hora_virada_dia: number;
+  percentual_infoproduto: number;
 }
 
 export interface OperadorExterno {
@@ -71,6 +72,7 @@ export function useCadastrosComissao() {
       valor_ftd_individual: Number(c.valor_ftd_individual),
       taxa_total_a_pagar: Number(c.taxa_total_a_pagar),
       hora_virada_dia: Number(c.hora_virada_dia),
+      percentual_infoproduto: Number(c.percentual_infoproduto),
     });
     setExternos(
       (externosRes.data ?? []).map((e) => ({
