@@ -1,191 +1,111 @@
-import { useState } from 'react';
+import { useCallback, useState } from 'react';
 import { supabase } from '../../lib/supabase/client';
+import type {
+  LinhaFechamento,
+  ResultadoFechamento,
+} from '../../../supabase/functions/_shared/calculoFechamento';
 
-interface ResultadoColaborador {
-  colaborador_id: string;
-  nome: string;
-  auxilio: number;
-  comissaoDiaSemana: number;
-  comissaoFimDeSemana: number;
-  adiantamento: number;
-  salarioTotal: number;
+export type { LinhaFechamento };
+
+export interface DadosFechamento extends ResultadoFechamento {
+  calculadoEm: string;
 }
 
-interface LeadSemDono {
-  id: number;
-  email: string;
-}
-
-interface DiaSemPresenca {
-  equipeId: string;
-  data: string;
-  leads: number;
-}
-
-interface RespostaFechamento {
-  mes: string;
-  totalLeadsConvertidos: number;
-  resultado: ResultadoColaborador[];
-  avisos: {
-    leadsSemColaboradorConhecido: LeadSemDono[];
-    diasDeFimDeSemanaSemPresencaConfirmada: DiaSemPresenca[];
-  };
-  calculadoEm: string | null;
-}
-
+// Fechamento mensal calculado a partir da base de vendas importada do Excel
+// (função calcular-fechamento-mensal). A cada cálculo, as linhas dos
+// colaboradores são salvas em fechamentos_mensais (foto do mês).
 export function useFechamentoMensal() {
-  const [dados, setDados] = useState<RespostaFechamento | null>(null);
+  const [dados, setDados] = useState<DadosFechamento | null>(null);
   const [carregando, setCarregando] = useState(false);
-  const [atualizando, setAtualizando] = useState(false);
+  const [importando, setImportando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
 
-  async function buscarSalvo(mes: string): Promise<RespostaFechamento | null> {
-            const { data, error } = await supabase
-      .from('fechamentos_mensais')
-      .select(
-        'colaborador_id, nome_snapshot, auxilio, comissao_dia_semana, comissao_fim_semana, adiantamento, salario_total, total_leads_convertidos, calculado_em'
-      )
-      .eq('mes', mes)
-      .order('salario_total', { ascending: false });
-
-    if (error || !data || data.length === 0) return null;
-
-    return {
-      mes,
-      totalLeadsConvertidos: data[0]?.total_leads_convertidos ?? 0,
-                  resultado: data.map((r) => ({
-        colaborador_id: r.colaborador_id,
-        nome: r.nome_snapshot,
-        auxilio: Number(r.auxilio),
-        comissaoDiaSemana: Number(r.comissao_dia_semana),
-        comissaoFimDeSemana: Number(r.comissao_fim_semana),
-        adiantamento: Number(r.adiantamento),
-        salarioTotal: Number(r.salario_total),
-      })),
-      avisos: { leadsSemColaboradorConhecido: [], diasDeFimDeSemanaSemPresencaConfirmada: [] },
-      calculadoEm: data[0]?.calculado_em ?? null,
-    };
-  }
-
-  async function buscarAoVivo(mes: string): Promise<{ dados?: RespostaFechamento; erro?: string }> {
-    const { data, error } = await supabase.functions.invoke('calcular-fechamento-mensal', {
-      body: { mes },
-    });
-
-    if (error) return { erro: 'Não foi possível calcular o fechamento. Tente novamente.' };
-    if (data?.erro) return { erro: data.erro };
-
-    return { dados: { ...data, calculadoEm: new Date().toISOString() } };
-  }
-
-    async function persistir(
-    mes: string,
-    adminId: string,
-    totalLeadsConvertidos: number,
-    itens: ResultadoColaborador[]
-  ) {
-    // Apaga tudo desse mês antes de salvar de novo, pra garantir que
-    // ninguém que não deveria mais aparecer (ex.: alguém que virou admin,
-    // ou foi desativado) fique "preso" de uma vez anterior.
-    await supabase.from('fechamentos_mensais').delete().eq('mes', mes);
-
+  const persistir = useCallback(async (resultado: ResultadoFechamento, adminId: string) => {
     const agora = new Date().toISOString();
-    const linhas = itens.map((item) => ({
-      mes,
-      colaborador_id: item.colaborador_id,
-      nome_snapshot: item.nome,
-      auxilio: item.auxilio,
-      comissao_dia_semana: item.comissaoDiaSemana,
-      comissao_fim_semana: item.comissaoFimDeSemana,
-      adiantamento: item.adiantamento,
-      salario_total: item.salarioTotal,
-      total_leads_convertidos: totalLeadsConvertidos,
-      calculado_em: agora,
-      calculado_por: adminId,
-    }));
+    const linhas = resultado.linhas
+      .filter((l) => l.colaborador_id)
+      .map((l) => ({
+        mes: resultado.mes,
+        colaborador_id: l.colaborador_id as string,
+        nome_snapshot: l.nome,
+        equipe_nome: l.equipe,
+        auxilio: l.auxilio,
+        comissao_dia_semana: l.comissao_equipe,
+        comissao_fim_semana: l.comissao_fds,
+        comissao_propria: l.comissao_propria,
+        adiantamento: l.adiantamento,
+        salario_total: l.salario_total,
+        total_a_pagar: l.total_a_pagar,
+        ftds: l.ftds,
+        total_leads_convertidos: resultado.totalFtds,
+        calculado_em: agora,
+        calculado_por: adminId,
+      }));
 
-    const { error } = await supabase
-      .from('fechamentos_mensais')
-      .upsert(linhas, { onConflict: 'mes,colaborador_id' });
+    // Substitui a foto do mês inteira, para não sobrar quem saiu do cálculo.
+    await supabase.from('fechamentos_mensais').delete().eq('mes', resultado.mes);
+    if (linhas.length > 0) await supabase.from('fechamentos_mensais').insert(linhas);
+    return agora;
+  }, []);
 
-    return { erro: error ? 'Não foi possível salvar automaticamente.' : null, calculadoEm: agora };
-  }
+  const calcular = useCallback(
+    async (mes: string, adminId: string) => {
+      setCarregando(true);
+      setErro(null);
 
-  // Carrega a tela: tenta o que já está salvo; se não existir nada ainda
-  // pra esse mês, calcula ao vivo e já salva sozinho, sem pedir confirmação.
-  async function carregarOuCalcular(mes: string, adminId: string) {
-    setCarregando(true);
-    setErro(null);
+      const { data, error } = await supabase.functions.invoke('calcular-fechamento-mensal', {
+        body: { mes },
+      });
 
-    const salvo = await buscarSalvo(mes);
-    if (salvo) {
-      setDados(salvo);
+      if (error || !data || data.erro) {
+        setErro(data?.erro ?? 'Não foi possível calcular o fechamento. Tente novamente.');
+        setCarregando(false);
+        return;
+      }
+
+      const resultado = data as ResultadoFechamento;
+      const calculadoEm = await persistir(resultado, adminId);
+      setDados({ ...resultado, calculadoEm });
       setCarregando(false);
-      return;
-    }
+    },
+    [persistir]
+  );
 
-    const resultado = await buscarAoVivo(mes);
-    if (resultado.erro || !resultado.dados) {
-      setErro(resultado.erro ?? 'Não foi possível calcular o fechamento.');
-      setCarregando(false);
-      return;
-    }
-
-    const persistencia = await persistir(mes, adminId, resultado.dados.totalLeadsConvertidos, resultado.dados.resultado);
-
-    setDados({
-      ...resultado.dados,
-      calculadoEm: persistencia.calculadoEm,
-    });
-    setCarregando(false);
-  }
-
-  // Botão "Atualizar": busca de novo na API e salva sozinho.
-  async function atualizar(mes: string, adminId: string) {
-    setAtualizando(true);
+  // Lê o Excel no navegador e grava a base (substitui os meses do arquivo).
+  async function importar(arquivo: File) {
+    setImportando(true);
     setErro(null);
+    try {
+      // Carregado só aqui: a leitura de Excel é pesada e só o admin usa.
+      const { lerBaseExcel } = await import('../../lib/lerBaseExcel');
+      const { linhas, aba, ignoradas } = await lerBaseExcel(arquivo);
+      if (linhas.length === 0) {
+        return { erro: `A aba "${aba}" não tem nenhuma venda para importar.` };
+      }
 
-    const resultado = await buscarAoVivo(mes);
-    if (resultado.erro || !resultado.dados) {
-      setErro(resultado.erro ?? 'Não foi possível atualizar o fechamento.');
-      setAtualizando(false);
-      return;
+      const { data, error } = await supabase.rpc('importar_vendas_base', { p_linhas: linhas });
+      if (error) {
+        return { erro: 'Não foi possível gravar a base. Nada foi alterado.' };
+      }
+
+      const meses = [...new Set(linhas.map((l) => l.data.slice(0, 7)))].sort();
+      return { erro: null, gravadas: (data as number) ?? linhas.length, ignoradas, aba, meses };
+    } catch (e) {
+      return { erro: e instanceof Error ? e.message : 'Não foi possível ler o arquivo.' };
+    } finally {
+      setImportando(false);
     }
-
-    const persistencia = await persistir(mes, adminId, resultado.dados.totalLeadsConvertidos, resultado.dados.resultado);
-
-    setDados({
-      ...resultado.dados,
-      calculadoEm: persistencia.calculadoEm,
-    });
-    setAtualizando(false);
   }
 
-  // Edita o adiantamento de UMA pessoa e já salva sozinho (linha inteira).
-  async function editarAdiantamento(mes: string, adminId: string, colaboradorId: string, novoValor: number) {
-    if (!dados) return;
-
-            const novoResultado = dados.resultado.map((r) =>
-      r.colaborador_id === colaboradorId
-        ? {
-            ...r,
-            adiantamento: novoValor,
-            salarioTotal:
-              Math.round((r.auxilio + r.comissaoDiaSemana + r.comissaoFimDeSemana - novoValor) * 100) / 100,
-          }
-        : r
-    );
-
-    setDados({ ...dados, resultado: novoResultado });
-
-    await supabase.from('adiantamentos_mensais').upsert(
-      { colaborador_id: colaboradorId, mes, valor: novoValor, atualizado_em: new Date().toISOString() },
-      { onConflict: 'colaborador_id,mes' }
-    );
-
-    const persistencia = await persistir(mes, adminId, dados.totalLeadsConvertidos, novoResultado);
-    setDados((atual) => (atual ? { ...atual, calculadoEm: persistencia.calculadoEm } : atual));
+  async function editarAdiantamento(mes: string, adminId: string, colaboradorId: string, valor: number) {
+    await supabase
+      .from('adiantamentos_mensais')
+      .upsert(
+        { colaborador_id: colaboradorId, mes, valor, atualizado_em: new Date().toISOString() },
+        { onConflict: 'colaborador_id,mes' }
+      );
+    await calcular(mes, adminId);
   }
 
-  return { dados, carregando, atualizando, erro, carregarOuCalcular, atualizar, editarAdiantamento };
+  return { dados, carregando, importando, erro, calcular, importar, editarAdiantamento };
 }

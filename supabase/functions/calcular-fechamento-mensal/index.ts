@@ -1,53 +1,23 @@
 import "@supabase/functions-js/edge-runtime.d.ts";
 import { withSupabase } from "@supabase/server";
+import {
+  calcularFechamento,
+  type ColaboradorFechamento,
+  type ConfiguracaoComissao,
+  type Venda,
+} from "../_shared/calculoFechamento.ts";
 
-interface LeadExterno {
-  id: number;
-  data_hora: string;
-  data_conversao: string;
-  email_operador: string;
-  nome_operador: string;
-  convertido: boolean;
+// Fechamento mensal a partir da base de vendas importada do Excel
+// (tabela vendas_importadas). As regras ficam em _shared/calculoFechamento.ts.
+
+function somarDias(data: string, dias: number) {
+  const [a, m, d] = data.split("-").map(Number);
+  return new Date(Date.UTC(a, m - 1, d + dias)).toISOString().slice(0, 10);
 }
 
-interface RespostaApiExterna {
-  total: number;
-  tem_mais: boolean;
-  leads: LeadExterno[];
-}
-
-const VALOR_DIA_DE_SEMANA = 2;
-const VALOR_FIM_DE_SEMANA = 3;
-
-function dataLocalEDiaDaSemana(dataHoraUtc: string) {
-  const dataUtc = new Date(dataHoraUtc);
-  let dataLocal = new Date(dataUtc.getTime() - 3 * 60 * 60 * 1000);
-
-  // Corte de dia às 6h da manhã (horário local), não à meia-noite: o turno
-  // da noite passa da virada do dia, então um lead às 2h ou 4h da manhã
-  // ainda conta como parte do dia ANTERIOR.
-  if (dataLocal.getUTCHours() < 6) {
-    dataLocal = new Date(dataLocal.getTime() - 24 * 60 * 60 * 1000);
-  }
-
-  const diaDaSemana = dataLocal.getUTCDay();
-  const dataFormatada = dataLocal.toISOString().slice(0, 10);
-  return { dataFormatada, diaDaSemana };
-}
-
-function todosOsDiasDoMes(mesInicio: string): string[] {
-  const [ano, mes] = mesInicio.split("-").map(Number);
-  const ultimoDia = new Date(Date.UTC(ano, mes, 0)).getUTCDate();
-  const dias: string[] = [];
-  for (let dia = 1; dia <= ultimoDia; dia++) {
-    dias.push(`${ano}-${String(mes).padStart(2, "0")}-${String(dia).padStart(2, "0")}`);
-  }
-  return dias;
-}
-
-function diaDaSemanaDeString(data: string): number {
-  const [ano, mes, dia] = data.split("-").map(Number);
-  return new Date(Date.UTC(ano, mes - 1, dia)).getUTCDay();
+function ultimoDiaDoMes(mes: string) {
+  const [a, m] = mes.split("-").map(Number);
+  return new Date(Date.UTC(a, m, 0)).toISOString().slice(0, 10);
 }
 
 export default {
@@ -70,328 +40,117 @@ export default {
     }
 
     const body = await req.json();
-    const mesInicio: string = body.mes; // formato "YYYY-MM-01"
+    const mes: string = body.mes; // "YYYY-MM-01"
 
-    if (!mesInicio || !/^\d{4}-\d{2}-01$/.test(mesInicio)) {
+    if (!mes || !/^\d{4}-\d{2}-01$/.test(mes)) {
       return Response.json(
         { erro: "Informe 'mes' no formato YYYY-MM-01 (primeiro dia do mês)." },
         { status: 400 }
       );
     }
 
-    const diasDoMes = todosOsDiasDoMes(mesInicio);
-    const mesFim = diasDoMes[diasDoMes.length - 1];
+    const db = ctx.supabaseAdmin;
 
-    // 1. Busca TODOS os leads do mês na API externa (com paginação).
-    const urlBase = Deno.env.get("MYPAINEL_API_URL")!;
-    const chaveApi = Deno.env.get("MYPAINEL_API_KEY")!;
-
-    const todosOsLeads: LeadExterno[] = [];
-    let pagina = 1;
-    let temMais = true;
-    let paginasLidas = 0;
-
-    while (temMais && paginasLidas < 20) {
-      const url = `${urlBase}?inicio=${mesInicio}&fim=${mesFim}&eixo=conversao&pagina=${pagina}`;
-      const resp = await fetch(url, { headers: { "x-api-key": chaveApi } });
-
-      if (!resp.ok) {
-        return Response.json(
-          { erro: `A API de leads retornou erro (status ${resp.status}) na página ${pagina}.` },
-          { status: 502 }
-        );
-      }
-
-      const dados: RespostaApiExterna = await resp.json();
-      todosOsLeads.push(...dados.leads);
-      temMais = dados.tem_mais;
-      pagina++;
-      paginasLidas++;
-    }
-
-    const leadsConvertidos = todosOsLeads.filter((l) => l.convertido);
-
-    // 2. Colaboradores ativos no mês: os ativos hoje e os desativados a partir
-    // do início do mês (entram até a data de desativação).
-        const { data: colaboradoresData, error: erroColaboradores } = await ctx.supabaseAdmin
-      .from("colaboradores")
+    const { data: config, error: erroConfig } = await db
+      .from("configuracao_comissao")
       .select(
-        "id, equipe_id, data_admissao, desativado_em, auxilio_mensal, comissionamento_individual, ativo, perfis(email, nome_completo)"
+        "inicio_regra_nova, valor_regra_nova, valor_antigo_dia_util, valor_antigo_fds, valor_ftd_individual, taxa_total_a_pagar, hora_virada_dia"
       )
-      .or(`ativo.eq.true,desativado_em.gte.${mesInicio}`);
+      .single();
 
-    if (erroColaboradores) {
-      return Response.json({ erro: "Não foi possível carregar os colaboradores." }, { status: 500 });
+    if (erroConfig || !config) {
+      return Response.json({ erro: "Não foi possível carregar os parâmetros de comissão." }, { status: 500 });
     }
 
-        interface ColaboradorInfo {
-      id: string;
-      equipe_id: string | null;
-      data_admissao: string | null;
-      desativado_em: string | null;
-      auxilio_mensal: number;
-      email: string | null;
-      nome: string;
-      comissionamentoIndividual: boolean;
-    }
-
-    const colaboradores: ColaboradorInfo[] = (colaboradoresData ?? []).map((c: any) => ({
-      id: c.id,
-      equipe_id: c.equipe_id,
-      data_admissao: c.data_admissao,
-      desativado_em: c.ativo ? null : c.desativado_em,
-      auxilio_mensal: Number(c.auxilio_mensal) || 0,
-      email: c.perfis?.email?.toLowerCase().trim() ?? null,
-      nome: c.perfis?.nome_completo ?? "(sem nome)",
-      comissionamentoIndividual: !!c.comissionamento_individual,
-    }));
-
-    const colaboradorPorEmail = new Map<string, ColaboradorInfo>();
-    for (const c of colaboradores) {
-      if (c.email) colaboradorPorEmail.set(c.email, c);
-    }
-    const colaboradorPorId = new Map(colaboradores.map((c) => [c.id, c]));
-
-    // 3. Histórico de vigência de equipe — para saber a equipe de cada
-    // colaborador em cada dia específico do mês (considera trocas).
-    const { data: historicoData, error: erroHistorico } = await ctx.supabaseAdmin
-      .from("historico_equipe")
-      .select("colaborador_id, equipe_id, valido_de, valido_ate");
-
-    if (erroHistorico) {
-      return Response.json({ erro: "Não foi possível carregar o histórico de equipe." }, { status: 500 });
-    }
-
-    function equipeVigenteEm(colaboradorId: string, data: string): string | null {
-      const registros = (historicoData ?? []).filter((h) => h.colaborador_id === colaboradorId);
-      for (const r of registros) {
-        if (r.valido_de <= data && (r.valido_ate === null || r.valido_ate >= data)) {
-          return r.equipe_id;
-        }
+    // Vendas do mês e do 1º dia do mês seguinte (as da madrugada ainda
+    // contam para o último dia deste mês). Paginado: o Supabase devolve no
+    // máximo 1000 linhas por consulta.
+    const vendas: Venda[] = [];
+    const ate = somarDias(ultimoDiaDoMes(mes), 1);
+    for (let inicio = 0; ; inicio += 1000) {
+      const { data, error } = await db
+        .from("vendas_importadas")
+        .select("operador, etapa, data, hora")
+        .gte("data", mes)
+        .lte("data", ate)
+        .order("id")
+        .range(inicio, inicio + 999);
+      if (error) {
+        return Response.json({ erro: "Não foi possível carregar a base de vendas." }, { status: 500 });
       }
-      // Sem histórico específico: usa a equipe atual do cadastro como fallback.
-      return colaboradorPorId.get(colaboradorId)?.equipe_id ?? null;
+      vendas.push(...(data ?? []));
+      if ((data ?? []).length < 1000) break;
     }
 
-        // 4. Todas as escalas do mês (não só as confirmadas) — precisamos
-    // saber quem foi confirmado (compareceu=true), quem foi confirmado
-    // como falta (compareceu=false) e quem nunca teve presença
-    // confirmada (compareceu=null, comum em dados anteriores ao sistema).
-    const { data: escalasData, error: erroEscalas } = await ctx.supabaseAdmin
-      .from("escalas")
-      .select("colaborador_id, data, compareceu")
-      .gte("data", mesInicio)
-      .lte("data", mesFim);
+    const [colaboradoresRes, vigenciasRes, equipesRes, adiantamentosRes, externosRes, fixosRes] =
+      await Promise.all([
+        db
+          .from("colaboradores")
+          .select(
+            "id, nome_base, equipe_id, data_admissao, desativado_em, auxilio_mensal, comissionamento_individual, ativo, perfis(nome_completo, papel)"
+          )
+          .or(`ativo.eq.true,desativado_em.gte.${mes}`),
+        db.from("historico_equipe").select("colaborador_id, equipe_id, valido_de, valido_ate"),
+        db.from("equipes").select("id, nome"),
+        db.from("adiantamentos_mensais").select("colaborador_id, valor").eq("mes", mes),
+        db.from("operadores_externos").select("nome_base, valor_por_ftd"),
+        db.from("pagamentos_fixos").select("id, nome, tipo, valor, data_inicio, adiantamento").eq("ativo", true),
+      ]);
 
-    if (erroEscalas) {
-      return Response.json({ erro: "Não foi possível carregar as presenças confirmadas." }, { status: 500 });
-    }
-
-    // 5. Processa os leads: agrupa contagem por (equipe, dia), separando
-    // dia de semana de fim de semana, e registra a 1ª conversão do mês de
-    // cada colaborador (usada para saber quando ele "entra" no rateio).
-    const leadsSemDonoConhecido: { id: number; email: string }[] = [];
-    const contagemDiaSemanaPorEquipeEDia = new Map<string, number>(); // "equipeId|data"
-    const contagemFimDeSemanaPorEquipeEDia = new Map<string, number>();
-    const primeiraConversaoNoMes = new Map<string, string>(); // colaborador_id -> data
-    const colaboradoresComLeadNoDia = new Map<string, Set<string>>(); // "data" -> Set(colaborador_id)
-    const comissaoDiaSemanaIndividual = new Map<string, number>(); // colaborador_id -> valor
-    const comissaoFimDeSemanaIndividual = new Map<string, number>(); // colaborador_id -> valor
-    const VALOR_INDIVIDUAL = 2;
-    for (const lead of leadsConvertidos) {
-      const emailLead = lead.email_operador?.toLowerCase().trim();
-      const colaborador = emailLead ? colaboradorPorEmail.get(emailLead) : undefined;
-
-      if (!colaborador) {
-        leadsSemDonoConhecido.push({ id: lead.id, email: lead.email_operador });
-        continue;
-      }
-
-                  const { dataFormatada, diaDaSemana } = dataLocalEDiaDaSemana(lead.data_conversao);
-
-      // Comissionamento individual: valor fixo por lead (mesmo valor em
-      // qualquer dia), sem dividir com ninguém e sem entrar na lógica de
-      // equipe — mas ainda soma nas colunas normais (dia de semana / fim
-      // de semana), conforme o dia em que o lead converteu.
-      if (colaborador.comissionamentoIndividual) {
-        const ehFimDeSemanaIndividual = diaDaSemana === 0 || diaDaSemana === 6;
-        const mapa = ehFimDeSemanaIndividual ? comissaoFimDeSemanaIndividual : comissaoDiaSemanaIndividual;
-        mapa.set(colaborador.id, (mapa.get(colaborador.id) ?? 0) + VALOR_INDIVIDUAL);
-        continue;
-      }
-
-      const atual = primeiraConversaoNoMes.get(colaborador.id);
-      if (!atual || dataFormatada < atual) {
-        primeiraConversaoNoMes.set(colaborador.id, dataFormatada);
-      }
-
-            const equipeDoDia = equipeVigenteEm(colaborador.id, dataFormatada);
-      if (!equipeDoDia) continue; // sem equipe nesse dia, não entra em rateio de equipe
-
-      const ehFimDeSemana = diaDaSemana === 0 || diaDaSemana === 6;
-      const chave = `${equipeDoDia}|${dataFormatada}`;
-
-            if (ehFimDeSemana) {
-        contagemFimDeSemanaPorEquipeEDia.set(chave, (contagemFimDeSemanaPorEquipeEDia.get(chave) ?? 0) + 1);
-        const conjuntoDoDia = colaboradoresComLeadNoDia.get(dataFormatada) ?? new Set<string>();
-        conjuntoDoDia.add(colaborador.id);
-        colaboradoresComLeadNoDia.set(dataFormatada, conjuntoDoDia);
-      } else {
-        contagemDiaSemanaPorEquipeEDia.set(chave, (contagemDiaSemanaPorEquipeEDia.get(chave) ?? 0) + 1);
-      }
-    }
-
-    // 6. Calcula, dia a dia, o rateio de dia de semana e de fim de semana.
-    const comissaoDiaSemanaPorColaborador = new Map<string, number>();
-    const comissaoFimDeSemanaPorColaborador = new Map<string, number>();
-    const diasDeFimDeSemanaSemPresencaConfirmada: { equipeId: string; data: string; leads: number }[] = [];
-
-    function adicionar(mapa: Map<string, number>, colaboradorId: string, valor: number) {
-      mapa.set(colaboradorId, (mapa.get(colaboradorId) ?? 0) + valor);
-    }
-
-    for (const dia of diasDoMes) {
-      const diaDaSemana = diaDaSemanaDeString(dia);
-      const ehFimDeSemana = diaDaSemana === 0 || diaDaSemana === 6;
-
-      // Todas as equipes distintas presentes na contagem desse dia.
-      const equipesDoDia = new Set<string>();
-      for (const c of colaboradores) {
-        const eq = equipeVigenteEm(c.id, dia);
-        if (eq) equipesDoDia.add(eq);
-      }
-
-      for (const equipeId of equipesDoDia) {
-        const chave = `${equipeId}|${dia}`;
-
-                if (ehFimDeSemana) {
-          const quantidadeLeads = contagemFimDeSemanaPorEquipeEDia.get(chave);
-          if (!quantidadeLeads) continue;
-
-          // Prioridade 1: quem teve presença explicitamente confirmada.
-          let presentes = colaboradores.filter((c) => {
-            if (equipeVigenteEm(c.id, dia) !== equipeId) return false;
-            return (escalasData ?? []).some(
-              (e) => e.colaborador_id === c.id && e.data === dia && e.compareceu === true
-            );
-          });
-
-                    // Prioridade 2 (só se ninguém tiver confirmação nenhuma): usa
-          // quem foi escalado sem confirmação (compareceu = null) como
-          // aproximação — útil para períodos anteriores ao sistema.
-          if (presentes.length === 0) {
-            presentes = colaboradores.filter((c) => {
-              if (equipeVigenteEm(c.id, dia) !== equipeId) return false;
-              return (escalasData ?? []).some(
-                (e) => e.colaborador_id === c.id && e.data === dia && e.compareceu === null
-              );
-            });
-          }
-
-          // Prioridade 3 (só se não existir NENHUM registro de escala pra
-          // esse dia): usa quem converteu pelo menos 1 lead nesse dia como
-          // prova de que trabalhou — necessário para dados anteriores ao
-          // sistema, quando nem a escala foi registrada.
-          if (presentes.length === 0) {
-            const comLeadNesseDia = colaboradoresComLeadNoDia.get(dia) ?? new Set<string>();
-            presentes = colaboradores.filter((c) => {
-              if (equipeVigenteEm(c.id, dia) !== equipeId) return false;
-              return comLeadNesseDia.has(c.id);
-            });
-          }
-
-          if (presentes.length === 0) {
-            diasDeFimDeSemanaSemPresencaConfirmada.push({ equipeId, data: dia, leads: quantidadeLeads });
-            continue;
-          }
-
-          const valorTotal = quantidadeLeads * VALOR_FIM_DE_SEMANA;
-          const valorPorPessoa = valorTotal / presentes.length;
-          for (const p of presentes) {
-            adicionar(comissaoFimDeSemanaPorColaborador, p.id, valorPorPessoa);
-          }
-        } else {
-          const quantidadeLeads = contagemDiaSemanaPorEquipeEDia.get(chave);
-          if (!quantidadeLeads) continue;
-
-          const ativos = colaboradores.filter((c) => {
-            if (equipeVigenteEm(c.id, dia) !== equipeId) return false;
-            const inicio = primeiraConversaoNoMes.get(c.id);
-            return inicio !== undefined && inicio <= dia;
-          });
-
-          if (ativos.length === 0) continue;
-
-          const valorTotal = quantidadeLeads * VALOR_DIA_DE_SEMANA;
-          const valorPorPessoa = valorTotal / ativos.length;
-          for (const a of ativos) {
-            adicionar(comissaoDiaSemanaPorColaborador, a.id, valorPorPessoa);
-          }
-        }
-      }
-    }
-
-    // 7. Auxílio proporcional aos dias ativos no mês (admissão e desativação).
-    const diasNoMes = diasDoMes.length;
-
-    function auxilioProporcional(c: ColaboradorInfo): number {
-      const inicio = c.data_admissao && c.data_admissao > mesInicio ? c.data_admissao : mesInicio;
-      const fimAtivo = c.desativado_em && c.desativado_em < mesFim ? c.desativado_em : mesFim;
-      if (inicio > fimAtivo) return 0;
-      if (inicio === mesInicio && fimAtivo === mesFim) return c.auxilio_mensal;
-
-      const diasAtivos = diasDoMes.filter((d) => d >= inicio && d <= fimAtivo).length;
-      return (c.auxilio_mensal * diasAtivos) / diasNoMes;
-    }
-
-    // 8. Adiantamentos já lançados para este mês.
-    const { data: adiantamentosData } = await ctx.supabaseAdmin
-      .from("adiantamentos_mensais")
-      .select("colaborador_id, valor")
-      .eq("mes", mesInicio);
-
-    const adiantamentoPorColaborador = new Map(
-      (adiantamentosData ?? []).map((a) => [a.colaborador_id, Number(a.valor)])
+    const falha = [colaboradoresRes, vigenciasRes, equipesRes, adiantamentosRes, externosRes, fixosRes].find(
+      (r) => r.error
     );
+    if (falha) {
+      return Response.json({ erro: "Não foi possível carregar os cadastros do fechamento." }, { status: 500 });
+    }
 
-            // 9. Monta o resultado final por colaborador.
-    const resultado = colaboradores
-      .map((c) => {
-        const auxilio = Math.round(auxilioProporcional(c) * 100) / 100;
-        const comissaoDiaSemana =
-          Math.round(
-            ((comissaoDiaSemanaPorColaborador.get(c.id) ?? 0) + (comissaoDiaSemanaIndividual.get(c.id) ?? 0)) * 100
-          ) / 100;
-        const comissaoFimDeSemana =
-          Math.round(
-            ((comissaoFimDeSemanaPorColaborador.get(c.id) ?? 0) + (comissaoFimDeSemanaIndividual.get(c.id) ?? 0)) *
-              100
-          ) / 100;
-        const adiantamento = adiantamentoPorColaborador.get(c.id) ?? 0;
-        const salarioTotal =
-          Math.round((auxilio + comissaoDiaSemana + comissaoFimDeSemana - adiantamento) * 100) / 100;
+    const colaboradores: ColaboradorFechamento[] = (colaboradoresRes.data ?? [])
+      // deno-lint-ignore no-explicit-any
+      .filter((c: any) => c.perfis?.papel !== "administrador")
+      // deno-lint-ignore no-explicit-any
+      .map((c: any) => ({
+        id: c.id,
+        nome: c.perfis?.nome_completo ?? "(sem nome)",
+        nome_base: c.nome_base,
+        equipe_id: c.equipe_id,
+        data_admissao: c.data_admissao,
+        desativado_em: c.ativo ? null : c.desativado_em,
+        auxilio_mensal: Number(c.auxilio_mensal) || 0,
+        comissionamento_individual: !!c.comissionamento_individual,
+      }));
 
-        return {
-          colaborador_id: c.id,
-          nome: c.nome,
-          auxilio,
-          comissaoDiaSemana,
-          comissaoFimDeSemana,
-          adiantamento,
-          salarioTotal,
-        };
-      })
-      .filter((r) => r.auxilio > 0 || r.comissaoDiaSemana > 0 || r.comissaoFimDeSemana > 0)
-      .sort((a, b) => b.salarioTotal - a.salarioTotal);
-
-    return Response.json({
-      mes: mesInicio,
-      totalLeadsConvertidos: leadsConvertidos.length,
-      resultado,
-      avisos: {
-        leadsSemColaboradorConhecido: leadsSemDonoConhecido,
-        diasDeFimDeSemanaSemPresencaConfirmada,
-      },
+    const resultado = calcularFechamento({
+      mes,
+      vendas,
+      colaboradores,
+      vigencias: vigenciasRes.data ?? [],
+      equipes: new Map((equipesRes.data ?? []).map((e) => [e.id, e.nome])),
+      adiantamentos: new Map(
+        (adiantamentosRes.data ?? []).map((a) => [a.colaborador_id, Number(a.valor)])
+      ),
+      externos: (externosRes.data ?? []).map((e) => ({
+        nome_base: e.nome_base,
+        valor_por_ftd: e.valor_por_ftd === null ? null : Number(e.valor_por_ftd),
+      })),
+      fixos: (fixosRes.data ?? []).map((f) => ({
+        id: f.id,
+        nome: f.nome,
+        tipo: f.tipo,
+        valor: Number(f.valor),
+        data_inicio: f.data_inicio,
+        adiantamento: Number(f.adiantamento),
+      })),
+      config: {
+        inicio_regra_nova: config.inicio_regra_nova,
+        valor_regra_nova: Number(config.valor_regra_nova),
+        valor_antigo_dia_util: Number(config.valor_antigo_dia_util),
+        valor_antigo_fds: Number(config.valor_antigo_fds),
+        valor_ftd_individual: Number(config.valor_ftd_individual),
+        taxa_total_a_pagar: Number(config.taxa_total_a_pagar),
+        hora_virada_dia: Number(config.hora_virada_dia),
+      } satisfies ConfiguracaoComissao,
     });
+
+    return Response.json(resultado);
   }),
 };

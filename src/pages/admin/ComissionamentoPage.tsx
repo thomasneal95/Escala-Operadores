@@ -1,16 +1,27 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState, type ChangeEvent } from 'react';
 import { useAuth } from '../../features/auth/AuthContext';
-import { useFechamentoMensal } from '../../features/schedules/useFechamentoMensal';
+import { useFechamentoMensal, type LinhaFechamento } from '../../features/schedules/useFechamentoMensal';
+import {
+  useCadastrosComissao,
+  type ConfiguracaoComissao,
+  type PagamentoFixo,
+} from '../../features/schedules/useCadastrosComissao';
+import { SecaoRecolhivel } from '../../components/SecaoRecolhivel';
+import { useToast } from '../../components/FeedbackProvider';
 
 function mesAtualFormatoInput() {
   const hoje = new Date();
-  const ano = hoje.getFullYear();
-  const mes = String(hoje.getMonth() + 1).padStart(2, '0');
-  return `${ano}-${mes}`;
+  return `${hoje.getFullYear()}-${String(hoje.getMonth() + 1).padStart(2, '0')}`;
 }
 
 function formatarMoeda(valor: number) {
   return valor.toLocaleString('pt-BR', { style: 'currency', currency: 'USD' });
+}
+
+function formatarData(data: string | null) {
+  if (!data) return '—';
+  const [ano, mes, dia] = data.split('-');
+  return `${dia}/${mes}/${ano}`;
 }
 
 function formatarDataHora(iso: string) {
@@ -23,46 +34,84 @@ function formatarDataHora(iso: string) {
   });
 }
 
+const rotuloTipo: Partial<Record<LinhaFechamento['tipo'], string>> = {
+  individual: 'Individual',
+  externo: 'Externo',
+  salario_fixo: 'Salário fixo',
+  auxilio_fixo: 'Auxílio fixo',
+};
+
+const classeCampo =
+  'mt-1 w-full rounded-md border border-slate-300 px-2 py-1.5 text-sm text-tinta focus:border-esmeralda focus:outline-none focus:ring-1 focus:ring-esmeralda';
+
 export function ComissionamentoPage() {
   const { session } = useAuth();
+  const toast = useToast();
   const [mesInput, setMesInput] = useState(mesAtualFormatoInput()); // "YYYY-MM"
-  const { dados, carregando, atualizando, erro, carregarOuCalcular, atualizar, editarAdiantamento } =
+  const { dados, carregando, importando, erro, calcular, importar, editarAdiantamento } =
     useFechamentoMensal();
+  const cadastros = useCadastrosComissao();
+  const entradaArquivo = useRef<HTMLInputElement>(null);
 
   const mes = `${mesInput}-01`;
+  const adminId = session?.user?.id ?? null;
 
   useEffect(() => {
-    if (session?.user) {
-      carregarOuCalcular(mes, session.user.id);
+    if (adminId) calcular(mes, adminId);
+  }, [mes, adminId, calcular]);
+
+  async function recalcular() {
+    if (adminId) await calcular(mes, adminId);
+  }
+
+  async function handleArquivo(event: ChangeEvent<HTMLInputElement>) {
+    const arquivo = event.target.files?.[0];
+    event.target.value = '';
+    if (!arquivo || !adminId) return;
+
+    const resultado = await importar(arquivo);
+    if (resultado.erro) {
+      toast(resultado.erro, 'erro');
+      return;
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mes, session?.user?.id]);
 
-  async function handleAtualizar() {
-    if (!session?.user) return;
-    await atualizar(mes, session.user.id);
+    const meses = resultado.meses ?? [];
+    toast(
+      `Base importada (aba "${resultado.aba}"): ${resultado.gravadas} venda(s) de ${meses
+        .map((m) => m.split('-').reverse().join('/'))
+        .join(', ')}.` + (resultado.ignoradas ? ` ${resultado.ignoradas} linha(s) sem dados ignorada(s).` : '')
+    );
+
+    // Abre o último mês do arquivo (normalmente o mês que está sendo fechado).
+    const ultimo = meses[meses.length - 1];
+    if (ultimo && ultimo !== mesInput) setMesInput(ultimo);
+    else await recalcular();
   }
 
-  function handleAdiantamentoBlur(colaboradorId: string, valor: string) {
-    if (!session?.user) return;
-    const numero = Number(valor) || 0;
-    editarAdiantamento(mes, session.user.id, colaboradorId, numero);
+  async function aposCadastro(resultado: { erro: string | null }, sucesso: string) {
+    if (resultado.erro) {
+      toast(resultado.erro, 'erro');
+      return;
+    }
+    toast(sucesso);
+    await recalcular();
   }
 
-  const totalGeral = dados?.resultado.reduce((soma, r) => soma + r.salarioTotal, 0) ?? 0;
+  const linhas = dados?.linhas ?? [];
+  const total = (campo: keyof LinhaFechamento) =>
+    linhas.reduce((soma, l) => soma + (typeof l[campo] === 'number' ? (l[campo] as number) : 0), 0);
+  const colaboradoresSemNome = cadastros.colaboradores.filter((c) => !c.nome_base);
 
   return (
     <div>
       <p className="font-mono text-xs font-medium uppercase tracking-widest text-ceruleo">
         Comissionamento
       </p>
-      <h1 className="mt-1 font-display text-2xl font-semibold text-tinta">
-        Fechamento mensal
-      </h1>
+      <h1 className="mt-1 font-display text-2xl font-semibold text-tinta">Fechamento mensal</h1>
       <p className="mt-2 text-sm text-slate-500">
-        Auxílio (proporcional à admissão) + Comissão de dia de semana (US$2/lead, dividido
-        entre quem já converteu no mês) + Comissão de fim de semana (US$3/lead, dividido
-        entre quem confirmou presença) − Adiantamento.
+        Envie a base de vendas do Excel (aba "Base" da planilha de comissões). O fechamento soma
+        Auxílio + Comissão de equipe (dias úteis) + Comissão de fim de semana − Adiantamento, com
+        as regras e valores definidos em "Parâmetros das regras".
       </p>
 
       <div className="mt-5 flex flex-wrap items-end gap-3">
@@ -76,76 +125,90 @@ export function ComissionamentoPage() {
           />
         </div>
 
+        <input
+          ref={entradaArquivo}
+          type="file"
+          accept=".xlsx,.xlsm,.xls,.csv"
+          onChange={handleArquivo}
+          className="hidden"
+        />
         <button
-          onClick={handleAtualizar}
-          disabled={atualizando || carregando}
+          onClick={() => entradaArquivo.current?.click()}
+          disabled={importando}
           className="rounded-md bg-esmeralda px-4 py-2 font-medium text-white transition hover:bg-esmeralda-dark disabled:cursor-not-allowed disabled:opacity-60"
         >
-          {atualizando ? 'Atualizando...' : '🔄 Atualizar'}
+          {importando ? 'Importando...' : '📤 Enviar base (Excel)'}
+        </button>
+        <button
+          onClick={recalcular}
+          disabled={carregando}
+          className="rounded-md border border-slate-300 px-4 py-2 font-medium text-slate-700 transition hover:bg-slate-100 disabled:opacity-60"
+        >
+          {carregando ? 'Calculando...' : '🔄 Recalcular'}
         </button>
 
         {dados?.calculadoEm && (
           <p className="text-xs text-slate-400">
-            Última atualização: {formatarDataHora(dados.calculadoEm)}
+            Calculado em {formatarDataHora(dados.calculadoEm)}
+            {dados.ultimaData && <> · base até {formatarData(dados.ultimaData)}</>}
           </p>
         )}
       </div>
 
-      {erro && (
-        <p className="mt-4 rounded-md bg-red-50 px-4 py-3 text-sm text-red-700">{erro}</p>
+      {(erro || cadastros.erro) && (
+        <p className="mt-4 rounded-md bg-red-50 px-4 py-3 text-sm text-red-700">{erro ?? cadastros.erro}</p>
       )}
 
-      {carregando && (
-        <p className="mt-6 text-sm text-slate-400">
-          Carregando... (na primeira vez de cada mês, isso pode levar alguns segundos, pois
-          busca os dados na API externa)
-        </p>
-      )}
+      {carregando && !dados && <p className="mt-6 text-sm text-slate-400">Calculando...</p>}
 
-      {!carregando && dados && (
+      {dados && (
         <>
-          <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-3">
-            <div className="rounded-lg border border-slate-200 bg-white p-4">
-              <p className="text-xs font-medium uppercase tracking-wide text-slate-400">
-                Leads convertidos no mês
-              </p>
-              <p className="mt-1 font-display text-2xl font-semibold text-tinta">
-                {dados.totalLeadsConvertidos}
-              </p>
-            </div>
-            <div className="rounded-lg border border-slate-200 bg-white p-4">
-              <p className="text-xs font-medium uppercase tracking-wide text-slate-400">
-                Colaboradores
-              </p>
-              <p className="mt-1 font-display text-2xl font-semibold text-tinta">
-                {dados.resultado.length}
-              </p>
-            </div>
-            <div className="rounded-lg border border-esmeralda/30 bg-esmeralda-light p-4">
-              <p className="text-xs font-medium uppercase tracking-wide text-esmeralda-dark">
-                Folha total (já com adiantamentos descontados)
-              </p>
-              <p className="mt-1 font-display text-2xl font-semibold text-tinta">
-                {formatarMoeda(totalGeral)}
-              </p>
-            </div>
+          <div className="mt-6 grid grid-cols-2 gap-4 lg:grid-cols-4">
+            <Cartao titulo="FTDs no mês" valor={String(dados.totalFtds)} />
+            <Cartao titulo="Pessoas" valor={String(linhas.length)} />
+            <Cartao titulo="Folha (salários)" valor={formatarMoeda(total('salario_total'))} />
+            <Cartao titulo="Total a pagar" valor={formatarMoeda(total('total_a_pagar'))} destaque />
           </div>
 
-          {(dados.avisos.leadsSemColaboradorConhecido.length > 0 ||
-            dados.avisos.diasDeFimDeSemanaSemPresencaConfirmada.length > 0) && (
-            <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 p-4">
-              <p className="text-sm font-medium text-amber-800">⚠️ Avisos</p>
-              {dados.avisos.leadsSemColaboradorConhecido.length > 0 && (
-                <p className="mt-1 text-sm text-amber-700">
-                  {dados.avisos.leadsSemColaboradorConhecido.length} lead(s) convertido(s)
-                  não puderam ser associados a nenhum colaborador cadastrado.
-                </p>
+          {dados.totalFtds === 0 && (
+            <p className="mt-4 rounded-md bg-slate-100 px-4 py-3 text-sm text-slate-600">
+              Não há vendas importadas para este mês. Use "Enviar base (Excel)".
+            </p>
+          )}
+
+          {(dados.avisos.operadoresSemCadastro.length > 0 || colaboradoresSemNome.length > 0) && (
+            <div className="mt-4 space-y-3 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm">
+              {dados.avisos.operadoresSemCadastro.length > 0 && (
+                <div>
+                  <p className="font-medium text-amber-800">
+                    Operadores da base sem cadastro — as vendas deles não entram no cálculo:
+                  </p>
+                  <div className="mt-2 space-y-2">
+                    {dados.avisos.operadoresSemCadastro.map((o) => (
+                      <OperadorSemCadastro
+                        key={o.operador}
+                        operador={o.operador}
+                        ftds={o.ftds}
+                        colaboradores={cadastros.colaboradores}
+                        onLigar={async (id) =>
+                          aposCadastro(await cadastros.definirNomeBase(id, o.operador), `"${o.operador}" ligado.`)
+                        }
+                        onExterno={async () =>
+                          aposCadastro(
+                            await cadastros.salvarExterno({ nome_base: o.operador, valor_por_ftd: null }),
+                            `"${o.operador}" marcado como externo.`
+                          )
+                        }
+                      />
+                    ))}
+                  </div>
+                </div>
               )}
-              {dados.avisos.diasDeFimDeSemanaSemPresencaConfirmada.length > 0 && (
-                <p className="mt-1 text-sm text-amber-700">
-                  {dados.avisos.diasDeFimDeSemanaSemPresencaConfirmada.length} dia(s) de fim
-                  de semana com leads convertidos, mas sem presença confirmada — esses
-                  valores não foram distribuídos.
+              {colaboradoresSemNome.length > 0 && (
+                <p className="text-amber-800">
+                  Colaboradores sem "nome na base" (não recebem comissão até serem ligados):{' '}
+                  {colaboradoresSemNome.map((c) => c.nome).join(', ')}. Ajuste em "Nomes na base",
+                  abaixo.
                 </p>
               )}
             </div>
@@ -155,61 +218,435 @@ export function ComissionamentoPage() {
             <table className="w-full text-left text-sm">
               <thead className="border-b border-slate-200 bg-slate-50 text-slate-500">
                 <tr>
-                  <th className="whitespace-nowrap px-4 py-3 font-medium">Colaborador</th>
-                  <th className="whitespace-nowrap px-4 py-3 font-medium">Auxílio</th>
-                  <th className="whitespace-nowrap px-4 py-3 font-medium">Com. dia semana</th>
-                  <th className="whitespace-nowrap px-4 py-3 font-medium">Com. fim de semana</th>
-                  <th className="whitespace-nowrap px-4 py-3 font-medium">Adiantamento</th>
-                  <th className="whitespace-nowrap px-4 py-3 font-medium">Salário total</th>
+                  {[
+                    'Nome',
+                    'Equipe',
+                    'Início',
+                    'Auxílio',
+                    'Com. própria*',
+                    'Com. equipe',
+                    'Com. FDS',
+                    'Adiantamento',
+                    'Salário',
+                    'FTDs',
+                    'Total a pagar',
+                  ].map((t) => (
+                    <th key={t} className="whitespace-nowrap px-3 py-3 font-medium">
+                      {t}
+                    </th>
+                  ))}
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {dados.resultado.length === 0 ? (
+                {linhas.length === 0 ? (
                   <tr>
-                    <td colSpan={6} className="px-4 py-6 text-center text-slate-400">
+                    <td colSpan={11} className="px-4 py-6 text-center text-slate-400">
                       Nenhum valor calculado para este mês.
                     </td>
                   </tr>
                 ) : (
-                  dados.resultado.map((r) => (
-                    <tr key={r.colaborador_id}>
-                      <td className="whitespace-nowrap px-4 py-3 font-medium text-tinta">
-                        {r.nome}
+                  linhas.map((l) => (
+                    <tr key={l.chave}>
+                      <td className="whitespace-nowrap px-3 py-2 font-medium text-tinta">
+                        {l.nome}
+                        {rotuloTipo[l.tipo] && (
+                          <span className="ml-2 rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-500">
+                            {rotuloTipo[l.tipo]}
+                          </span>
+                        )}
                       </td>
-                      <td className="whitespace-nowrap px-4 py-3 text-tinta">
-                        {formatarMoeda(r.auxilio)}
+                      <td className="px-3 py-2 text-slate-600">{l.equipe ?? '—'}</td>
+                      <td className="whitespace-nowrap px-3 py-2 text-slate-600">{formatarData(l.data_inicio)}</td>
+                      <td className="whitespace-nowrap px-3 py-2">{formatarMoeda(l.auxilio)}</td>
+                      <td className="whitespace-nowrap px-3 py-2 text-slate-400">{formatarMoeda(l.comissao_propria)}</td>
+                      <td className="whitespace-nowrap px-3 py-2">{formatarMoeda(l.comissao_equipe)}</td>
+                      <td className="whitespace-nowrap px-3 py-2">{formatarMoeda(l.comissao_fds)}</td>
+                      <td className="whitespace-nowrap px-3 py-2">
+                        {l.colaborador_id ? (
+                          <input
+                            type="number"
+                            step="0.01"
+                            defaultValue={l.adiantamento}
+                            key={`${l.chave}-${l.adiantamento}`}
+                            onBlur={(e) => {
+                              const valor = Number(e.target.value) || 0;
+                              if (adminId && valor !== l.adiantamento) {
+                                editarAdiantamento(mes, adminId, l.colaborador_id as string, valor);
+                              }
+                            }}
+                            className="w-24 rounded-md border border-slate-300 px-2 py-1 text-sm"
+                          />
+                        ) : (
+                          formatarMoeda(l.adiantamento)
+                        )}
                       </td>
-                      <td className="whitespace-nowrap px-4 py-3 text-tinta">
-                        {formatarMoeda(r.comissaoDiaSemana)}
+                      <td className="whitespace-nowrap px-3 py-2 font-semibold text-tinta">
+                        {formatarMoeda(l.salario_total)}
                       </td>
-                                            <td className="whitespace-nowrap px-4 py-3 text-tinta">
-                        {formatarMoeda(r.comissaoFimDeSemana)}
-                      </td>
-                      <td className="whitespace-nowrap px-4 py-3">
-                        <input
-                          type="number"
-                          step="0.01"
-                          defaultValue={r.adiantamento}
-                          key={`${r.colaborador_id}-${r.adiantamento}`}
-                          onBlur={(e) => handleAdiantamentoBlur(r.colaborador_id, e.target.value)}
-                          className="w-24 rounded-md border border-slate-300 px-2 py-1 text-sm"
-                        />
-                      </td>
-                      <td className="whitespace-nowrap px-4 py-3 font-semibold text-tinta">
-                        {formatarMoeda(r.salarioTotal)}
+                      <td className="px-3 py-2 text-slate-600">{l.ftds}</td>
+                      <td className="whitespace-nowrap px-3 py-2 font-semibold text-esmeralda-dark">
+                        {formatarMoeda(l.total_a_pagar)}
                       </td>
                     </tr>
                   ))
                 )}
               </tbody>
+              {linhas.length > 0 && (
+                <tfoot className="border-t border-slate-200 bg-slate-50 font-semibold text-tinta">
+                  <tr>
+                    <td className="px-3 py-2" colSpan={3}>
+                      Total
+                    </td>
+                    <td className="whitespace-nowrap px-3 py-2">{formatarMoeda(total('auxilio'))}</td>
+                    <td className="whitespace-nowrap px-3 py-2 text-slate-400">{formatarMoeda(total('comissao_propria'))}</td>
+                    <td className="whitespace-nowrap px-3 py-2">{formatarMoeda(total('comissao_equipe'))}</td>
+                    <td className="whitespace-nowrap px-3 py-2">{formatarMoeda(total('comissao_fds'))}</td>
+                    <td className="whitespace-nowrap px-3 py-2">{formatarMoeda(total('adiantamento'))}</td>
+                    <td className="whitespace-nowrap px-3 py-2">{formatarMoeda(total('salario_total'))}</td>
+                    <td className="px-3 py-2">{total('ftds')}</td>
+                    <td className="whitespace-nowrap px-3 py-2 text-esmeralda-dark">{formatarMoeda(total('total_a_pagar'))}</td>
+                  </tr>
+                </tfoot>
+              )}
             </table>
           </div>
 
-          <p className="mt-3 text-xs text-slate-400">
-            Os valores de adiantamento são salvos automaticamente assim que você sai do campo.
+          <p className="mt-2 text-xs text-slate-400">
+            * Com. própria: FTDs da pessoa em dias úteis × valor — só informativa, não entra no
+            salário (exceto Individual e Externo, que recebem por FTD). Adiantamentos são salvos ao
+            sair do campo.
           </p>
         </>
       )}
+
+      <div className="mt-8 space-y-4">
+        {cadastros.config && (
+          <SecaoRecolhivel titulo="Parâmetros das regras" padraoAberta={false}>
+            <FormularioParametros
+              config={cadastros.config}
+              onSalvar={async (novo) => aposCadastro(await cadastros.salvarConfig(novo), 'Parâmetros salvos.')}
+            />
+          </SecaoRecolhivel>
+        )}
+
+        <SecaoRecolhivel
+          titulo="Nomes na base"
+          padraoAberta={false}
+          descricao="Nome de cada colaborador exatamente como aparece na coluna Operador da base."
+        >
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+            {cadastros.colaboradores.map((c) => (
+              <label key={c.id} className="block text-sm text-slate-700">
+                {c.nome}
+                <input
+                  defaultValue={c.nome_base ?? ''}
+                  key={`${c.id}-${c.nome_base}`}
+                  placeholder="Nome na base"
+                  onBlur={async (e) => {
+                    const valor = e.target.value.trim();
+                    if (valor === (c.nome_base ?? '')) return;
+                    aposCadastro(await cadastros.definirNomeBase(c.id, valor || null), 'Nome na base salvo.');
+                  }}
+                  className={classeCampo}
+                />
+              </label>
+            ))}
+          </div>
+        </SecaoRecolhivel>
+
+        <SecaoRecolhivel
+          titulo="Operadores externos"
+          padraoAberta={false}
+          descricao="Logins da base que não são da operação. Com valor por FTD, entram no fechamento recebendo esse valor (ex.: João, US$ 2)."
+        >
+          <OperadoresExternos
+            externos={cadastros.externos}
+            onSalvar={async (e) => aposCadastro(await cadastros.salvarExterno(e), 'Operador externo salvo.')}
+            onRemover={async (n) => aposCadastro(await cadastros.removerExterno(n), 'Operador externo removido.')}
+          />
+        </SecaoRecolhivel>
+
+        <SecaoRecolhivel
+          titulo="Pagamentos fixos"
+          padraoAberta={false}
+          descricao="Quem recebe sem comissão: salário fixo (proporcional à data de início) ou auxílio fixo."
+        >
+          <PagamentosFixos
+            fixos={cadastros.fixos}
+            onSalvar={async (f) => aposCadastro(await cadastros.salvarFixo(f), 'Pagamento fixo salvo.')}
+            onRemover={async (id) => aposCadastro(await cadastros.removerFixo(id), 'Pagamento fixo removido.')}
+          />
+        </SecaoRecolhivel>
+      </div>
+    </div>
+  );
+}
+
+function Cartao({ titulo, valor, destaque }: { titulo: string; valor: string; destaque?: boolean }) {
+  return (
+    <div
+      className={`rounded-lg border p-4 ${
+        destaque ? 'border-esmeralda/30 bg-esmeralda-light' : 'border-slate-200 bg-white'
+      }`}
+    >
+      <p
+        className={`text-xs font-medium uppercase tracking-wide ${
+          destaque ? 'text-esmeralda-dark' : 'text-slate-400'
+        }`}
+      >
+        {titulo}
+      </p>
+      <p className="mt-1 font-display text-2xl font-semibold text-tinta">{valor}</p>
+    </div>
+  );
+}
+
+function OperadorSemCadastro({
+  operador,
+  ftds,
+  colaboradores,
+  onLigar,
+  onExterno,
+}: {
+  operador: string;
+  ftds: number;
+  colaboradores: { id: string; nome: string; nome_base: string | null }[];
+  onLigar: (colaboradorId: string) => void;
+  onExterno: () => void;
+}) {
+  const [escolhido, setEscolhido] = useState('');
+  return (
+    <div className="flex flex-wrap items-center gap-2 rounded-md bg-white px-3 py-2">
+      <span className="font-medium text-tinta">{operador}</span>
+      <span className="text-slate-500">· {ftds} FTD(s)</span>
+      <select
+        value={escolhido}
+        onChange={(e) => setEscolhido(e.target.value)}
+        className="rounded-md border border-slate-300 px-2 py-1 text-sm"
+      >
+        <option value="">Ligar a colaborador...</option>
+        {colaboradores.map((c) => (
+          <option key={c.id} value={c.id}>
+            {c.nome}
+            {c.nome_base ? ` (hoje: ${c.nome_base})` : ''}
+          </option>
+        ))}
+      </select>
+      <button
+        onClick={() => escolhido && onLigar(escolhido)}
+        disabled={!escolhido}
+        className="rounded-md bg-esmeralda px-3 py-1 text-sm font-medium text-white disabled:opacity-50"
+      >
+        Ligar
+      </button>
+      <button onClick={onExterno} className="text-sm font-medium text-slate-500 hover:text-tinta">
+        É externo
+      </button>
+    </div>
+  );
+}
+
+function FormularioParametros({
+  config,
+  onSalvar,
+}: {
+  config: ConfiguracaoComissao;
+  onSalvar: (novo: ConfiguracaoComissao) => void;
+}) {
+  const [rascunho, setRascunho] = useState(config);
+  const numero = (campo: keyof ConfiguracaoComissao, rotulo: string, passo = '0.01') => (
+    <label className="block text-sm text-slate-700">
+      {rotulo}
+      <input
+        type="number"
+        step={passo}
+        value={rascunho[campo] as number}
+        onChange={(e) => setRascunho({ ...rascunho, [campo]: Number(e.target.value) })}
+        className={classeCampo}
+      />
+    </label>
+  );
+
+  return (
+    <div>
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        <label className="block text-sm text-slate-700">
+          Início da regra nova
+          <input
+            type="date"
+            value={rascunho.inicio_regra_nova}
+            onChange={(e) => setRascunho({ ...rascunho, inicio_regra_nova: e.target.value })}
+            className={classeCampo}
+          />
+        </label>
+        {numero('valor_regra_nova', 'Valor por FTD na regra nova (US$)')}
+        {numero('valor_antigo_dia_util', 'Valor antigo — dia útil (US$)')}
+        {numero('valor_antigo_fds', 'Valor antigo — fim de semana (US$)')}
+        {numero('valor_ftd_individual', 'Valor por FTD — colaborador individual (US$)')}
+        <label className="block text-sm text-slate-700">
+          Acréscimo no total a pagar (%)
+          <input
+            type="number"
+            step="0.1"
+            value={Math.round(rascunho.taxa_total_a_pagar * 1000) / 10}
+            onChange={(e) => setRascunho({ ...rascunho, taxa_total_a_pagar: Number(e.target.value) / 100 })}
+            className={classeCampo}
+          />
+        </label>
+        {numero('hora_virada_dia', 'Virada do dia (vendas antes desta hora contam no dia anterior)', '1')}
+      </div>
+      <button
+        onClick={() => onSalvar(rascunho)}
+        className="mt-4 rounded-md bg-esmeralda px-4 py-2 text-sm font-medium text-white hover:bg-esmeralda-dark"
+      >
+        Salvar parâmetros
+      </button>
+    </div>
+  );
+}
+
+function OperadoresExternos({
+  externos,
+  onSalvar,
+  onRemover,
+}: {
+  externos: { nome_base: string; valor_por_ftd: number | null }[];
+  onSalvar: (e: { nome_base: string; valor_por_ftd: number | null }) => void;
+  onRemover: (nomeBase: string) => void;
+}) {
+  const [nome, setNome] = useState('');
+  const [valor, setValor] = useState('');
+  return (
+    <div className="space-y-2">
+      {externos.length === 0 && <p className="text-sm text-slate-400">Nenhum operador externo.</p>}
+      {externos.map((e) => (
+        <div key={e.nome_base} className="flex flex-wrap items-center gap-3 text-sm">
+          <span className="w-40 font-medium text-tinta">{e.nome_base}</span>
+          <span className="text-slate-500">
+            {e.valor_por_ftd === null ? 'Fora do fechamento' : `${e.valor_por_ftd.toFixed(2)} US$/FTD`}
+          </span>
+          <button onClick={() => onRemover(e.nome_base)} className="text-red-600 hover:text-red-700">
+            Remover
+          </button>
+        </div>
+      ))}
+      <div className="flex flex-wrap items-end gap-2 pt-2">
+        <label className="text-sm text-slate-700">
+          Nome na base
+          <input value={nome} onChange={(e) => setNome(e.target.value)} className={classeCampo} />
+        </label>
+        <label className="text-sm text-slate-700">
+          US$ por FTD (vazio = fora)
+          <input
+            type="number"
+            step="0.01"
+            value={valor}
+            onChange={(e) => setValor(e.target.value)}
+            className={classeCampo}
+          />
+        </label>
+        <button
+          onClick={() => {
+            if (!nome.trim()) return;
+            onSalvar({ nome_base: nome, valor_por_ftd: valor === '' ? null : Number(valor) });
+            setNome('');
+            setValor('');
+          }}
+          className="rounded-md bg-esmeralda px-3 py-2 text-sm font-medium text-white"
+        >
+          Adicionar
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function PagamentosFixos({
+  fixos,
+  onSalvar,
+  onRemover,
+}: {
+  fixos: PagamentoFixo[];
+  onSalvar: (f: Omit<PagamentoFixo, 'id'> & { id?: string }) => void;
+  onRemover: (id: string) => void;
+}) {
+  const vazio = { nome: '', tipo: 'salario_fixo' as const, valor: 0, data_inicio: null, adiantamento: 0 };
+  const [novo, setNovo] = useState<Omit<PagamentoFixo, 'id'>>(vazio);
+  return (
+    <div className="space-y-2">
+      {fixos.length === 0 && <p className="text-sm text-slate-400">Nenhum pagamento fixo.</p>}
+      {fixos.map((f) => (
+        <div key={f.id} className="flex flex-wrap items-center gap-3 text-sm">
+          <span className="w-40 font-medium text-tinta">{f.nome}</span>
+          <span className="text-slate-500">
+            {f.tipo === 'salario_fixo' ? 'Salário fixo' : 'Auxílio fixo'} · US$ {f.valor.toFixed(2)}
+            {f.data_inicio && ` · desde ${formatarData(f.data_inicio)}`}
+          </span>
+          <label className="flex items-center gap-1 text-slate-500">
+            Adiantamento
+            <input
+              type="number"
+              step="0.01"
+              defaultValue={f.adiantamento}
+              key={`${f.id}-${f.adiantamento}`}
+              onBlur={(e) => {
+                const valor = Number(e.target.value) || 0;
+                if (valor !== f.adiantamento) onSalvar({ ...f, adiantamento: valor });
+              }}
+              className="w-20 rounded-md border border-slate-300 px-2 py-1"
+            />
+          </label>
+          <button onClick={() => onRemover(f.id)} className="text-red-600 hover:text-red-700">
+            Remover
+          </button>
+        </div>
+      ))}
+      <div className="flex flex-wrap items-end gap-2 pt-2">
+        <label className="text-sm text-slate-700">
+          Nome
+          <input value={novo.nome} onChange={(e) => setNovo({ ...novo, nome: e.target.value })} className={classeCampo} />
+        </label>
+        <label className="text-sm text-slate-700">
+          Tipo
+          <select
+            value={novo.tipo}
+            onChange={(e) => setNovo({ ...novo, tipo: e.target.value as PagamentoFixo['tipo'] })}
+            className={classeCampo}
+          >
+            <option value="salario_fixo">Salário fixo</option>
+            <option value="auxilio_fixo">Auxílio fixo</option>
+          </select>
+        </label>
+        <label className="text-sm text-slate-700">
+          Valor (US$)
+          <input
+            type="number"
+            step="0.01"
+            value={novo.valor}
+            onChange={(e) => setNovo({ ...novo, valor: Number(e.target.value) })}
+            className={classeCampo}
+          />
+        </label>
+        <label className="text-sm text-slate-700">
+          Início (opcional)
+          <input
+            type="date"
+            value={novo.data_inicio ?? ''}
+            onChange={(e) => setNovo({ ...novo, data_inicio: e.target.value || null })}
+            className={classeCampo}
+          />
+        </label>
+        <button
+          onClick={() => {
+            if (!novo.nome.trim()) return;
+            onSalvar(novo);
+            setNovo(vazio);
+          }}
+          className="rounded-md bg-esmeralda px-3 py-2 text-sm font-medium text-white"
+        >
+          Adicionar
+        </button>
+      </div>
     </div>
   );
 }
