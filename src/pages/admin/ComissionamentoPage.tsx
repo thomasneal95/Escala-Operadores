@@ -372,6 +372,8 @@ export function ComissionamentoPage() {
             </div>
           )}
 
+          {linhas.length > 0 && <ResumoPorEquipe linhas={linhas} />}
+
           <div className="mt-4 overflow-x-auto rounded-lg border border-slate-200 bg-white">
             <table className="w-full text-left text-sm">
               <thead className="border-b border-slate-200 bg-slate-50 text-slate-500">
@@ -557,6 +559,81 @@ export function ComissionamentoPage() {
       )}
       </>
       )}
+    </div>
+  );
+}
+
+// Somatório por equipe: FTDs e quanto a equipe recebe no mês. Externos,
+// pagamentos fixos e quem está sem equipe ficam em "Outros".
+function ResumoPorEquipe({ linhas }: { linhas: LinhaFechamento[] }) {
+  const grupos = new Map<string, LinhaFechamento[]>();
+  for (const l of linhas) {
+    const grupo = l.equipe ? `Equipe ${l.equipe}` : 'Outros (externos, fixos e sem equipe)';
+    grupos.set(grupo, [...(grupos.get(grupo) ?? []), l]);
+  }
+  const ordem = [...grupos.keys()].sort((a, b) => {
+    if (a.startsWith('Outros')) return 1;
+    if (b.startsWith('Outros')) return -1;
+    return a.localeCompare(b, 'pt-BR');
+  });
+  const soma = (lista: LinhaFechamento[], campo: keyof LinhaFechamento) =>
+    lista.reduce((s, l) => s + (l[campo] as number), 0);
+  const colunas: [string, (lista: LinhaFechamento[]) => string][] = [
+    ['Pessoas', (lista) => String(lista.length)],
+    ['FTDs', (lista) => String(soma(lista, 'ftds'))],
+    ['Com. equipe', (lista) => formatarMoeda(soma(lista, 'comissao_equipe'))],
+    ['Com. FDS', (lista) => formatarMoeda(soma(lista, 'comissao_fds'))],
+    ['Com. infoprodutos', (lista) => formatarMoeda(soma(lista, 'comissao_infoprodutos'))],
+    ['Auxílio', (lista) => formatarMoeda(soma(lista, 'auxilio'))],
+    ['Salário', (lista) => formatarMoeda(soma(lista, 'salario_total'))],
+    ['Total a pagar', (lista) => formatarMoeda(soma(lista, 'total_a_pagar'))],
+  ];
+
+  return (
+    <div className="mt-4 overflow-x-auto rounded-lg border border-slate-200 bg-white">
+      <p className="border-b border-slate-200 px-3 py-2 text-sm font-medium text-tinta">Resumo por equipe</p>
+      <table className="w-full text-left text-sm">
+        <thead className="border-b border-slate-200 bg-slate-50 text-slate-500">
+          <tr>
+            <th className="whitespace-nowrap px-3 py-2 font-medium">Equipe</th>
+            {colunas.map(([titulo]) => (
+              <th key={titulo} className="whitespace-nowrap px-3 py-2 font-medium">
+                {titulo}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-slate-100">
+          {ordem.map((grupo) => {
+            const lista = grupos.get(grupo) ?? [];
+            return (
+              <tr key={grupo}>
+                <td className="whitespace-nowrap px-3 py-2 font-medium text-tinta">{grupo}</td>
+                {colunas.map(([titulo, valor]) => (
+                  <td
+                    key={titulo}
+                    className={`whitespace-nowrap px-3 py-2 ${
+                      titulo === 'Total a pagar' ? 'font-semibold text-esmeralda-dark' : titulo === 'Salário' ? 'font-semibold text-tinta' : ''
+                    }`}
+                  >
+                    {valor(lista)}
+                  </td>
+                ))}
+              </tr>
+            );
+          })}
+        </tbody>
+        <tfoot className="border-t border-slate-200 bg-slate-50 font-semibold text-tinta">
+          <tr>
+            <td className="px-3 py-2">Total</td>
+            {colunas.map(([titulo, valor]) => (
+              <td key={titulo} className={`whitespace-nowrap px-3 py-2 ${titulo === 'Total a pagar' ? 'text-esmeralda-dark' : ''}`}>
+                {valor(linhas)}
+              </td>
+            ))}
+          </tr>
+        </tfoot>
+      </table>
     </div>
   );
 }
