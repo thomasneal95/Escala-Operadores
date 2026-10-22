@@ -10,6 +10,7 @@ import { SecaoRecolhivel } from '../../components/SecaoRecolhivel';
 import { useConfirm, useToast } from '../../components/FeedbackProvider';
 import { useHistoricoComissoes } from '../../features/schedules/useHistoricoComissoes';
 import { HistoricoComissoes } from './HistoricoComissoes';
+import { PaineisComissao } from './PaineisComissao';
 
 function mesAtualFormatoInput() {
   const hoje = new Date();
@@ -65,7 +66,7 @@ export function ComissionamentoPage() {
   const { session } = useAuth();
   const toast = useToast();
   const confirmar = useConfirm();
-  const [aba, setAba] = useState<'fechamento' | 'historico'>('fechamento');
+  const [aba, setAba] = useState<'fechamento' | 'painel' | 'historico'>('fechamento');
   const historico = useHistoricoComissoes();
   const [mesInput, setMesInput] = useState(mesAtualFormatoInput()); // "YYYY-MM"
   const { dados, carregando, importando, erro, calcular, importar, editarAdiantamento } =
@@ -160,6 +161,7 @@ export function ComissionamentoPage() {
         {(
           [
             ['fechamento', 'Fechamento do mês'],
+            ['painel', 'Painel'],
             ['historico', 'Histórico'],
           ] as const
         ).map(([id, rotulo]) => (
@@ -252,6 +254,20 @@ export function ComissionamentoPage() {
 
       {carregando && !dados && <p className="mt-6 text-sm text-slate-400">Calculando...</p>}
 
+      {aba === 'painel' ? (
+        dados && (
+          <div className="mt-6">
+            {dados.totalFtds === 0 ? (
+              <p className="rounded-md bg-slate-100 px-4 py-3 text-sm text-slate-600">
+                Não há vendas importadas para este mês. Use "Enviar base (Excel)".
+              </p>
+            ) : (
+              <PaineisComissao dados={dados} />
+            )}
+          </div>
+        )
+      ) : (
+      <>
       {dados && (
         <>
           <div className="mt-6 grid grid-cols-2 gap-4 lg:grid-cols-4">
@@ -469,6 +485,8 @@ export function ComissionamentoPage() {
           />
         </SecaoRecolhivel>
       </div>
+      </>
+      )}
       </>
       )}
     </div>

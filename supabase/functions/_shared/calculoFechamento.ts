@@ -93,11 +93,32 @@ export interface LinhaFechamento {
   total_a_pagar: number;
 }
 
+// Dados para os painéis (Dashboard, Insights e Projeção da planilha).
+export interface PaineisFechamento {
+  // FTDs válidos por dia (calendário e projeção). Ficam de fora só os
+  // externos sem valor por FTD (logins fora da operação); os pagos por FTD
+  // (ex.: João) contam.
+  ftdsPorDia: { dia: string; ftds: number }[];
+  // Bolo de comissão por equipe e dia (dias úteis: rateio da equipe; FDS:
+  // valor dividido entre quem teve FTD).
+  comissaoPorEquipeEDia: { dia: string; equipe: string; valor: number }[];
+  porEquipe: {
+    equipe: string;
+    ativos: number;
+    ftds: number;
+    rejeitados: number;
+  }[];
+  rejeitadosPorOperador: { operador: string; equipe: string | null; qtd: number }[];
+  rejeitadosNoMes: number;
+  ativos: number;
+}
+
 export interface ResultadoFechamento {
   mes: string;
   ultimaData: string | null;
   totalFtds: number;
   linhas: LinhaFechamento[];
+  paineis: PaineisFechamento;
   avisos: {
     operadoresSemCadastro: { operador: string; ftds: number }[];
     colaboradoresSemNomeNaBase: string[];
@@ -414,11 +435,73 @@ export function calcularFechamento(entrada: {
 
   linhas.sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
 
+  // ---- Painéis ----
+  const nomeEquipe = (id: string | null) => (id ? equipes.get(id) ?? null : null);
+
+  const ftdsPorDiaMapa = new Map<string, number>();
+  for (const v of validas) {
+    if (externoPorNome.get(normalizarNome(v.operador))?.valor_por_ftd === null) continue;
+    ftdsPorDiaMapa.set(v.dia, (ftdsPorDiaMapa.get(v.dia) ?? 0) + 1);
+  }
+
+  const comissaoPorEquipeEDia = [...ftdsPorEquipeEDia].flatMap(([k, qtd]) => {
+    const [equipeId, dia] = k.split('|');
+    const equipe = nomeEquipe(equipeId);
+    return equipe ? [{ dia, equipe, valor: arredondar(qtd * valorDoDia(dia)) }] : [];
+  });
+
+  const porEquipeMapa = new Map<string, { equipe: string; ativos: number; ftds: number; rejeitados: number }>();
+  const daEquipe = (nome: string) => {
+    const atual = porEquipeMapa.get(nome) ?? { equipe: nome, ativos: 0, ftds: 0, rejeitados: 0 };
+    porEquipeMapa.set(nome, atual);
+    return atual;
+  };
+  for (const [k, qtd] of ftdsPorEquipeEDia) {
+    const equipe = nomeEquipe(k.split('|')[0]);
+    if (equipe) daEquipe(equipe).ftds += qtd;
+  }
+  let ativos = 0;
+  for (const c of deEquipe) {
+    if (!primeiroLancamento.has(c.id)) continue;
+    ativos++;
+    const equipe = nomeEquipe(equipeNoDia(c, ultimoDia));
+    if (equipe) daEquipe(equipe).ativos++;
+  }
+
+  const rejeitadosPorOperadorMapa = new Map<string, { operador: string; equipe: string | null; qtd: number }>();
+  let rejeitadosNoMes = 0;
+  for (const v of todasDoMes) {
+    if (!v.rejeitada) continue;
+    const nome = normalizarNome(v.operador);
+    if (externoPorNome.has(nome)) continue;
+    rejeitadosNoMes++;
+    const c = colaboradorPorNome.get(nome);
+    const equipe = c ? nomeEquipe(equipeNoDia(c, v.dia)) : null;
+    if (equipe) daEquipe(equipe).rejeitados++;
+    const r = rejeitadosPorOperadorMapa.get(nome) ?? { operador: c?.nome ?? v.operador.trim(), equipe, qtd: 0 };
+    r.qtd++;
+    rejeitadosPorOperadorMapa.set(nome, r);
+  }
+
+  const paineis: PaineisFechamento = {
+    ftdsPorDia: [...ftdsPorDiaMapa]
+      .map(([dia, ftds]) => ({ dia, ftds }))
+      .sort((a, b) => a.dia.localeCompare(b.dia)),
+    comissaoPorEquipeEDia: comissaoPorEquipeEDia.sort(
+      (a, b) => a.dia.localeCompare(b.dia) || a.equipe.localeCompare(b.equipe)
+    ),
+    porEquipe: [...porEquipeMapa.values()].sort((a, b) => a.equipe.localeCompare(b.equipe)),
+    rejeitadosPorOperador: [...rejeitadosPorOperadorMapa.values()].sort((a, b) => b.qtd - a.qtd),
+    rejeitadosNoMes,
+    ativos,
+  };
+
   return {
     mes,
     ultimaData,
     totalFtds: validas.length,
     linhas,
+    paineis,
     avisos: {
       operadoresSemCadastro: [...ftdsPorOperadorDesconhecido.values()].sort((a, b) => b.ftds - a.ftds),
       colaboradoresSemNomeNaBase: colaboradores.filter((c) => !c.nome_base).map((c) => c.nome),
