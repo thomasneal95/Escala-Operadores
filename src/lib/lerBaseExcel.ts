@@ -110,3 +110,57 @@ export async function lerBaseExcel(arquivo: File): Promise<{ linhas: LinhaBase[]
 
   return { linhas, aba: nomeAba, ignoradas };
 }
+
+// ---------------------------------------------------------------------------
+// Aba "Historico" da planilha de comissões: meses já fechados (uma linha por
+// pessoa e mês), para trazer o histórico antigo para o site.
+
+export interface LinhaHistoricoExcel {
+  mes: string; // YYYY-MM-01
+  nome: string;
+  equipe: string | null;
+  data_inicio: string | null;
+  auxilio: number;
+  comissao_propria: number;
+  comissao_equipe: number;
+  comissao_fds: number;
+  adiantamento: number;
+  salario_total: number;
+}
+
+export async function lerHistoricoExcel(arquivo: File): Promise<LinhaHistoricoExcel[]> {
+  const pasta = read(await arquivo.arrayBuffer(), { type: 'array', dense: true });
+  const nomeAba = pasta.SheetNames.find((n) => normalizar(n) === 'historico');
+  if (!nomeAba) throw new Error('O arquivo não tem a aba "Historico".');
+
+  const registros = utils.sheet_to_json<Record<string, unknown>>(pasta.Sheets[nomeAba], {
+    defval: null,
+    raw: true,
+  });
+  const numero = (v: unknown) => (typeof v === 'number' ? v : Number(v) || 0);
+
+  const linhas: LinhaHistoricoExcel[] = [];
+  for (const registro of registros) {
+    const campo = (nome: string) => {
+      const chave = Object.keys(registro).find((k) => normalizar(k) === nome);
+      return chave ? registro[chave] : null;
+    };
+    const data = paraData(campo('mes'));
+    const nome = String(campo('nome') ?? '').trim();
+    if (!data || !nome) continue;
+    const equipe = String(campo('equipe') ?? '').trim();
+    linhas.push({
+      mes: `${data.slice(0, 7)}-01`,
+      nome,
+      equipe: equipe && equipe !== '-' ? equipe : null,
+      data_inicio: paraData(campo('data inicio')),
+      auxilio: numero(campo('auxilio')),
+      comissao_propria: numero(campo('com. individual')),
+      comissao_equipe: numero(campo('com. equipe')),
+      comissao_fds: numero(campo('com. fds')),
+      adiantamento: numero(campo('adiantamento')),
+      salario_total: numero(campo('salario total')),
+    });
+  }
+  return linhas;
+}

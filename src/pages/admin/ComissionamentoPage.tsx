@@ -7,11 +7,28 @@ import {
   type PagamentoFixo,
 } from '../../features/schedules/useCadastrosComissao';
 import { SecaoRecolhivel } from '../../components/SecaoRecolhivel';
-import { useToast } from '../../components/FeedbackProvider';
+import { useConfirm, useToast } from '../../components/FeedbackProvider';
+import { useHistoricoComissoes } from '../../features/schedules/useHistoricoComissoes';
+import { HistoricoComissoes } from './HistoricoComissoes';
 
 function mesAtualFormatoInput() {
   const hoje = new Date();
   return `${hoje.getFullYear()}-${String(hoje.getMonth() + 1).padStart(2, '0')}`;
+}
+
+const nomesMeses = [
+  'janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho',
+  'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro',
+];
+
+function nomeDoMes(mes: string) {
+  const [ano, m] = mes.split('-').map(Number);
+  return `${nomesMeses[m - 1]}/${ano}`;
+}
+
+function mesAnterior(mes: string) {
+  const [ano, m] = mes.split('-').map(Number);
+  return m === 1 ? `${ano - 1}-12-01` : `${ano}-${String(m - 1).padStart(2, '0')}-01`;
 }
 
 function formatarMoeda(valor: number) {
@@ -47,6 +64,9 @@ const classeCampo =
 export function ComissionamentoPage() {
   const { session } = useAuth();
   const toast = useToast();
+  const confirmar = useConfirm();
+  const [aba, setAba] = useState<'fechamento' | 'historico'>('fechamento');
+  const historico = useHistoricoComissoes();
   const [mesInput, setMesInput] = useState(mesAtualFormatoInput()); // "YYYY-MM"
   const { dados, carregando, importando, erro, calcular, importar, editarAdiantamento } =
     useFechamentoMensal();
@@ -57,11 +77,33 @@ export function ComissionamentoPage() {
   const adminId = session?.user?.id ?? null;
 
   useEffect(() => {
-    if (adminId) calcular(mes, adminId);
+    if (adminId) calcular(mes);
   }, [mes, adminId, calcular]);
 
   async function recalcular() {
-    if (adminId) await calcular(mes, adminId);
+    if (adminId) await calcular(mes);
+  }
+
+  const arquivado = historico.meses.find((m) => m.mes === mes) ?? null;
+  // Avisa só a partir do 1º mês que já está no histórico (antes disso não há
+  // o que arquivar).
+  const primeiroArquivado = historico.meses[historico.meses.length - 1]?.mes ?? null;
+  const anteriorArquivado =
+    !primeiroArquivado ||
+    mesAnterior(mes) < primeiroArquivado ||
+    historico.meses.some((m) => m.mes === mesAnterior(mes));
+
+  async function handleArquivar() {
+    if (!dados) return;
+    const confirmou = await confirmar(
+      arquivado
+        ? `${nomeDoMes(mes)} já está no histórico. Substituir a foto arquivada pelo cálculo atual?`
+        : `Arquivar ${nomeDoMes(mes)} no histórico? A foto guardada não muda mesmo que a base ou os cadastros mudem depois.`
+    );
+    if (!confirmou) return;
+    const resultado = await historico.arquivar(dados);
+    if (resultado.erro) toast(resultado.erro, 'erro');
+    else toast(`${nomeDoMes(mes)} arquivado no histórico.`);
   }
 
   async function handleArquivo(event: ChangeEvent<HTMLInputElement>) {
@@ -114,6 +156,31 @@ export function ComissionamentoPage() {
         as regras e valores definidos em "Parâmetros das regras".
       </p>
 
+      <div className="mt-5 inline-flex rounded-md border border-slate-200 bg-slate-50 p-0.5 text-sm">
+        {(
+          [
+            ['fechamento', 'Fechamento do mês'],
+            ['historico', 'Histórico'],
+          ] as const
+        ).map(([id, rotulo]) => (
+          <button
+            key={id}
+            onClick={() => setAba(id)}
+            className={`rounded px-3 py-1.5 font-medium transition ${
+              aba === id ? 'bg-white text-tinta shadow-sm' : 'text-slate-500 hover:text-tinta'
+            }`}
+          >
+            {rotulo}
+          </button>
+        ))}
+      </div>
+
+      {aba === 'historico' ? (
+        <div className="mt-6">
+          <HistoricoComissoes historico={historico} />
+        </div>
+      ) : (
+      <>
       <div className="mt-5 flex flex-wrap items-end gap-3">
         <div>
           <label className="block text-sm font-medium text-slate-700">Mês</label>
@@ -147,6 +214,14 @@ export function ComissionamentoPage() {
           {carregando ? 'Calculando...' : '🔄 Recalcular'}
         </button>
 
+        <button
+          onClick={handleArquivar}
+          disabled={!dados || carregando || historico.processando || dados.totalFtds === 0}
+          className="rounded-md border border-profundo/30 px-4 py-2 font-medium text-profundo transition hover:bg-profundo-light disabled:opacity-60"
+        >
+          📦 Arquivar mês no histórico
+        </button>
+
         {dados?.calculadoEm && (
           <p className="text-xs text-slate-400">
             Calculado em {formatarDataHora(dados.calculadoEm)}
@@ -154,6 +229,22 @@ export function ComissionamentoPage() {
           </p>
         )}
       </div>
+
+      {arquivado && dados && (
+        <p className="mt-4 rounded-md bg-profundo-light px-4 py-3 text-sm text-profundo">
+          📦 {nomeDoMes(mes)} está arquivado no histórico (em{' '}
+          {new Date(arquivado.arquivado_em).toLocaleDateString('pt-BR')}).
+          {Math.abs(arquivado.salario_total - total('salario_total')) > 0.05 &&
+            ` O cálculo atual difere da foto arquivada em ${formatarMoeda(
+              total('salario_total') - arquivado.salario_total
+            )} na folha — arquive de novo se quiser atualizar a foto.`}
+        </p>
+      )}
+      {!historico.carregando && !anteriorArquivado && (
+        <p className="mt-4 rounded-md bg-amber-50 px-4 py-3 text-sm text-amber-800">
+          ⚠ {nomeDoMes(mesAnterior(mes))} ainda não foi arquivado no histórico.
+        </p>
+      )}
 
       {(erro || cadastros.erro) && (
         <p className="mt-4 rounded-md bg-red-50 px-4 py-3 text-sm text-red-700">{erro ?? cadastros.erro}</p>
@@ -271,7 +362,7 @@ export function ComissionamentoPage() {
                             onBlur={(e) => {
                               const valor = Number(e.target.value) || 0;
                               if (adminId && valor !== l.adiantamento) {
-                                editarAdiantamento(mes, adminId, l.colaborador_id as string, valor);
+                                editarAdiantamento(mes, l.colaborador_id as string, valor);
                               }
                             }}
                             className="w-24 rounded-md border border-slate-300 px-2 py-1 text-sm"
@@ -378,6 +469,8 @@ export function ComissionamentoPage() {
           />
         </SecaoRecolhivel>
       </div>
+      </>
+      )}
     </div>
   );
 }

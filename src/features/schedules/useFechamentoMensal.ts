@@ -12,64 +12,31 @@ export interface DadosFechamento extends ResultadoFechamento {
 }
 
 // Fechamento mensal calculado a partir da base de vendas importada do Excel
-// (função calcular-fechamento-mensal). A cada cálculo, as linhas dos
-// colaboradores são salvas em fechamentos_mensais (foto do mês).
+// (função calcular-fechamento-mensal). A foto do mês fica no histórico
+// quando o admin arquiva (useHistoricoComissoes).
 export function useFechamentoMensal() {
   const [dados, setDados] = useState<DadosFechamento | null>(null);
   const [carregando, setCarregando] = useState(false);
   const [importando, setImportando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
 
-  const persistir = useCallback(async (resultado: ResultadoFechamento, adminId: string) => {
-    const agora = new Date().toISOString();
-    const linhas = resultado.linhas
-      .filter((l) => l.colaborador_id)
-      .map((l) => ({
-        mes: resultado.mes,
-        colaborador_id: l.colaborador_id as string,
-        nome_snapshot: l.nome,
-        equipe_nome: l.equipe,
-        auxilio: l.auxilio,
-        comissao_dia_semana: l.comissao_equipe,
-        comissao_fim_semana: l.comissao_fds,
-        comissao_propria: l.comissao_propria,
-        adiantamento: l.adiantamento,
-        salario_total: l.salario_total,
-        total_a_pagar: l.total_a_pagar,
-        ftds: l.ftds,
-        total_leads_convertidos: resultado.totalFtds,
-        calculado_em: agora,
-        calculado_por: adminId,
-      }));
+  const calcular = useCallback(async (mes: string) => {
+    setCarregando(true);
+    setErro(null);
 
-    // Substitui a foto do mês inteira, para não sobrar quem saiu do cálculo.
-    await supabase.from('fechamentos_mensais').delete().eq('mes', resultado.mes);
-    if (linhas.length > 0) await supabase.from('fechamentos_mensais').insert(linhas);
-    return agora;
-  }, []);
+    const { data, error } = await supabase.functions.invoke('calcular-fechamento-mensal', {
+      body: { mes },
+    });
 
-  const calcular = useCallback(
-    async (mes: string, adminId: string) => {
-      setCarregando(true);
-      setErro(null);
-
-      const { data, error } = await supabase.functions.invoke('calcular-fechamento-mensal', {
-        body: { mes },
-      });
-
-      if (error || !data || data.erro) {
-        setErro(data?.erro ?? 'Não foi possível calcular o fechamento. Tente novamente.');
-        setCarregando(false);
-        return;
-      }
-
-      const resultado = data as ResultadoFechamento;
-      const calculadoEm = await persistir(resultado, adminId);
-      setDados({ ...resultado, calculadoEm });
+    if (error || !data || data.erro) {
+      setErro(data?.erro ?? 'Não foi possível calcular o fechamento. Tente novamente.');
       setCarregando(false);
-    },
-    [persistir]
-  );
+      return;
+    }
+
+    setDados({ ...(data as ResultadoFechamento), calculadoEm: new Date().toISOString() });
+    setCarregando(false);
+  }, []);
 
   // Lê o Excel no navegador e grava a base (substitui os meses do arquivo).
   async function importar(arquivo: File) {
@@ -97,14 +64,14 @@ export function useFechamentoMensal() {
     }
   }
 
-  async function editarAdiantamento(mes: string, adminId: string, colaboradorId: string, valor: number) {
+  async function editarAdiantamento(mes: string, colaboradorId: string, valor: number) {
     await supabase
       .from('adiantamentos_mensais')
       .upsert(
         { colaborador_id: colaboradorId, mes, valor, atualizado_em: new Date().toISOString() },
         { onConflict: 'colaborador_id,mes' }
       );
-    await calcular(mes, adminId);
+    await calcular(mes);
   }
 
   return { dados, carregando, importando, erro, calcular, importar, editarAdiantamento };
