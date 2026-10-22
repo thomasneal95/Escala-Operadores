@@ -21,7 +21,7 @@ const corStatus: Record<string, string> = {
 };
 
 export function SolicitacoesTrocaAdminPage() {
-  const { solicitacoes, carregando, erro, processando, aprovar, rejeitar } =
+  const { solicitacoes, carregando, erro, processando, aprovar, aplicar, rejeitar } =
     useSolicitacoesTrocaAdmin();
   const confirmar = useConfirm();
   const toast = useToast();
@@ -31,6 +31,39 @@ export function SolicitacoesTrocaAdminPage() {
   }
 
   const aguardandoAprovacao = solicitacoes.filter((s) => s.status === 'aceito_pelo_colega');
+  const naoAplicadas = solicitacoes.filter((s) => s.naoAplicada);
+
+  async function handleAplicar(s: (typeof solicitacoes)[number]) {
+    const resultado = await aplicar(s.id);
+    if (resultado.erro) {
+      toast(`${s.solicitanteNome} × ${s.colegaNome}: ${resultado.erro}`, 'erro');
+      return false;
+    }
+    return true;
+  }
+
+  async function handleAplicarTodas() {
+    const confirmou = await confirmar(
+      `Aplicar na escala as ${naoAplicadas.length} trocas aprovadas que ainda não aparecem para ` +
+        'os operadores? Só os turnos que ainda estão com a pessoa errada serão movidos.'
+    );
+    if (!confirmou) return;
+
+    let aplicadas = 0;
+    for (const s of naoAplicadas) {
+      if (await handleAplicar(s)) aplicadas++;
+    }
+    toast(`${aplicadas} de ${naoAplicadas.length} troca(s) aplicada(s) na escala.`);
+  }
+
+  async function handleAplicarUma(s: (typeof solicitacoes)[number]) {
+    const confirmou = await confirmar(
+      `Aplicar na escala a troca entre ${s.solicitanteNome} e ${s.colegaNome}? ` +
+        'Só os turnos que ainda estão com a pessoa errada serão movidos.'
+    );
+    if (!confirmou) return;
+    if (await handleAplicar(s)) toast('Troca aplicada na escala.');
+  }
   const outras = solicitacoes.filter((s) => s.status !== 'aceito_pelo_colega');
 
   async function handleAprovar(s: (typeof solicitacoes)[number]) {
@@ -71,6 +104,51 @@ export function SolicitacoesTrocaAdminPage() {
       <h1 className="mt-1 font-display text-2xl font-semibold text-tinta">
         Solicitações de troca de turno
       </h1>
+
+      {/* Aprovadas que não chegaram à escala */}
+      {naoAplicadas.length > 0 && (
+        <div className="mt-6 rounded-lg border border-amber-300 bg-amber-50 p-4">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <p className="text-sm font-medium text-amber-800">
+              {naoAplicadas.length} troca(s) aprovada(s) ainda não aparecem na escala dos operadores.
+            </p>
+            {naoAplicadas.length > 1 && (
+              <button
+                onClick={handleAplicarTodas}
+                disabled={processando !== null}
+                className="rounded-md bg-amber-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-amber-700 disabled:opacity-60"
+              >
+                Aplicar todas na escala
+              </button>
+            )}
+          </div>
+          <div className="mt-3 space-y-2">
+            {naoAplicadas.map((s) => (
+              <div
+                key={s.id}
+                className="flex flex-wrap items-center justify-between gap-2 rounded-md bg-white px-3 py-2 text-sm"
+              >
+                <div className="text-tinta">
+                  <span className="font-medium">{s.solicitanteNome}</span>
+                  {s.blocoSolicitante && <> · {rotuloBloco(s.blocoSolicitante)}</>}
+                  <span className="mx-1 text-slate-400">⇄</span>
+                  <span className="font-medium">{s.colegaNome}</span>
+                  {s.tipo === 'cobertura'
+                    ? ' (só cobre)'
+                    : s.blocoColega && <> · {rotuloBloco(s.blocoColega)}</>}
+                </div>
+                <button
+                  onClick={() => handleAplicarUma(s)}
+                  disabled={processando === s.id}
+                  className="rounded-md border border-amber-400 px-3 py-1 text-sm font-medium text-amber-800 hover:bg-amber-100 disabled:opacity-60"
+                >
+                  {processando === s.id ? 'Aplicando...' : 'Aplicar na escala'}
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Aguardando aprovação */}
       <div className="mt-6">
@@ -171,6 +249,11 @@ export function SolicitacoesTrocaAdminPage() {
                       >
                         {rotuloStatus[s.status]}
                       </span>
+                      {s.naoAplicada && (
+                        <span className="ml-1 rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800">
+                          Não aplicada na escala
+                        </span>
+                      )}
                     </td>
                   </tr>
                 ))}
