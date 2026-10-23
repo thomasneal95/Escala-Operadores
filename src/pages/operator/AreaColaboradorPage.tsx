@@ -7,6 +7,7 @@ import { ErrorBoundary } from '../../components/ErrorBoundary';
 import { FallbackErroTela } from '../../components/FallbackErroTela';
 import { useToast } from '../../components/FeedbackProvider';
 import { MinhaEscalaPage } from './MinhaEscalaPage';
+import { MeuRodizio } from '../../components/MeuRodizio';
 
 function SecaoCalendario() {
   const { urlHttps, urlWebcal, carregando } = useCalendarioToken();
@@ -95,6 +96,9 @@ export function AreaColaboradorPage() {
         fallback={<FallbackErroTela />}
       >
         {conteudo}
+      </ErrorBoundary>
+      <ErrorBoundary fallback={null}>
+        <MeuRodizio />
       </ErrorBoundary>
       <SecaoCalendario />
     </div>

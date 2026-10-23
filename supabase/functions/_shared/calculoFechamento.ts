@@ -118,7 +118,7 @@ export interface PaineisFechamento {
   ftdsPorDia: { dia: string; ftds: number }[];
   // Bolo de comissão por equipe e dia (dias úteis: rateio da equipe; FDS:
   // valor dividido entre quem teve FTD).
-  comissaoPorEquipeEDia: { dia: string; equipe: string; valor: number }[];
+  comissaoPorEquipeEDia: { dia: string; equipe: string; valor: number; ftds: number }[];
   porEquipe: {
     equipe: string;
     ativos: number;
@@ -217,7 +217,7 @@ function proporcional(valor: number, admissao: string | null, desativacao: strin
 
 const arredondar = (v: number) => Math.round(v * 100) / 100 || 0;
 
-export function calcularFechamento(entrada: {
+export interface EntradaFechamento {
   mes: string; // YYYY-MM-01
   vendas: Venda[];
   colaboradores: ColaboradorFechamento[];
@@ -233,7 +233,11 @@ export function calcularFechamento(entrada: {
   // Acertos de desligamento já pagos no mês: colaborador_id -> valor pago.
   acertosPagos?: Map<string, number>;
   config: ConfiguracaoComissao;
-}): ResultadoFechamento {
+  // Detalhe dia a dia de uma pessoa (portal do operador).
+  detalheDe?: string;
+}
+
+export function calcularFechamento(entrada: EntradaFechamento): ResultadoFechamento {
   const { mes, colaboradores, vigencias, equipes, adiantamentos, externos, fixos, config } = entrada;
   const fimDoMes = ultimoDiaDoMes(mes);
 
@@ -563,7 +567,7 @@ export function calcularFechamento(entrada: {
   const comissaoPorEquipeEDia = [...ftdsPorEquipeEDia].flatMap(([k, qtd]) => {
     const [equipeId, dia] = k.split('|');
     const equipe = nomeEquipe(equipeId);
-    return equipe ? [{ dia, equipe, valor: arredondar(qtd * valorDoDia(dia)) }] : [];
+    return equipe ? [{ dia, equipe, valor: arredondar(qtd * valorDoDia(dia)), ftds: qtd }] : [];
   });
 
   const porEquipeMapa = new Map<string, { equipe: string; ativos: number; ftds: number; rejeitados: number }>();
@@ -600,7 +604,8 @@ export function calcularFechamento(entrada: {
   }
 
   const desligadosNoMes = colaboradores.filter(
-    (c) => c.desativado_em && c.desativado_em >= mes && c.desativado_em <= fimDoMes
+    (c) =>
+      (c.desativado_em && c.desativado_em >= mes && c.desativado_em <= fimDoMes) || c.id === entrada.detalheDe
   );
   const detalheDesligados = desligadosNoMes.map((c) => {
     const dias = new Map<string, { dia: string; ftds: number; comissao_equipe: number; comissao_fds: number; comissao_infoprodutos: number }>();

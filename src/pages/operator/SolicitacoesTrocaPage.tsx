@@ -4,6 +4,7 @@ import { useColegasEquipe } from '../../features/teams/useColegasEquipe';
 import { useAreaColaborador } from '../../features/schedules/useAreaColaborador';
 import { useMinhasEscalasDosPeriodos } from '../../features/schedules/useMinhasEscalasDosPeriodos';
 import { useEscalasDoColega } from '../../features/schedules/useEscalasDoColega';
+import { useQuemTrabalhaNaData } from '../../features/schedules/useQuemTrabalhaNaData';
 import { corTurno } from '../../lib/turnoColors';
 import { agruparEmBlocos, rotuloBloco } from '../../lib/blocosDeTrabalho';
 
@@ -63,7 +64,16 @@ export function SolicitacoesTrocaPage() {
 
   const podeSolicitar = periodosPublicados.length > 0;
 
-  const colegasParaSolicitar = colegas.filter((c) => !c.souEu);
+  // Colegas de folga no dia escolhido vêm primeiro (são os que podem cobrir).
+  const minhaEscalaEscolhida = minhasEscalas.find((e) => e.id === minhaEscalaId) ?? null;
+  const { ocupados } = useQuemTrabalhaNaData(
+    minhaEscalaEscolhida?.data ?? null,
+    minhaEscalaEscolhida?.periodo_id ?? null
+  );
+  const deFolga = (id: string) => !!ocupados && !ocupados.has(id);
+  const colegasParaSolicitar = colegas
+    .filter((c) => !c.souEu)
+    .sort((a, b) => Number(deFolga(b.id)) - Number(deFolga(a.id)));
 
   // Dias de trabalho do colega escolhido que caem nos meus dias de folga —
   // são os que posso pegar em troca do meu.
@@ -183,9 +193,15 @@ export function SolicitacoesTrocaPage() {
                 {colegasParaSolicitar.map((c) => (
                   <option key={c.id} value={c.id}>
                     {c.nome_completo}
+                    {deFolga(c.id) ? ' — de folga nesse dia' : ''}
                   </option>
                 ))}
               </select>
+              {ocupados && colegasParaSolicitar.some((c) => deFolga(c.id)) && (
+                <p className="mt-1 text-xs text-slate-500">
+                  Quem está de folga no seu dia aparece primeiro na lista.
+                </p>
+              )}
             </div>
 
             <div className="sm:col-span-2">

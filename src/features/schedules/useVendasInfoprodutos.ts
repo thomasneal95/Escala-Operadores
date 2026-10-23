@@ -1,8 +1,11 @@
 import { useCallback, useEffect, useState } from 'react';
 import { supabase } from '../../lib/supabase/client';
+import { useAuth } from '../auth/AuthContext';
 
 // Vendas de infoprodutos lançadas no site (uma por venda). A comissão é
 // calculada no fechamento do mês (função calcular-fechamento-mensal).
+// As registradas pelos operadores chegam "pendentes" e só entram no
+// fechamento depois de confirmadas aqui.
 
 export interface VendaInfoproduto {
   id: string;
@@ -11,9 +14,12 @@ export interface VendaInfoproduto {
   email_lead: string | null;
   operador: string;
   valor: number;
+  status: 'pendente' | 'confirmada' | 'recusada';
+  // Preenchido quando o próprio operador registrou a venda pelo portal.
+  colaborador_id: string | null;
 }
 
-export type NovaVendaInfoproduto = Omit<VendaInfoproduto, 'id'>;
+export type NovaVendaInfoproduto = Omit<VendaInfoproduto, 'id' | 'status' | 'colaborador_id'>;
 
 function ultimoDiaDoMes(mes: string) {
   const [a, m] = mes.split('-').map(Number);
@@ -21,22 +27,26 @@ function ultimoDiaDoMes(mes: string) {
 }
 
 export function useVendasInfoprodutos(mes: string) {
+  const { session } = useAuth();
   const [vendas, setVendas] = useState<VendaInfoproduto[]>([]);
   const [produtosConhecidos, setProdutosConhecidos] = useState<string[]>([]);
+  // Meses (YYYY-MM) de outras vendas pendentes, para o admin não esquecer.
+  const [pendentesEmOutrosMeses, setPendentesEmOutrosMeses] = useState<string[]>([]);
   const [carregando, setCarregando] = useState(true);
   const [erro, setErro] = useState<string | null>(null);
   const [processando, setProcessando] = useState(false);
 
   const carregar = useCallback(async () => {
-    const [vendasRes, produtosRes] = await Promise.all([
+    const [vendasRes, produtosRes, pendentesRes] = await Promise.all([
       supabase
         .from('vendas_infoprodutos')
-        .select('id, data, produto, email_lead, operador, valor')
+        .select('id, data, produto, email_lead, operador, valor, status, colaborador_id')
         .gte('data', mes)
         .lte('data', ultimoDiaDoMes(mes))
         .order('data')
         .order('criado_em'),
       supabase.from('vendas_infoprodutos').select('produto'),
+      supabase.from('vendas_infoprodutos').select('data').eq('status', 'pendente'),
     ]);
 
     if (vendasRes.error) {
@@ -48,6 +58,11 @@ export function useVendasInfoprodutos(mes: string) {
     setVendas((vendasRes.data ?? []).map((v) => ({ ...v, valor: Number(v.valor) })));
     setProdutosConhecidos(
       [...new Set((produtosRes.data ?? []).map((p) => p.produto as string))].sort()
+    );
+    setPendentesEmOutrosMeses(
+      [...new Set((pendentesRes.data ?? []).map((p) => (p.data as string).slice(0, 7)))]
+        .filter((m) => m !== mes.slice(0, 7))
+        .sort()
     );
     setErro(null);
     setCarregando(false);
@@ -77,6 +92,7 @@ export function useVendasInfoprodutos(mes: string) {
   return {
     vendas,
     produtosConhecidos,
+    pendentesEmOutrosMeses,
     carregando,
     erro,
     processando,
@@ -86,6 +102,14 @@ export function useVendasInfoprodutos(mes: string) {
       executar(
         supabase.from('vendas_infoprodutos').update(limpar(v)).eq('id', id),
         'Não foi possível salvar a venda.'
+      ),
+    conferir: (ids: string[], status: 'confirmada' | 'recusada') =>
+      executar(
+        supabase
+          .from('vendas_infoprodutos')
+          .update({ status, conferido_em: new Date().toISOString(), conferido_por: session?.user.id ?? null })
+          .in('id', ids),
+        'Não foi possível salvar a conferência.'
       ),
     remover: (id: string) =>
       executar(supabase.from('vendas_infoprodutos').delete().eq('id', id), 'Não foi possível excluir a venda.'),

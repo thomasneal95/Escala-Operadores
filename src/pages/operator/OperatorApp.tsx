@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import type { ReactElement } from 'react';
 import { useAuth } from '../../features/auth/AuthContext';
 import { AreaColaboradorPage } from './AreaColaboradorPage';
@@ -6,18 +6,24 @@ import { ColegasEquipePage } from './ColegasEquipePage';
 import { HistoricoEscalasPage } from './HistoricoEscalasPage';
 import { SolicitacoesTrocaPage } from './SolicitacoesTrocaPage';
 import { MultasPage } from './MultasPage';
+import { MeusGanhosPage } from './MeusGanhosPage';
+import { DesempenhoPage } from './DesempenhoPage';
+import { InfoprodutosOperadorPage } from './InfoprodutosOperadorPage';
 import { TourOperador } from '../../components/TourOperador';
 import { ErrorBoundary } from '../../components/ErrorBoundary';
 import { FallbackErroTela } from '../../components/FallbackErroTela';
 import { NotificacaoBadge } from '../../components/NotificacaoBadge';
 import { useNotificacoesOperador } from '../../features/notificacoes/useNotificacoesOperador';
 
-type Aba = 'minha-area' | 'equipe' | 'trocas' | 'multas' | 'historico';
+type Aba = 'minha-area' | 'equipe' | 'trocas' | 'ganhos' | 'desempenho' | 'infoprodutos' | 'multas' | 'historico';
 
 const abas: { id: Aba; rotulo: string }[] = [
   { id: 'minha-area', rotulo: 'Minha área' },
   { id: 'equipe', rotulo: 'Equipe' },
   { id: 'trocas', rotulo: 'Trocas' },
+  { id: 'ganhos', rotulo: 'Meus ganhos' },
+  { id: 'desempenho', rotulo: 'Desempenho' },
+  { id: 'infoprodutos', rotulo: 'Infoprodutos' },
   { id: 'multas', rotulo: 'Multas' },
   { id: 'historico', rotulo: 'Histórico' },
 ];
@@ -47,6 +53,23 @@ const iconesPorAba: Record<Aba, ReactElement> = {
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8}>
       <path d="M4 7h13l-3-3" strokeLinecap="round" strokeLinejoin="round" />
       <path d="M20 17H7l3 3" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  ),
+  ganhos: (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8}>
+      <circle cx="12" cy="12" r="9" />
+      <path d="M15 9.5c-.5-1-1.6-1.5-3-1.5-1.7 0-3 .9-3 2s1.3 1.7 3 2 3 .9 3 2-1.3 2-3 2c-1.4 0-2.5-.5-3-1.5M12 6.5v11" strokeLinecap="round" />
+    </svg>
+  ),
+  desempenho: (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8}>
+      <path d="M4 20V10M10 20V4M16 20v-7M22 20H2" strokeLinecap="round" />
+    </svg>
+  ),
+  infoprodutos: (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8}>
+      <path d="M4 7h16l-1.5 12a1 1 0 0 1-1 .9h-11a1 1 0 0 1-1-.9L4 7Z" strokeLinejoin="round" />
+      <path d="M9 10V6a3 3 0 0 1 6 0v4" strokeLinecap="round" />
     </svg>
   ),
   multas: (
@@ -80,12 +103,35 @@ export function OperatorApp() {
   const { perfil, sair } = useAuth();
   const [abaAtiva, setAbaAtiva] = useState<Aba>('minha-area');
   const [menuAberto, setMenuAberto] = useState(false);
-  const { trocasPendentes, multasNovas } = useNotificacoesOperador();
+  const {
+    escalasNovas,
+    trocasPendentes,
+    trocasDecididas,
+    multasNovas,
+    mesesFechados,
+    vendasConferidas,
+    marcarVisto,
+  } = useNotificacoesOperador();
 
   const contagemPorAba: Partial<Record<Aba, number>> = {
-    trocas: trocasPendentes,
+    'minha-area': escalasNovas,
+    trocas: trocasPendentes + trocasDecididas,
+    ganhos: mesesFechados,
+    infoprodutos: vendasConferidas,
     multas: multasNovas,
   };
+
+  // Abrir a aba conta como "visto" para os avisos dela.
+  useEffect(() => {
+    const escopo: Partial<Record<Aba, string>> = {
+      'minha-area': 'escala',
+      trocas: 'trocas',
+      ganhos: 'ganhos',
+      infoprodutos: 'infoprodutos',
+    };
+    const atual = escopo[abaAtiva];
+    if (atual) marcarVisto(atual);
+  }, [abaAtiva, marcarVisto]);
   // Não conta a aba em que a pessoa já está — ela já está vendo o que
   // precisa ver ali, o ponto no menu é só pra avisar de OUTRA aba.
   const totalNotificacoes = Object.entries(contagemPorAba)
@@ -181,6 +227,9 @@ export function OperatorApp() {
             {abaAtiva === 'minha-area' && <AreaColaboradorPage />}
             {abaAtiva === 'equipe' && <ColegasEquipePage />}
             {abaAtiva === 'trocas' && <SolicitacoesTrocaPage />}
+            {abaAtiva === 'ganhos' && <MeusGanhosPage />}
+            {abaAtiva === 'desempenho' && <DesempenhoPage />}
+            {abaAtiva === 'infoprodutos' && <InfoprodutosOperadorPage />}
             {abaAtiva === 'multas' && <MultasPage />}
             {abaAtiva === 'historico' && <HistoricoEscalasPage />}
           </ErrorBoundary>

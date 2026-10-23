@@ -70,10 +70,24 @@ export function InfoprodutosComissao({
     if (confirmou) await depois(await info.remover(v.id), 'Venda excluída.');
   }
 
-  const total = info.vendas.reduce((s, v) => s + v.valor, 0);
+  async function handleConferir(ids: string[], status: 'confirmada' | 'recusada') {
+    if (status === 'recusada') {
+      const confirmou = await confirmar('Recusar esta venda? Ela não entra na comissão (o operador vê que foi recusada).');
+      if (!confirmou) return;
+    }
+    await depois(
+      await info.conferir(ids, status),
+      status === 'confirmada' ? `${ids.length} venda(s) confirmada(s).` : 'Venda recusada.'
+    );
+  }
+
+  // Só as confirmadas contam no fechamento (e nos totais abaixo).
+  const pendentes = info.vendas.filter((v) => v.status === 'pendente');
+  const confirmadas = info.vendas.filter((v) => v.status === 'confirmada');
+  const total = confirmadas.reduce((s, v) => s + v.valor, 0);
   const agrupar = (chave: (v: VendaInfoproduto) => string) => {
     const mapa = new Map<string, { nome: string; qtd: number; valor: number }>();
-    for (const v of info.vendas) {
+    for (const v of confirmadas) {
       const k = chave(v);
       const atual = mapa.get(k) ?? { nome: k, qtd: 0, valor: 0 };
       atual.qtd++;
@@ -108,13 +122,68 @@ export function InfoprodutosComissao({
 
       {info.erro && <p className="rounded-md bg-red-50 px-4 py-3 text-sm text-red-700">{info.erro}</p>}
 
+      {info.pendentesEmOutrosMeses.length > 0 && (
+        <p className="rounded-md bg-amber-50 px-4 py-3 text-sm text-amber-800">
+          Também há vendas aguardando conferência em:{' '}
+          {info.pendentesEmOutrosMeses.map((m) => `${m.slice(5)}/${m.slice(0, 4)}`).join(', ')}. Troque o mês acima para
+          conferir.
+        </p>
+      )}
+
+      {pendentes.length > 0 && (
+        <div className="rounded-lg border border-amber-200 bg-amber-50 p-5">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h2 className="font-display font-semibold text-tinta">
+                {pendentes.length} venda(s) registrada(s) pelos operadores aguardando conferência
+              </h2>
+              <p className="text-xs text-slate-600">Só entram na comissão depois de confirmadas.</p>
+            </div>
+            <button
+              onClick={() => handleConferir(pendentes.map((v) => v.id), 'confirmada')}
+              disabled={info.processando}
+              className="rounded-md bg-esmeralda px-4 py-2 text-sm font-medium text-white hover:bg-esmeralda-dark disabled:opacity-60"
+            >
+              Confirmar todas
+            </button>
+          </div>
+          <ul className="mt-3 divide-y divide-amber-200 text-sm">
+            {pendentes.map((v) => (
+              <li key={v.id} className="flex flex-wrap items-center justify-between gap-2 py-2">
+                <span className="text-tinta">
+                  {dataBr(v.data)} · <span className="font-medium">{v.operador}</span> · {v.produto} ·{' '}
+                  {moeda(v.valor)}
+                  {v.email_lead && <span className="text-slate-500"> · {v.email_lead}</span>}
+                </span>
+                <span className="flex gap-3">
+                  <button
+                    onClick={() => handleConferir([v.id], 'confirmada')}
+                    disabled={info.processando}
+                    className="text-sm font-medium text-esmeralda-dark hover:underline"
+                  >
+                    Confirmar
+                  </button>
+                  <button
+                    onClick={() => handleConferir([v.id], 'recusada')}
+                    disabled={info.processando}
+                    className="text-sm font-medium text-red-600 hover:underline"
+                  >
+                    Recusar
+                  </button>
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-        <Cartao titulo="Vendas no mês" valor={String(info.vendas.length)} />
+        <Cartao titulo="Vendas confirmadas" valor={String(confirmadas.length)} />
         <Cartao titulo="Total vendido" valor={moeda(total)} />
         <Cartao titulo={`Comissão (${Math.round(percentual * 1000) / 10}%)`} valor={moeda(total * percentual)} />
       </div>
 
-      {info.vendas.length > 0 && (
+      {confirmadas.length > 0 && (
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
           <Resumo titulo="Por produto" linhas={agrupar((v) => v.produto)} />
           <Resumo titulo="Por operador" linhas={agrupar((v) => v.operador)} />
@@ -147,8 +216,19 @@ export function InfoprodutosComissao({
               </tr>
             ) : (
               info.vendas.map((v) => (
-                <tr key={v.id}>
-                  <td className="whitespace-nowrap px-3 py-2">{dataBr(v.data)}</td>
+                <tr key={v.id} className={v.status === 'confirmada' ? '' : 'text-slate-400'}>
+                  <td className="whitespace-nowrap px-3 py-2">
+                    {dataBr(v.data)}
+                    {v.status !== 'confirmada' && (
+                      <span
+                        className={`ml-1 rounded-full px-2 py-0.5 text-[11px] ${
+                          v.status === 'pendente' ? 'bg-amber-100 text-amber-800' : 'bg-red-50 text-red-700'
+                        }`}
+                      >
+                        {v.status === 'pendente' ? 'pendente' : 'recusada'}
+                      </span>
+                    )}
+                  </td>
                   <td className="px-3 py-2">{v.produto}</td>
                   <td className="px-3 py-2 text-slate-500">{v.email_lead ?? '—'}</td>
                   <td className="whitespace-nowrap px-3 py-2">
@@ -160,7 +240,9 @@ export function InfoprodutosComissao({
                     )}
                   </td>
                   <td className="whitespace-nowrap px-3 py-2">{moeda(v.valor)}</td>
-                  <td className="whitespace-nowrap px-3 py-2 text-slate-600">{moeda(v.valor * percentual)}</td>
+                  <td className="whitespace-nowrap px-3 py-2 text-slate-600">
+                    {v.status === 'confirmada' ? moeda(v.valor * percentual) : '—'}
+                  </td>
                   <td className="whitespace-nowrap px-3 py-2 text-right">
                     <button onClick={() => setEditando(v)} className="mr-3 text-sm font-medium text-ceruleo hover:underline">
                       Editar

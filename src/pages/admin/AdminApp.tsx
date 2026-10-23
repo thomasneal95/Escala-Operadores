@@ -173,7 +173,7 @@ export function AdminApp() {
   const { perfil, sair } = useAuth();
   const [abaAtiva, setAbaAtiva] = useState<Aba>('painel');
   const [menuAberto, setMenuAberto] = useState(false);
-  const { trocasPendentes, multasPendentes, escalaParaMontar, presencasPendentes } =
+  const { trocasPendentes, multasPendentes, escalaParaMontar, presencasPendentes, infoprodutosPendentes } =
     useNotificacoesAdmin();
 
   const contagemPorAba: Partial<Record<Aba, number>> = {
@@ -181,6 +181,7 @@ export function AdminApp() {
     multas: multasPendentes,
     escala: escalaParaMontar,
     historico: presencasPendentes,
+    comissionamento: infoprodutosPendentes,
   };
   // Não conta a aba em que a pessoa já está — ela já está vendo o que
   // precisa ver ali, o ponto no menu é só pra avisar de OUTRA aba.
