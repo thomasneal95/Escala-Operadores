@@ -82,7 +82,17 @@ export default {
       if ((data ?? []).length < 1000) break;
     }
 
-    const [colaboradoresRes, vigenciasRes, equipesRes, adiantamentosRes, externosRes, fixosRes, infoprodutosRes, acertosRes] =
+    const [
+      colaboradoresRes,
+      vigenciasRes,
+      equipesRes,
+      adiantamentosRes,
+      externosRes,
+      fixosRes,
+      infoprodutosRes,
+      acertosRes,
+      desligadosForaRes,
+    ] =
       await Promise.all([
         db
           .from("colaboradores")
@@ -101,9 +111,25 @@ export default {
           .gte("data", mes)
           .lte("data", ultimoDiaDoMes(mes)),
         db.from("acertos_desligamento").select("colaborador_id, valor_pago").eq("mes", mes),
+        db
+          .from("colaboradores")
+          .select("nome_base, desativado_em, perfis(nome_completo)")
+          .eq("ativo", false)
+          .not("nome_base", "is", null)
+          .or(`desativado_em.is.null,desativado_em.lt.${mes}`),
       ]);
 
-    const falha = [colaboradoresRes, vigenciasRes, equipesRes, adiantamentosRes, externosRes, fixosRes, infoprodutosRes, acertosRes].find(
+    const falha = [
+      colaboradoresRes,
+      vigenciasRes,
+      equipesRes,
+      adiantamentosRes,
+      externosRes,
+      fixosRes,
+      infoprodutosRes,
+      acertosRes,
+      desligadosForaRes,
+    ].find(
       (r) => r.error
     );
     if (falha) {
@@ -145,6 +171,12 @@ export default {
         valor: Number(f.valor),
         data_inicio: f.data_inicio,
         adiantamento: Number(f.adiantamento),
+      })),
+      // deno-lint-ignore no-explicit-any
+      desligadosForaDoMes: (desligadosForaRes.data ?? []).map((d: any) => ({
+        nome: d.perfis?.nome_completo ?? d.nome_base,
+        nome_base: d.nome_base,
+        desativado_em: d.desativado_em,
       })),
       acertosPagos: new Map(
         (acertosRes.data ?? []).map((a) => [a.colaborador_id, Number(a.valor_pago)])

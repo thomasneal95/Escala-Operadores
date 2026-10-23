@@ -34,6 +34,8 @@ export interface ColaboradorNomeBase {
   id: string;
   nome: string;
   nome_base: string | null;
+  ativo: boolean;
+  desativado_em: string | null;
 }
 
 export function useCadastrosComissao() {
@@ -54,8 +56,9 @@ export function useCadastrosComissao() {
         .order('nome'),
       supabase
         .from('colaboradores')
-        .select('id, nome_base, perfis(nome_completo, papel)')
-        .eq('ativo', true),
+        // Inclui os desligados: as vendas do mês em que saíram também precisam
+        // ser ligadas a eles.
+        .select('id, nome_base, ativo, desativado_em, perfis(nome_completo, papel)'),
     ]);
 
     if (configRes.error || externosRes.error || fixosRes.error || colaboradoresRes.error) {
@@ -94,6 +97,8 @@ export function useCadastrosComissao() {
           id: c.id,
           nome: (c.perfis as unknown as { nome_completo: string } | null)?.nome_completo ?? '(sem nome)',
           nome_base: c.nome_base,
+          ativo: c.ativo,
+          desativado_em: c.desativado_em,
         }))
         .sort((a, b) => a.nome.localeCompare(b.nome))
     );

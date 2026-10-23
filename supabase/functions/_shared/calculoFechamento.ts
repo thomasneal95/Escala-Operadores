@@ -151,6 +151,9 @@ export interface ResultadoFechamento {
   avisos: {
     operadoresSemCadastro: { operador: string; ftds: number }[];
     infoprodutosSemOperador: { operador: string; valor: number }[];
+    // Vendas de quem já tinha saído antes do mês (ou está sem data de saída):
+    // não entram no cálculo até a data de saída ser corrigida.
+    vendasDeDesligados: { operador: string; nome: string; desativado_em: string | null; ftds: number }[];
     colaboradoresSemNomeNaBase: string[];
     vendasForaDoMes: number;
   };
@@ -224,6 +227,9 @@ export function calcularFechamento(entrada: {
   externos: OperadorExterno[];
   fixos: PagamentoFixo[];
   infoprodutos?: VendaInfoproduto[];
+  // Desligados antes do mês (ou sem data) que têm nome na base — só para
+  // avisar quando aparecem vendas deles.
+  desligadosForaDoMes?: { nome: string; nome_base: string; desativado_em: string | null }[];
   // Acertos de desligamento já pagos no mês: colaborador_id -> valor pago.
   acertosPagos?: Map<string, number>;
   config: ConfiguracaoComissao;
@@ -276,6 +282,13 @@ export function calcularFechamento(entrada: {
   const primeiroLancamento = new Map<string, string>();
   const ftdsPorColaboradorEDia = new Map<string, number>(); // `${id}|${dia}`
   const ftdsPorOperadorDesconhecido = new Map<string, { operador: string; ftds: number }>();
+  const desligadoForaPorNome = new Map(
+    (entrada.desligadosForaDoMes ?? []).map((d) => [normalizarNome(d.nome_base), d])
+  );
+  const vendasDeDesligados = new Map<
+    string,
+    { operador: string; nome: string; desativado_em: string | null; ftds: number }
+  >();
   const ftdsPorExterno = new Map<string, { total: number; diasUteis: number }>();
 
   for (const v of todasDoMes) {
@@ -298,6 +311,18 @@ export function calcularFechamento(entrada: {
       e.total++;
       if (!ehFimDeSemana(v.dia)) e.diasUteis++;
       ftdsPorExterno.set(nome, e);
+      continue;
+    }
+    const desligado = desligadoForaPorNome.get(nome);
+    if (desligado) {
+      const atual = vendasDeDesligados.get(nome) ?? {
+        operador: v.operador.trim(),
+        nome: desligado.nome,
+        desativado_em: desligado.desativado_em,
+        ftds: 0,
+      };
+      atual.ftds++;
+      vendasDeDesligados.set(nome, atual);
       continue;
     }
     const d = ftdsPorOperadorDesconhecido.get(nome) ?? { operador: v.operador.trim(), ftds: 0 };
@@ -649,6 +674,7 @@ export function calcularFechamento(entrada: {
     avisos: {
       operadoresSemCadastro: [...ftdsPorOperadorDesconhecido.values()].sort((a, b) => b.ftds - a.ftds),
       infoprodutosSemOperador,
+      vendasDeDesligados: [...vendasDeDesligados.values()].sort((a, b) => b.ftds - a.ftds),
       colaboradoresSemNomeNaBase: colaboradores.filter((c) => !c.nome_base).map((c) => c.nome),
       vendasForaDoMes,
     },

@@ -150,7 +150,11 @@ export function ComissionamentoPage() {
   const linhas = dados?.linhas ?? [];
   const total = (campo: keyof LinhaFechamento) =>
     linhas.reduce((soma, l) => soma + (typeof l[campo] === 'number' ? (l[campo] as number) : 0), 0);
-  const colaboradoresSemNome = cadastros.colaboradores.filter((c) => !c.nome_base);
+  const colaboradoresSemNome = cadastros.colaboradores.filter((c) => c.ativo && !c.nome_base);
+  const ativos = cadastros.colaboradores.filter((c) => c.ativo);
+  const desligados = cadastros.colaboradores
+    .filter((c) => !c.ativo)
+    .sort((a, b) => (b.desativado_em ?? '').localeCompare(a.desativado_em ?? ''));
 
   return (
     <div>
@@ -323,8 +327,29 @@ export function ComissionamentoPage() {
 
           {(dados.avisos.operadoresSemCadastro.length > 0 ||
             colaboradoresSemNome.length > 0 ||
+            dados.avisos.vendasDeDesligados.length > 0 ||
             dados.avisos.infoprodutosSemOperador.length > 0) && (
             <div className="mt-4 space-y-3 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm">
+              {dados.avisos.vendasDeDesligados.length > 0 && (
+                <div className="text-amber-800">
+                  <p className="font-medium">
+                    Vendas de quem já tinha saído antes deste mês (ou está sem data de saída) — não
+                    entram no cálculo:
+                  </p>
+                  <ul className="mt-1 list-disc pl-5">
+                    {dados.avisos.vendasDeDesligados.map((d) => (
+                      <li key={d.operador}>
+                        {d.nome} ({d.operador}) · {d.ftds} FTD(s) ·{' '}
+                        {d.desativado_em ? `saída registrada em ${formatarData(d.desativado_em)}` : 'sem data de saída'}
+                      </li>
+                    ))}
+                  </ul>
+                  <p className="mt-1">
+                    Se a pessoa trabalhou neste mês, corrija o último dia em Colaboradores → "Data de saída" e
+                    recalcule.
+                  </p>
+                </div>
+              )}
               {dados.avisos.infoprodutosSemOperador.length > 0 && (
                 <p className="text-amber-800">
                   Vendas de infoprodutos com operador não reconhecido (sem comissão até corrigir na aba
@@ -398,10 +423,22 @@ export function ComissionamentoPage() {
           padraoAberta={false}
           descricao="Nome de cada colaborador exatamente como aparece na coluna Operador da base."
         >
+          {[
+            { titulo: null, lista: ativos },
+            { titulo: 'Desligados', lista: desligados },
+          ].map(({ titulo, lista }) =>
+            lista.length === 0 ? null : (
+          <div key={titulo ?? 'ativos'} className={titulo ? 'mt-5' : ''}>
+          {titulo && <p className="mb-2 text-xs font-medium uppercase tracking-wide text-slate-500">{titulo}</p>}
           <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-            {cadastros.colaboradores.map((c) => (
+            {lista.map((c) => (
               <label key={c.id} className="block text-sm text-slate-700">
                 {c.nome}
+                {!c.ativo && (
+                  <span className="ml-1 text-xs text-slate-400">
+                    ({c.desativado_em ? `saiu em ${formatarData(c.desativado_em)}` : 'sem data de saída'})
+                  </span>
+                )}
                 <input
                   defaultValue={c.nome_base ?? ''}
                   key={`${c.id}-${c.nome_base}`}
@@ -416,6 +453,9 @@ export function ComissionamentoPage() {
               </label>
             ))}
           </div>
+          </div>
+            )
+          )}
         </SecaoRecolhivel>
 
         <SecaoRecolhivel
@@ -701,7 +741,7 @@ function OperadorSemCadastro({
 }: {
   operador: string;
   ftds: number;
-  colaboradores: { id: string; nome: string; nome_base: string | null }[];
+  colaboradores: { id: string; nome: string; nome_base: string | null; ativo: boolean; desativado_em: string | null }[];
   onLigar: (colaboradorId: string) => void;
   onExterno: () => void;
 }) {
@@ -716,12 +756,22 @@ function OperadorSemCadastro({
         className="rounded-md border border-slate-300 px-2 py-1 text-sm"
       >
         <option value="">Ligar a colaborador...</option>
-        {colaboradores.map((c) => (
-          <option key={c.id} value={c.id}>
-            {c.nome}
-            {c.nome_base ? ` (hoje: ${c.nome_base})` : ''}
-          </option>
-        ))}
+        {[
+          { rotulo: 'Ativos', lista: colaboradores.filter((c) => c.ativo) },
+          { rotulo: 'Desligados', lista: colaboradores.filter((c) => !c.ativo) },
+        ].map(({ rotulo, lista }) =>
+          lista.length === 0 ? null : (
+            <optgroup key={rotulo} label={rotulo}>
+              {lista.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.nome}
+                  {!c.ativo && (c.desativado_em ? ` — saiu em ${formatarData(c.desativado_em)}` : ' — sem data de saída')}
+                  {c.nome_base ? ` (hoje: ${c.nome_base})` : ''}
+                </option>
+              ))}
+            </optgroup>
+          )
+        )}
       </select>
       <button
         onClick={() => escolhido && onLigar(escolhido)}
