@@ -58,7 +58,7 @@ export function useCadastrosComissao() {
         .from('colaboradores')
         // Inclui os desligados: as vendas do mês em que saíram também precisam
         // ser ligadas a eles.
-        .select('id, nome_base, ativo, desativado_em, perfis(nome_completo, papel)'),
+        .select('id, nome_base, ativo, desativado_em, comissionamento_individual, perfis(nome_completo, papel)'),
     ]);
 
     if (configRes.error || externosRes.error || fixosRes.error || colaboradoresRes.error) {
@@ -92,7 +92,12 @@ export function useCadastrosComissao() {
     );
     setColaboradores(
       (colaboradoresRes.data ?? [])
-        .filter((c) => (c.perfis as unknown as { papel: string } | null)?.papel !== 'administrador')
+        // Mesmos critérios do fechamento: sem admins e sem "individual".
+        .filter(
+          (c) =>
+            (c.perfis as unknown as { papel: string } | null)?.papel !== 'administrador' &&
+            !c.comissionamento_individual
+        )
         .map((c) => ({
           id: c.id,
           nome: (c.perfis as unknown as { nome_completo: string } | null)?.nome_completo ?? '(sem nome)',

@@ -137,8 +137,11 @@ export default {
     }
 
     const colaboradores: ColaboradorFechamento[] = (colaboradoresRes.data ?? [])
+      // Fora do fechamento: administradores e cadastros de "comissionamento
+      // individual" (não é mais usado — quem recebe por FTD, como o João, é
+      // operador externo; manter os dois duplicaria o pagamento).
       // deno-lint-ignore no-explicit-any
-      .filter((c: any) => c.perfis?.papel !== "administrador")
+      .filter((c: any) => c.perfis?.papel !== "administrador" && !c.comissionamento_individual)
       // deno-lint-ignore no-explicit-any
       .map((c: any) => ({
         id: c.id,

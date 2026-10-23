@@ -502,7 +502,13 @@ function TabelaPorPessoa({
   onAdiantamento: (colaboradorId: string, valor: number) => void;
 }) {
   const [aberta, setAberta] = useState<string | null>(null);
-  const comissoes = (l: LinhaFechamento) => l.comissao_equipe + l.comissao_fds + l.comissao_infoprodutos;
+  // Externo (e individual) recebe por FTD: a parte dos dias úteis fica em
+  // comissao_propria e entra no pagamento.
+  const comissoes = (l: LinhaFechamento) =>
+    l.comissao_equipe +
+    l.comissao_fds +
+    l.comissao_infoprodutos +
+    (l.tipo === 'externo' || l.tipo === 'individual' ? l.comissao_propria : 0);
   const soma = (f: (l: LinhaFechamento) => number) => linhas.reduce((s, l) => s + f(l), 0);
   const direita = 'whitespace-nowrap px-3 py-2 text-right tabular-nums';
 
@@ -588,13 +594,20 @@ function TabelaPorPessoa({
                         <dl className="grid grid-cols-2 gap-x-6 gap-y-2 text-sm sm:grid-cols-4 lg:grid-cols-7">
                           <Detalhe rotulo="Início" valor={formatarData(l.data_inicio)} />
                           <Detalhe rotulo="Com. equipe (dias úteis)" valor={formatarMoeda(l.comissao_equipe)} />
-                          <Detalhe rotulo="Com. fim de semana" valor={formatarMoeda(l.comissao_fds)} />
-                          <Detalhe rotulo="Com. infoprodutos" valor={formatarMoeda(l.comissao_infoprodutos)} />
                           <Detalhe
-                            rotulo="Com. própria (informativa)"
-                            valor={formatarMoeda(l.comissao_propria)}
-                            dica="FTDs da pessoa em dias úteis × valor. Não entra no salário (exceto externos e individuais, que recebem por FTD)."
+                            rotulo={l.tipo === 'externo' ? 'FTDs no fim de semana (pagos)' : 'Com. fim de semana'}
+                            valor={formatarMoeda(l.comissao_fds)}
                           />
+                          <Detalhe rotulo="Com. infoprodutos" valor={formatarMoeda(l.comissao_infoprodutos)} />
+                          {l.tipo === 'externo' || l.tipo === 'individual' ? (
+                            <Detalhe rotulo="FTDs em dias úteis (pagos)" valor={formatarMoeda(l.comissao_propria)} />
+                          ) : (
+                            <Detalhe
+                              rotulo="Com. própria (informativa)"
+                              valor={formatarMoeda(l.comissao_propria)}
+                              dica="FTDs da pessoa em dias úteis × valor. Não entra no salário."
+                            />
+                          )}
                           {l.ja_pago > 0 && <Detalhe rotulo="Já pago (acerto)" valor={formatarMoeda(l.ja_pago)} />}
                           {l.desligado_em && <Detalhe rotulo="Último dia" valor={formatarData(l.desligado_em)} />}
                         </dl>
@@ -622,8 +635,8 @@ function TabelaPorPessoa({
         )}
       </table>
       <p className="border-t border-slate-100 px-3 py-2 text-xs text-slate-400">
-        Clique numa linha para ver o detalhe. Comissões = equipe + fim de semana + infoprodutos. Adiantamentos são salvos ao
-        sair do campo.
+        Clique numa linha para ver o detalhe. Comissões = equipe + fim de semana + infoprodutos (externos: todos os FTDs).
+        Adiantamentos são salvos ao sair do campo.
       </p>
     </div>
   );
