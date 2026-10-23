@@ -29,7 +29,6 @@ function ultimoDiaDoMes(mes: string) {
 export function useVendasInfoprodutos(mes: string) {
   const { session } = useAuth();
   const [vendas, setVendas] = useState<VendaInfoproduto[]>([]);
-  const [produtosConhecidos, setProdutosConhecidos] = useState<string[]>([]);
   // Meses (YYYY-MM) de outras vendas pendentes, para o admin não esquecer.
   const [pendentesEmOutrosMeses, setPendentesEmOutrosMeses] = useState<string[]>([]);
   const [carregando, setCarregando] = useState(true);
@@ -37,7 +36,7 @@ export function useVendasInfoprodutos(mes: string) {
   const [processando, setProcessando] = useState(false);
 
   const carregar = useCallback(async () => {
-    const [vendasRes, produtosRes, pendentesRes] = await Promise.all([
+    const [vendasRes, pendentesRes] = await Promise.all([
       supabase
         .from('vendas_infoprodutos')
         .select('id, data, produto, email_lead, operador, valor, status, colaborador_id')
@@ -45,7 +44,6 @@ export function useVendasInfoprodutos(mes: string) {
         .lte('data', ultimoDiaDoMes(mes))
         .order('data')
         .order('criado_em'),
-      supabase.from('vendas_infoprodutos').select('produto'),
       supabase.from('vendas_infoprodutos').select('data').eq('status', 'pendente'),
     ]);
 
@@ -56,9 +54,6 @@ export function useVendasInfoprodutos(mes: string) {
     }
 
     setVendas((vendasRes.data ?? []).map((v) => ({ ...v, valor: Number(v.valor) })));
-    setProdutosConhecidos(
-      [...new Set((produtosRes.data ?? []).map((p) => p.produto as string))].sort()
-    );
     setPendentesEmOutrosMeses(
       [...new Set((pendentesRes.data ?? []).map((p) => (p.data as string).slice(0, 7)))]
         .filter((m) => m !== mes.slice(0, 7))
@@ -91,7 +86,6 @@ export function useVendasInfoprodutos(mes: string) {
 
   return {
     vendas,
-    produtosConhecidos,
     pendentesEmOutrosMeses,
     carregando,
     erro,

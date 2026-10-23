@@ -5,8 +5,7 @@ import {
   type VendaInfoproduto,
 } from '../../features/schedules/useVendasInfoprodutos';
 import { useConfirm, useToast } from '../../components/FeedbackProvider';
-
-const PRODUTOS_PADRAO = ['Sala de Sinais', 'Transmissões VIP', 'Combo (Sala de Sinais + Transmissões VIP)'];
+import { PRODUTOS_INFOPRODUTOS } from '../../lib/produtosInfoprodutos';
 
 const classeCampo =
   'mt-1 w-full rounded-md border border-slate-300 px-2 py-1.5 text-sm text-tinta focus:border-esmeralda focus:outline-none focus:ring-1 focus:ring-esmeralda';
@@ -38,8 +37,6 @@ export function InfoprodutosComissao({
   const confirmar = useConfirm();
   const entradaArquivo = useRef<HTMLInputElement>(null);
   const [editando, setEditando] = useState<VendaInfoproduto | null>(null);
-
-  const produtos = [...new Set([...PRODUTOS_PADRAO, ...info.produtosConhecidos])];
 
   async function depois(resultado: { erro: string | null }, sucesso: string) {
     if (resultado.erro) {
@@ -105,7 +102,6 @@ export function InfoprodutosComissao({
           key={editando?.id ?? 'nova'}
           inicial={editando}
           mes={mes}
-          produtos={produtos}
           operadores={operadores}
           processando={info.processando}
           onCancelar={editando ? () => setEditando(null) : undefined}
@@ -279,7 +275,6 @@ export function InfoprodutosComissao({
 function FormularioVenda({
   inicial,
   mes,
-  produtos,
   operadores,
   processando,
   onSalvar,
@@ -287,7 +282,6 @@ function FormularioVenda({
 }: {
   inicial: VendaInfoproduto | null;
   mes: string;
-  produtos: string[];
   operadores: string[];
   processando: boolean;
   onSalvar: (v: NovaVendaInfoproduto) => Promise<boolean>;
@@ -322,18 +316,22 @@ function FormularioVenda({
       </label>
       <label className="text-sm text-slate-700 lg:col-span-2">
         Produto
-        <input
-          list="produtos-infoprodutos"
+        <select
           required
           value={venda.produto}
           onChange={(e) => setVenda({ ...venda, produto: e.target.value })}
           className={classeCampo}
-        />
-        <datalist id="produtos-infoprodutos">
-          {produtos.map((p) => (
-            <option key={p} value={p} />
+        >
+          <option value="">Selecione</option>
+          {PRODUTOS_INFOPRODUTOS.map((p) => (
+            <option key={p} value={p}>
+              {p}
+            </option>
           ))}
-        </datalist>
+          {venda.produto && !PRODUTOS_INFOPRODUTOS.includes(venda.produto) && (
+            <option value={venda.produto}>{venda.produto}</option>
+          )}
+        </select>
       </label>
       <label className="text-sm text-slate-700">
         Operador

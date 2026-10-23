@@ -8,6 +8,7 @@ import {
 import { useConfirm, useToast } from '../../components/FeedbackProvider';
 import { dataBr, mesAtual, moeda, tituloDoMes } from '../../lib/formatoPortal';
 import { SeletorMes } from '../../components/SeletorMes';
+import { PRODUTOS_INFOPRODUTOS } from '../../lib/produtosInfoprodutos';
 
 function hoje() {
   const h = new Date();
@@ -30,7 +31,7 @@ const campo =
 // comissão do mês.
 export function InfoprodutosOperadorPage() {
   const [mes, setMes] = useState(mesAtual());
-  const { vendas, produtosConhecidos, carregando, processando, registrar, editar, excluir } =
+  const { vendas, carregando, processando, registrar, editar, excluir } =
     useMinhasVendasInfoprodutos(`${mes}-01`);
   const [form, setForm] = useState<NovaVenda>(vazio);
   const [editando, setEditando] = useState<string | null>(null);
@@ -120,19 +121,22 @@ export function InfoprodutosOperadorPage() {
         </div>
         <label className="block text-sm text-slate-700">
           Produto
-          <input
-            type="text"
+          <select
             required
-            list="produtos-conhecidos"
             value={form.produto}
             onChange={(e) => setForm({ ...form, produto: e.target.value })}
             className={campo}
-          />
-          <datalist id="produtos-conhecidos">
-            {produtosConhecidos.map((p) => (
-              <option key={p} value={p} />
+          >
+            <option value="">Selecione</option>
+            {PRODUTOS_INFOPRODUTOS.map((p) => (
+              <option key={p} value={p}>
+                {p}
+              </option>
             ))}
-          </datalist>
+            {form.produto && !PRODUTOS_INFOPRODUTOS.includes(form.produto) && (
+              <option value={form.produto}>{form.produto}</option>
+            )}
+          </select>
         </label>
         <label className="block text-sm text-slate-700">
           E-mail do lead <span className="text-slate-400">(opcional)</span>

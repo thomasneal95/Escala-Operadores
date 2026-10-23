@@ -27,22 +27,17 @@ function ultimoDiaDoMes(mes: string) {
 
 export function useMinhasVendasInfoprodutos(mes: string) {
   const [vendas, setVendas] = useState<MinhaVendaInfoproduto[]>([]);
-  const [produtosConhecidos, setProdutosConhecidos] = useState<string[]>([]);
   const [carregando, setCarregando] = useState(true);
   const [processando, setProcessando] = useState(false);
 
   const carregar = useCallback(async () => {
-    const [{ data }, { data: produtos }] = await Promise.all([
-      supabase
-        .from('vendas_infoprodutos')
-        .select('id, data, produto, email_lead, valor, status')
-        .gte('data', mes)
-        .lte('data', ultimoDiaDoMes(mes))
-        .order('data', { ascending: false }),
-      supabase.from('vendas_infoprodutos').select('produto'),
-    ]);
+    const { data } = await supabase
+      .from('vendas_infoprodutos')
+      .select('id, data, produto, email_lead, valor, status')
+      .gte('data', mes)
+      .lte('data', ultimoDiaDoMes(mes))
+      .order('data', { ascending: false });
     setVendas((data ?? []).map((v) => ({ ...v, valor: Number(v.valor) })));
-    setProdutosConhecidos([...new Set((produtos ?? []).map((p) => p.produto as string))].sort());
     setCarregando(false);
   }, [mes]);
 
@@ -61,7 +56,6 @@ export function useMinhasVendasInfoprodutos(mes: string) {
 
   return {
     vendas,
-    produtosConhecidos,
     carregando,
     processando,
     registrar: (v: NovaVenda) =>
