@@ -22,8 +22,9 @@
 //   - "Comissão própria" (FTDs da pessoa em dias úteis × valor) é só
 //     informativa — não entra no salário.
 //   - Infoprodutos: cada venda gera `percentual_infoproduto` do valor,
-//     dividido igualmente entre todos da equipe do vendedor na data (o
-//     externo pago por FTD, ex.: João, fica com tudo). Soma no salário.
+//     dividido igualmente entre todos da equipe do vendedor na data; no fim
+//     de semana, só entre quem da equipe teve FTD no dia, mais quem vendeu
+//     (o externo pago por FTD, ex.: João, fica com tudo). Soma no salário.
 //   - Casos especiais: operador externo com valor fixo por FTD (ex.: João),
 //     colaborador de comissionamento individual, salário fixo e auxílio fixo.
 //
@@ -396,8 +397,12 @@ export function calcularFechamento(entrada: EntradaFechamento): ResultadoFechame
       const ativosNaData = (x: ColaboradorFechamento) =>
         (!x.data_admissao || x.data_admissao <= venda.data) &&
         (!x.desativado_em || x.desativado_em >= venda.data);
+      // No fim de semana, como nos FTDs, só entra quem trabalhou no dia
+      // (teve FTD) — e sempre quem vendeu.
+      const trabalhou = (x: ColaboradorFechamento) =>
+        !ehFimDeSemana(venda.data) || x.id === c.id || ftdsPorColaboradorEDia.has(`${x.id}|${venda.data}`);
       const membros = equipe
-        ? colaboradores.filter((x) => ativosNaData(x) && equipeNoDia(x, venda.data) === equipe)
+        ? colaboradores.filter((x) => ativosNaData(x) && equipeNoDia(x, venda.data) === equipe && trabalhou(x))
         : [c];
       const quem = membros.length > 0 ? membros : [c];
       for (const m of quem) {

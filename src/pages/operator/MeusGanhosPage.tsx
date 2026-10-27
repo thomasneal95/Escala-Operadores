@@ -116,7 +116,8 @@ function ComoFunciona({ dados }: { dados: MeuFechamento }) {
           FTD naquele dia.
         </li>
         <li>
-          <strong>Infoprodutos:</strong> cada venda gera {pct}% do valor, dividido entre todos da equipe de quem vendeu.
+          <strong>Infoprodutos:</strong> cada venda gera {pct}% do valor, dividido entre todos da equipe de quem vendeu. No fim
+          de semana, só entre quem vendeu e quem da equipe teve pelo menos um FTD naquele dia.
         </li>
         <li>
           <strong>Auxílio:</strong> valor mensal; quem entrou ou saiu no meio do mês recebe proporcional aos dias.

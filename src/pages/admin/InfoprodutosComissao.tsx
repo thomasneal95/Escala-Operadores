@@ -265,7 +265,7 @@ export function InfoprodutosComissao({
         </button>
         <span>
           Traz as vendas da aba "Vendas Infoprodutos" do Excel. A comissão de cada venda é dividida entre todos da
-          equipe do operador; operador externo (ex.: João) fica com ela inteira.
+          equipe do operador (no fim de semana, só entre ele e quem da equipe teve FTD no dia); operador externo (ex.: João) fica com ela inteira.
         </span>
       </div>
     </div>
