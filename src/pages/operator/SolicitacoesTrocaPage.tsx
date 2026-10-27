@@ -53,7 +53,7 @@ export function SolicitacoesTrocaPage() {
 
   const [minhaEscalaId, setMinhaEscalaId] = useState('');
   const [colegaId, setColegaId] = useState('');
-  const [tipo, setTipo] = useState<'troca' | 'cobertura'>('troca');
+  const [tipo, setTipo] = useState<'troca' | 'cobertura' | 'assumir'>('troca');
   // Dia do colega que quero pegar ('' = o colega escolhe ao aceitar).
   const [escalaDoColegaId, setEscalaDoColegaId] = useState('');
   const [erroForm, setErroForm] = useState<string | null>(null);
@@ -90,16 +90,29 @@ export function SolicitacoesTrocaPage() {
     setErroForm(null);
     setSucesso(null);
 
-    const escala = minhasEscalas.find((e) => e.id === minhaEscalaId);
-    if (!escala || !colegaId) {
-      setErroForm('Selecione o seu turno e o colega para solicitar a troca.');
-      return;
+    let resultado;
+    if (tipo === 'assumir') {
+      // Estou de folga: peço para trabalhar no dia do colega.
+      const diaDoColega = escalasDoColega.find((e) => e.id === escalaDoColegaId);
+      if (!colegaId || !diaDoColega) {
+        setErroForm('Selecione o colega e o dia dele que você quer assumir.');
+        return;
+      }
+      resultado = await criarSolicitacao(diaDoColega.periodo_id, null, colegaId, {
+        tipo,
+        escalaColegaId: diaDoColega.id,
+      });
+    } else {
+      const escala = minhasEscalas.find((e) => e.id === minhaEscalaId);
+      if (!escala || !colegaId) {
+        setErroForm('Selecione o seu turno e o colega para solicitar a troca.');
+        return;
+      }
+      resultado = await criarSolicitacao(escala.periodo_id, escala.id, colegaId, {
+        tipo,
+        escalaColegaId: escalaDoColegaId || null,
+      });
     }
-
-    const resultado = await criarSolicitacao(escala.periodo_id, escala.id, colegaId, {
-      tipo,
-      escalaColegaId: escalaDoColegaId || null,
-    });
     if (resultado.erro) {
       setErroForm(resultado.erro);
       return;
@@ -154,59 +167,11 @@ export function SolicitacoesTrocaPage() {
             Você só pode solicitar troca depois que a escala dos próximos fins de semana
             estiver confirmada.
           </p>
-        ) : meusBlocos.length === 0 ? (
-          <p className="mt-2 text-sm text-slate-500">
-            Você não está escalado nos próximos fins de semana confirmados, então não há
-            turno para trocar.
-          </p>
         ) : (
           <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <div>
-              <label className="block text-sm font-medium text-slate-700">Seu dia de trabalho</label>
-              <select
-                value={minhaEscalaId}
-                onChange={(e) => setMinhaEscalaId(e.target.value)}
-                className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-tinta focus:border-esmeralda focus:outline-none focus:ring-1 focus:ring-esmeralda"
-              >
-                <option value="">Selecione</option>
-                {meusBlocos.map((b) => (
-                  <option key={b.id} value={b.id}>
-                    {rotuloBloco(b)}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-slate-700">
-                Trocar com quem?
-              </label>
-              <select
-                value={colegaId}
-                onChange={(e) => {
-                  setColegaId(e.target.value);
-                  setEscalaDoColegaId('');
-                }}
-                className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-tinta focus:border-esmeralda focus:outline-none focus:ring-1 focus:ring-esmeralda"
-              >
-                <option value="">Selecione</option>
-                {colegasParaSolicitar.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.nome_completo}
-                    {deFolga(c.id) ? ' — de folga nesse dia' : ''}
-                  </option>
-                ))}
-              </select>
-              {ocupados && colegasParaSolicitar.some((c) => deFolga(c.id)) && (
-                <p className="mt-1 text-xs text-slate-500">
-                  Quem está de folga no seu dia aparece primeiro na lista.
-                </p>
-              )}
-            </div>
-
             <div className="sm:col-span-2">
               <p className="block text-sm font-medium text-slate-700">O que você quer?</p>
-              <div className="mt-1 flex flex-col gap-1.5 text-sm text-tinta sm:flex-row sm:gap-6">
+              <div className="mt-1 flex flex-col gap-1.5 text-sm text-tinta">
                 <label className="flex items-center gap-2">
                   <input
                     type="radio"
@@ -225,8 +190,96 @@ export function SolicitacoesTrocaPage() {
                   />
                   O colega só cobre o meu dia (sem devolver)
                 </label>
+                <label className="flex items-center gap-2">
+                  <input
+                    type="radio"
+                    name="tipo_troca"
+                    checked={tipo === 'assumir'}
+                    onChange={() => {
+                      setTipo('assumir');
+                      setEscalaDoColegaId('');
+                    }}
+                  />
+                  Estou de folga e quero trabalhar no dia de um colega
+                </label>
               </div>
             </div>
+
+            {tipo !== 'assumir' && (
+              <div>
+                <label className="block text-sm font-medium text-slate-700">Seu dia de trabalho</label>
+                {meusBlocos.length === 0 ? (
+                  <p className="mt-1 text-sm text-slate-500">
+                    Você não está escalado nos próximos fins de semana confirmados.
+                  </p>
+                ) : (
+                  <select
+                    value={minhaEscalaId}
+                    onChange={(e) => setMinhaEscalaId(e.target.value)}
+                    className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-tinta focus:border-esmeralda focus:outline-none focus:ring-1 focus:ring-esmeralda"
+                  >
+                    <option value="">Selecione</option>
+                    {meusBlocos.map((b) => (
+                      <option key={b.id} value={b.id}>
+                        {rotuloBloco(b)}
+                      </option>
+                    ))}
+                  </select>
+                )}
+              </div>
+            )}
+
+            <div>
+              <label className="block text-sm font-medium text-slate-700">
+                {tipo === 'assumir' ? 'No lugar de quem?' : 'Trocar com quem?'}
+              </label>
+              <select
+                value={colegaId}
+                onChange={(e) => {
+                  setColegaId(e.target.value);
+                  setEscalaDoColegaId('');
+                }}
+                className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-tinta focus:border-esmeralda focus:outline-none focus:ring-1 focus:ring-esmeralda"
+              >
+                <option value="">Selecione</option>
+                {colegasParaSolicitar.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.nome_completo}
+                    {tipo !== 'assumir' && deFolga(c.id) ? ' — de folga nesse dia' : ''}
+                  </option>
+                ))}
+              </select>
+              {tipo !== 'assumir' && ocupados && colegasParaSolicitar.some((c) => deFolga(c.id)) && (
+                <p className="mt-1 text-xs text-slate-500">
+                  Quem está de folga no seu dia aparece primeiro na lista.
+                </p>
+              )}
+            </div>
+
+            {tipo === 'assumir' && colegaId && (
+              <div className="sm:col-span-2">
+                <label className="block text-sm font-medium text-slate-700">
+                  Dia do colega que você quer assumir (na sua folga)
+                </label>
+                <select
+                  value={escalaDoColegaId}
+                  onChange={(e) => setEscalaDoColegaId(e.target.value)}
+                  className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-tinta focus:border-esmeralda focus:outline-none focus:ring-1 focus:ring-esmeralda"
+                >
+                  <option value="">Selecione</option>
+                  {blocosDoColegaNaMinhaFolga.map((b) => (
+                    <option key={b.id} value={b.id}>
+                      {rotuloBloco(b)}
+                    </option>
+                  ))}
+                </select>
+                {blocosDoColegaNaMinhaFolga.length === 0 && (
+                  <p className="mt-1 text-xs text-slate-400">
+                    Esse colega não trabalha em nenhum dos seus dias de folga confirmados.
+                  </p>
+                )}
+              </div>
+            )}
 
             {tipo === 'troca' && colegaId && (
               <div className="sm:col-span-2">
@@ -263,7 +316,9 @@ export function SolicitacoesTrocaPage() {
                   ? 'Enviando...'
                   : tipo === 'cobertura'
                     ? 'Pedir cobertura'
-                    : 'Solicitar troca'}
+                    : tipo === 'assumir'
+                      ? 'Pedir para assumir o dia'
+                      : 'Solicitar troca'}
               </button>
             </div>
           </div>
@@ -300,7 +355,9 @@ export function SolicitacoesTrocaPage() {
                       <span className="font-medium text-tinta">{s.outraPessoaNome}</span>{' '}
                       {s.tipo === 'cobertura'
                         ? 'pediu que você cubra um dia de trabalho (sem devolver).'
-                        : 'quer trocar um dia de trabalho com você.'}
+                        : s.tipo === 'assumir'
+                          ? 'está de folga e quer trabalhar no seu dia (você fica de folga).'
+                          : 'quer trocar um dia de trabalho com você.'}
                     </p>
                     <span
                       className={`rounded-full px-2 py-0.5 text-xs font-medium ${corStatus[s.status]}`}
@@ -314,7 +371,9 @@ export function SolicitacoesTrocaPage() {
                       <p className="font-medium uppercase tracking-wide text-slate-400">
                         Dia de {s.outraPessoaNome}
                       </p>
-                      {s.blocoOutraPessoa ? (
+                      {s.tipo === 'assumir' ? (
+                        <p className="mt-0.5 italic">Nenhum — está de folga</p>
+                      ) : s.blocoOutraPessoa ? (
                         <p className={`mt-0.5 font-medium ${cor?.text ?? 'text-slate-700'}`}>
                           {rotuloBloco(s.blocoOutraPessoa)}
                         </p>
@@ -422,7 +481,9 @@ export function SolicitacoesTrocaPage() {
                     <p className="font-medium uppercase tracking-wide text-slate-400">
                       Seu dia oferecido
                     </p>
-                    {s.meuBloco ? (
+                    {s.tipo === 'assumir' ? (
+                      <p className="mt-0.5 italic">Nenhum — você está de folga</p>
+                    ) : s.meuBloco ? (
                       <p className="mt-0.5 text-slate-700">{rotuloBloco(s.meuBloco)}</p>
                     ) : (
                       <p className="mt-0.5">—</p>

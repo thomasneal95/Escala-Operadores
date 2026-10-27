@@ -7,7 +7,7 @@ import type { EscalaDoBloco } from '../../lib/blocosDeTrabalho';
 // pela policy de colegas de equipe (só fins de semana confirmados).
 export function useEscalasDoColega(colegaId: string | null, periodoIds: string[]) {
   const chavePeriodos = periodoIds.join(',');
-  const [escalas, setEscalas] = useState<EscalaDoBloco[]>([]);
+  const [escalas, setEscalas] = useState<(EscalaDoBloco & { periodo_id: string })[]>([]);
 
   useEffect(() => {
     const ids = chavePeriodos ? chavePeriodos.split(',') : [];
@@ -20,7 +20,7 @@ export function useEscalasDoColega(colegaId: string | null, periodoIds: string[]
     supabase
       .from('escalas')
       .select(
-        'id, colaborador_id, data, turno_nome_snapshot, turno_hora_inicio_snapshot, turno_hora_fim_snapshot'
+        'id, colaborador_id, periodo_id, data, turno_nome_snapshot, turno_hora_inicio_snapshot, turno_hora_fim_snapshot'
       )
       .eq('colaborador_id', colegaId)
       .in('periodo_id', ids)

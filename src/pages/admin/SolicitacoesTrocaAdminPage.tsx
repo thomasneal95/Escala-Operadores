@@ -67,13 +67,16 @@ export function SolicitacoesTrocaAdminPage() {
   const outras = solicitacoes.filter((s) => s.status !== 'aceito_pelo_colega');
 
   async function handleAprovar(s: (typeof solicitacoes)[number]) {
-    if (!s.blocoSolicitante || (s.tipo === 'troca' && !s.blocoColega)) return;
+    if (s.tipo === 'assumir' ? !s.blocoColega : !s.blocoSolicitante || (s.tipo === 'troca' && !s.blocoColega)) return;
 
         const confirmou = await confirmar(
       s.tipo === 'cobertura'
         ? `Aprovar que ${s.colegaNome} cubra o dia de ${s.solicitanteNome}? ` +
             'O dia passa para o colega imediatamente na escala.'
-        : `Aprovar a troca entre ${s.solicitanteNome} e ${s.colegaNome}? ` +
+        : s.tipo === 'assumir'
+          ? `Aprovar que ${s.solicitanteNome} (de folga) trabalhe no dia de ${s.colegaNome}? ` +
+              'O dia passa para quem pediu imediatamente na escala.'
+          : `Aprovar a troca entre ${s.solicitanteNome} e ${s.colegaNome}? ` +
             'Os dois dias de trabalho vão trocar de dono imediatamente na escala.'
     );
     if (!confirmou) return;
@@ -130,7 +133,9 @@ export function SolicitacoesTrocaAdminPage() {
               >
                 <div className="text-tinta">
                   <span className="font-medium">{s.solicitanteNome}</span>
-                  {s.blocoSolicitante && <> · {rotuloBloco(s.blocoSolicitante)}</>}
+                  {s.tipo === 'assumir'
+                    ? ' (de folga)'
+                    : s.blocoSolicitante && <> · {rotuloBloco(s.blocoSolicitante)}</>}
                   <span className="mx-1 text-slate-400">⇄</span>
                   <span className="font-medium">{s.colegaNome}</span>
                   {s.tipo === 'cobertura'
@@ -181,8 +186,12 @@ export function SolicitacoesTrocaAdminPage() {
                     <p className="text-xs font-medium uppercase tracking-wide text-slate-500">
                       {s.colegaNome} vai trabalhar
                     </p>
-                    {s.blocoSolicitante && (
-                      <p className="mt-1 text-sm text-tinta">{rotuloBloco(s.blocoSolicitante)}</p>
+                    {s.tipo === 'assumir' ? (
+                      <p className="mt-1 text-sm text-slate-500">Nada — fica de folga</p>
+                    ) : (
+                      s.blocoSolicitante && (
+                        <p className="mt-1 text-sm text-tinta">{rotuloBloco(s.blocoSolicitante)}</p>
+                      )
                     )}
                   </div>
                 </div>
@@ -233,7 +242,11 @@ export function SolicitacoesTrocaAdminPage() {
                   <tr key={s.id}>
                     <td className="px-4 py-3 text-tinta">{s.solicitanteNome}</td>
                     <td className="px-4 py-3 text-slate-500">
-                      {s.blocoSolicitante ? rotuloBloco(s.blocoSolicitante) : '—'}
+                      {s.tipo === 'assumir'
+                        ? 'De folga'
+                        : s.blocoSolicitante
+                          ? rotuloBloco(s.blocoSolicitante)
+                          : '—'}
                     </td>
                     <td className="px-4 py-3 text-tinta">{s.colegaNome}</td>
                     <td className="px-4 py-3 text-slate-500">

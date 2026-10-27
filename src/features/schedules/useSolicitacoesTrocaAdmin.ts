@@ -8,7 +8,7 @@ interface SolicitacaoTrocaAdmin {
   id: string;
   status: string;
   criado_em: string;
-  tipo: 'troca' | 'cobertura';
+  tipo: 'troca' | 'cobertura' | 'assumir';
   solicitanteNome: string;
   colegaNome: string;
   blocoSolicitante: BlocoDeTrabalho | null;
@@ -80,7 +80,7 @@ export function useSolicitacoesTrocaAdmin() {
     const aprovadasFuturas = (data ?? []).filter((s) => {
       const a = formatarEscala(s.escala_solicitante);
       const b = formatarEscala(s.escala_colega);
-      return s.status === 'aprovado' && a && a.data >= hoje && (!b || b.data >= hoje);
+      return s.status === 'aprovado' && (a || b) && (!a || a.data >= hoje) && (!b || b.data >= hoje);
     });
     const linhasDasPessoas = aprovadasFuturas.length
       ? (
@@ -110,8 +110,10 @@ export function useSolicitacoesTrocaAdmin() {
 
     function naoAplicada(s: (typeof aprovadasFuturas)[number]) {
       if (!aprovadasFuturas.includes(s)) return false;
-      const a = formatarEscala(s.escala_solicitante)!;
+      const a = formatarEscala(s.escala_solicitante);
       const b = formatarEscala(s.escala_colega);
+      if (s.tipo === 'assumir') return !!b && trabalha(s.colega_id, b.data);
+      if (!a) return false;
       if (s.tipo === 'cobertura') return trabalha(s.solicitante_id, a.data);
       if (!b) return false;
       if (a.data !== b.data) {

@@ -16,8 +16,9 @@ interface SolicitacaoTroca {
     | 'cancelado';
   criado_em: string;
   // 'troca': os dois dias trocam de dono; 'cobertura': o colega só cobre o
-  // dia de quem pediu, sem devolver nenhum.
-  tipo: 'troca' | 'cobertura';
+  // dia de quem pediu, sem devolver nenhum; 'assumir': quem pediu está de
+  // folga e trabalha no dia do colega, que fica de folga.
+  tipo: 'troca' | 'cobertura' | 'assumir';
   souSolicitante: boolean;
   outraPessoaNome: string;
   meuBloco: BlocoDeTrabalho | null;
@@ -163,13 +164,15 @@ export function useSolicitacoesTroca() {
     };
   }, [colaboradorId, carregar, idInstancia]);
 
-  // escalaColegaId: dia do colega que quem pede quer pegar (opcional; sem
-  // ele, o colega escolhe ao aceitar). Na cobertura não há dia de volta.
+  // escalaColegaId: dia do colega que quem pede quer pegar (opcional na
+  // troca — sem ele, o colega escolhe ao aceitar — e obrigatório no
+  // 'assumir'). Na cobertura não há dia de volta; no 'assumir', quem pede
+  // está de folga e não entrega dia (escalaSolicitanteId null).
   async function criarSolicitacao(
     periodoId: string,
-    escalaSolicitanteId: string,
+    escalaSolicitanteId: string | null,
     colegaId: string,
-    opcoes: { tipo: 'troca' | 'cobertura'; escalaColegaId: string | null }
+    opcoes: { tipo: 'troca' | 'cobertura' | 'assumir'; escalaColegaId: string | null }
   ) {
     if (!colaboradorId) return { erro: 'Não foi possível identificar seus dados.' };
 
@@ -180,7 +183,7 @@ export function useSolicitacoesTroca() {
       escala_solicitante_id: escalaSolicitanteId,
       colega_id: colegaId,
       tipo: opcoes.tipo,
-      escala_colega_id: opcoes.tipo === 'troca' ? opcoes.escalaColegaId : null,
+      escala_colega_id: opcoes.tipo === 'cobertura' ? null : opcoes.escalaColegaId,
     });
     setProcessando(null);
 
@@ -193,7 +196,7 @@ export function useSolicitacoesTroca() {
   }
 
   // escalaColegaId null: o dia de volta já foi escolhido por quem pediu,
-  // ou é uma cobertura (sem dia de volta).
+  // ou é uma cobertura / um 'assumir' (sem dia a escolher).
   async function aceitarSolicitacao(solicitacaoId: string, escalaColegaId: string | null) {
     setProcessando(solicitacaoId);
     const { error } = await supabase
