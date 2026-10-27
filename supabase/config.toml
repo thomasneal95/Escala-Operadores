@@ -505,3 +505,9 @@ enabled = true
 verify_jwt = false
 import_map = "./functions/diagnostico-acesso/deno.json"
 entrypoint = "./functions/diagnostico-acesso/index.ts"
+
+[functions.alterar-email-colaborador]
+enabled = true
+verify_jwt = false
+import_map = "./functions/alterar-email-colaborador/deno.json"
+entrypoint = "./functions/alterar-email-colaborador/index.ts"

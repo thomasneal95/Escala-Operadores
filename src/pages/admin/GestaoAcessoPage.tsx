@@ -3,6 +3,7 @@ import { useGestaoAcesso } from '../../features/employees/useGestaoAcesso';
 import { useExcluirColaborador } from '../../features/employees/useExcluirColaborador';
 import { useAlterarSenhaColaborador } from '../../features/employees/useAlterarSenhaColaborador';
 import { useConfirm } from '../../components/FeedbackProvider';
+import { useAlterarEmailColaborador } from '../../features/employees/useAlterarEmailColaborador';
 import { useDiagnosticoAcesso, type DiagnosticoAcesso } from '../../features/employees/useDiagnosticoAcesso';
 
 export function GestaoAcessoPage() {
@@ -15,6 +16,33 @@ export function GestaoAcessoPage() {
   const [senhaId, setSenhaId] = useState<string | null>(null);
   const [novaSenha, setNovaSenha] = useState('');
   const diagnostico = useDiagnosticoAcesso();
+  const { alterarEmail, processando: alterandoEmail } = useAlterarEmailColaborador();
+  const [emailId, setEmailId] = useState<string | null>(null);
+  const [novoEmail, setNovoEmail] = useState('');
+
+  function iniciarAlterarEmail(perfilId: string) {
+    setSenhaId(null);
+    setEmailId(perfilId);
+    setNovoEmail(diagnosticos[perfilId]?.emailLogin ?? '');
+    setErroLinha((atual) => ({ ...atual, [perfilId]: '' }));
+    setMensagemLinha((atual) => ({ ...atual, [perfilId]: '' }));
+  }
+
+  async function salvarEmail(perfilId: string) {
+    setErroLinha((atual) => ({ ...atual, [perfilId]: '' }));
+    const resultado = await alterarEmail(perfilId, novoEmail);
+    if (resultado.erro) {
+      setErroLinha((atual) => ({ ...atual, [perfilId]: resultado.erro as string }));
+      return;
+    }
+    setEmailId(null);
+    setNovoEmail('');
+    setDiagnosticos(({ [perfilId]: _, ...resto }) => resto);
+    setMensagemLinha((atual) => ({
+      ...atual,
+      [perfilId]: `E-mail alterado. A pessoa já pode entrar com ${novoEmail.trim().toLowerCase()}.`,
+    }));
+  }
   const [diagnosticos, setDiagnosticos] = useState<Record<string, DiagnosticoAcesso>>({});
 
   async function verificarAcesso(
@@ -67,6 +95,7 @@ export function GestaoAcessoPage() {
   }
 
   function iniciarAlterarSenha(perfilId: string) {
+    setEmailId(null);
     setSenhaId(perfilId);
     setNovaSenha('');
     setErroLinha((atual) => ({ ...atual, [perfilId]: '' }));
@@ -114,7 +143,7 @@ export function GestaoAcessoPage() {
       </h1>
       <p className="mt-2 text-sm text-slate-500">
         Defina quem tem acesso ao painel administrativo e quem acessa como
-        colaborador. Também é aqui que você altera a senha de qualquer pessoa.
+        colaborador. Também é aqui que você altera a senha e o e-mail de login de qualquer pessoa.
       </p>
 
       <div className="mt-6 overflow-hidden rounded-lg border border-slate-200 bg-white">
@@ -177,7 +206,31 @@ export function GestaoAcessoPage() {
                     )}
                   </td>
                   <td className="px-4 py-3">
-                    {alterandoSenhaDele ? (
+                    {emailId === perfil.id ? (
+                      <div className="flex flex-wrap items-center gap-3">
+                        <input
+                          type="email"
+                          value={novoEmail}
+                          onChange={(e) => setNovoEmail(e.target.value)}
+                          className="w-56 rounded-md border border-slate-300 px-2 py-1 text-sm"
+                          placeholder="Novo e-mail"
+                          autoFocus
+                        />
+                        <button
+                          onClick={() => salvarEmail(perfil.id)}
+                          disabled={alterandoEmail}
+                          className="text-sm font-medium text-esmeralda-dark hover:text-esmeralda"
+                        >
+                          {alterandoEmail ? 'Salvando...' : 'Salvar e-mail'}
+                        </button>
+                        <button
+                          onClick={() => setEmailId(null)}
+                          className="text-sm font-medium text-slate-500 hover:text-slate-700"
+                        >
+                          Cancelar
+                        </button>
+                      </div>
+                    ) : alterandoSenhaDele ? (
                       <div className="flex flex-wrap items-center gap-3">
                         <input
                           type="text"
@@ -234,6 +287,12 @@ export function GestaoAcessoPage() {
                           className="text-sm font-medium text-slate-600 hover:text-tinta"
                         >
                           Alterar senha
+                        </button>
+                        <button
+                          onClick={() => iniciarAlterarEmail(perfil.id)}
+                          className="text-sm font-medium text-slate-600 hover:text-tinta"
+                        >
+                          Alterar e-mail
                         </button>
                         <button
                           onClick={() => verificarAcesso(perfil.id)}

@@ -24,7 +24,9 @@ export function useDiagnosticoAcesso() {
     });
     setProcessando(null);
 
-    if (data?.erro) return { erro: data.erro as string, diagnostico: null };
+    // Erros de regra (ex.: perfil desativado) vêm no corpo da resposta.
+    const corpo = data ?? (await error?.context?.json?.().catch(() => null));
+    if (corpo?.erro) return { erro: corpo.erro as string, diagnostico: null };
     if (error) return { erro: 'Não foi possível verificar o acesso.', diagnostico: null };
     return { erro: null, diagnostico: data as DiagnosticoAcesso };
   }
