@@ -1,6 +1,25 @@
 import { useState, type FormEvent } from 'react';
 import { useAuth } from '../features/auth/AuthContext';
 
+// Motivo devolvido pelo Supabase Auth → mensagem para quem está entrando.
+function mensagemDeErro(codigo: string) {
+  switch (codigo) {
+    case 'invalid_credentials':
+      return 'E-mail ou senha incorretos.';
+    case 'user_banned':
+      return 'Seu acesso está bloqueado. Fale com o administrador.';
+    case 'email_not_confirmed':
+      return 'Seu e-mail ainda não foi confirmado. Fale com o administrador.';
+    case 'over_request_rate_limit':
+    case 'over_email_send_rate_limit':
+      return 'Muitas tentativas seguidas. Aguarde alguns minutos e tente de novo.';
+    case 'sem_conexao':
+      return 'Sem conexão com o servidor. Verifique a internet e tente de novo.';
+    default:
+      return `Não foi possível entrar (${codigo}). Fale com o administrador.`;
+  }
+}
+
 export function LoginPage() {
   const { entrar } = useAuth();
   const [email, setEmail] = useState('');
@@ -19,7 +38,7 @@ export function LoginPage() {
     setEnviando(false);
 
     if (erroLogin) {
-      setErro('E-mail ou senha incorretos.');
+      setErro(mensagemDeErro(erroLogin));
     }
   }
 

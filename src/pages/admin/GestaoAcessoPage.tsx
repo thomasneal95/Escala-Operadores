@@ -3,6 +3,7 @@ import { useGestaoAcesso } from '../../features/employees/useGestaoAcesso';
 import { useExcluirColaborador } from '../../features/employees/useExcluirColaborador';
 import { useAlterarSenhaColaborador } from '../../features/employees/useAlterarSenhaColaborador';
 import { useConfirm } from '../../components/FeedbackProvider';
+import { useDiagnosticoAcesso, type DiagnosticoAcesso } from '../../features/employees/useDiagnosticoAcesso';
 
 export function GestaoAcessoPage() {
   const { perfis, carregando, erro, processando, alterarPapel, recarregar } = useGestaoAcesso();
@@ -13,6 +14,26 @@ export function GestaoAcessoPage() {
   const [mensagemLinha, setMensagemLinha] = useState<Record<string, string>>({});
   const [senhaId, setSenhaId] = useState<string | null>(null);
   const [novaSenha, setNovaSenha] = useState('');
+  const diagnostico = useDiagnosticoAcesso();
+  const [diagnosticos, setDiagnosticos] = useState<Record<string, DiagnosticoAcesso>>({});
+
+  async function verificarAcesso(
+    perfilId: string,
+    acao: 'diagnosticar' | 'liberar' | 'confirmar_email' = 'diagnosticar'
+  ) {
+    setErroLinha((atual) => ({ ...atual, [perfilId]: '' }));
+    const resultado =
+      acao === 'liberar'
+        ? await diagnostico.liberar(perfilId)
+        : acao === 'confirmar_email'
+          ? await diagnostico.confirmarEmail(perfilId)
+          : await diagnostico.diagnosticar(perfilId);
+    if (resultado.erro || !resultado.diagnostico) {
+      setErroLinha((atual) => ({ ...atual, [perfilId]: resultado.erro ?? '' }));
+      return;
+    }
+    setDiagnosticos((atual) => ({ ...atual, [perfilId]: resultado.diagnostico as DiagnosticoAcesso }));
+  }
 
   async function handleAlterar(perfilId: string, novoPapel: 'administrador' | 'colaborador') {
     setErroLinha((atual) => ({ ...atual, [perfilId]: '' }));
@@ -119,6 +140,17 @@ export function GestaoAcessoPage() {
                         Colaboradores, se necessário.
                       </p>
                     )}
+                    {diagnosticos[perfil.id] && (
+                      <PainelDiagnostico
+                        d={diagnosticos[perfil.id]}
+                        processando={diagnostico.processando === perfil.id}
+                        onLiberar={() => verificarAcesso(perfil.id, 'liberar')}
+                        onConfirmarEmail={() => verificarAcesso(perfil.id, 'confirmar_email')}
+                        onFechar={() =>
+                          setDiagnosticos(({ [perfil.id]: _, ...resto }) => resto)
+                        }
+                      />
+                    )}
                     {mensagemLinha[perfil.id] && (
                       <p className="mt-0.5 text-xs text-esmeralda-dark">
                         {mensagemLinha[perfil.id]}
@@ -203,6 +235,13 @@ export function GestaoAcessoPage() {
                         >
                           Alterar senha
                         </button>
+                        <button
+                          onClick={() => verificarAcesso(perfil.id)}
+                          disabled={diagnostico.processando === perfil.id}
+                          className="text-sm font-medium text-ceruleo hover:underline disabled:opacity-50"
+                        >
+                          {diagnostico.processando === perfil.id ? 'Verificando...' : 'Verificar acesso'}
+                        </button>
                       </div>
                     )}
                   </td>
@@ -211,6 +250,77 @@ export function GestaoAcessoPage() {
             })}
           </tbody>
         </table>
+      </div>
+    </div>
+  );
+}
+
+function dataHora(iso: string | null | undefined) {
+  return iso ? new Date(iso).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' }) : 'nunca';
+}
+
+// O que o login tem da pessoa e, quando é o caso, o motivo provável de ela
+// não conseguir entrar.
+function PainelDiagnostico({
+  d,
+  processando,
+  onLiberar,
+  onConfirmarEmail,
+  onFechar,
+}: {
+  d: DiagnosticoAcesso;
+  processando: boolean;
+  onLiberar: () => void;
+  onConfirmarEmail: () => void;
+  onFechar: () => void;
+}) {
+  const problemas: string[] = [];
+  if (!d.existeLogin) problemas.push('Não existe login para este perfil. Será preciso recriar o cadastro.');
+  if (d.existeLogin && !d.perfilAtivo) problemas.push('O perfil está desativado — o login fica bloqueado de propósito.');
+  if (d.bloqueado && d.perfilAtivo) problemas.push('O login está bloqueado, mas o perfil está ativo.');
+  if (d.existeLogin && !d.emailConfirmado) problemas.push('O e-mail de login não está confirmado.');
+  if (d.emailLogin && d.emailPerfil && d.emailLogin.toLowerCase() !== d.emailPerfil.toLowerCase()) {
+    problemas.push(`O e-mail do cadastro (${d.emailPerfil}) é diferente do e-mail de login.`);
+  }
+
+  return (
+    <div className="mt-2 rounded-md border border-slate-200 bg-slate-50 p-3 text-xs text-slate-600">
+      {d.existeLogin && (
+        <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5">
+          <dt className="text-slate-400">E-mail de login</dt>
+          <dd className="break-all font-medium text-tinta">{d.emailLogin}</dd>
+          <dt className="text-slate-400">Situação</dt>
+          <dd>{d.bloqueado ? 'Bloqueado' : 'Liberado'}{d.emailConfirmado ? '' : ' · e-mail não confirmado'}</dd>
+          <dt className="text-slate-400">Último acesso</dt>
+          <dd>{dataHora(d.ultimoLogin)}</dd>
+        </dl>
+      )}
+      {problemas.length > 0 ? (
+        <ul className="mt-2 list-disc space-y-0.5 pl-4 text-red-700">
+          {problemas.map((p) => (
+            <li key={p}>{p}</li>
+          ))}
+        </ul>
+      ) : (
+        <p className="mt-2 text-esmeralda-dark">
+          Nenhum bloqueio no login. Se a pessoa não consegue entrar, confira se ela digita exatamente o
+          e-mail acima; se estiver certo, o problema é a senha — use "Alterar senha".
+        </p>
+      )}
+      <div className="mt-2 flex flex-wrap gap-3">
+        {d.bloqueado && d.perfilAtivo && (
+          <button onClick={onLiberar} disabled={processando} className="font-medium text-ceruleo hover:underline">
+            Liberar login
+          </button>
+        )}
+        {d.existeLogin && !d.emailConfirmado && (
+          <button onClick={onConfirmarEmail} disabled={processando} className="font-medium text-ceruleo hover:underline">
+            Confirmar e-mail
+          </button>
+        )}
+        <button onClick={onFechar} className="font-medium text-slate-500 hover:text-slate-700">
+          Fechar
+        </button>
       </div>
     </div>
   );

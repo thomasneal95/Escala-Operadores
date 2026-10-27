@@ -499,3 +499,9 @@ enabled = true
 verify_jwt = false
 import_map = "./functions/meu-fechamento/deno.json"
 entrypoint = "./functions/meu-fechamento/index.ts"
+
+[functions.diagnostico-acesso]
+enabled = true
+verify_jwt = false
+import_map = "./functions/diagnostico-acesso/deno.json"
+entrypoint = "./functions/diagnostico-acesso/index.ts"

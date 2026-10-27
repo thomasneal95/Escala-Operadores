@@ -72,10 +72,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
+  // Espaços e maiúsculas no e-mail (comuns no celular) não impedem a entrada.
+  // O erro volta com o motivo para a tela de login explicar o que houve.
   async function entrar(email: string, senha: string) {
-    const { error } = await supabase.auth.signInWithPassword({ email, password: senha });
+    const { error } = await supabase.auth.signInWithPassword({
+      email: email.trim().toLowerCase(),
+      password: senha,
+    });
     if (error) {
-      return { erro: error.message };
+      return { erro: error.code ?? (error.status === 0 ? 'sem_conexao' : error.message) };
     }
     return { erro: null };
   }
