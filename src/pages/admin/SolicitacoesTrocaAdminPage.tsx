@@ -78,7 +78,8 @@ export function SolicitacoesTrocaAdminPage() {
           ? `Aprovar que ${s.solicitanteNome} (de folga) trabalhe no dia de ${s.colegaNome}? ` +
               'O dia passa para quem pediu imediatamente na escala.'
           : `Aprovar a troca entre ${s.solicitanteNome} e ${s.colegaNome}? ` +
-            'Os dois dias de trabalho vão trocar de dono imediatamente na escala.'
+            'Os dois dias de trabalho vão trocar de dono imediatamente na escala. Se alguém já trabalhar em parte ' +
+            'do horário que recebe, fica só com o restante e os turnos que coincidem saem da escala.'
     );
     if (!confirmou) return;
 
