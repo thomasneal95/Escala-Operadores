@@ -72,7 +72,8 @@ export function SolicitacoesTrocaAdminPage() {
         const confirmou = await confirmar(
       s.tipo === 'cobertura'
         ? `Aprovar que ${s.colegaNome} cubra o dia de ${s.solicitanteNome}? ` +
-            'O dia passa para o colega imediatamente na escala.'
+            'O dia passa para o colega imediatamente na escala. Se ele já trabalhar em parte desse horário, ' +
+            'cobre só o restante e os turnos que coincidem saem da escala.'
         : s.tipo === 'assumir'
           ? `Aprovar que ${s.solicitanteNome} (de folga) trabalhe no dia de ${s.colegaNome}? ` +
               'O dia passa para quem pediu imediatamente na escala.'
