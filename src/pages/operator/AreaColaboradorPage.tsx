@@ -8,6 +8,7 @@ import { FallbackErroTela } from '../../components/FallbackErroTela';
 import { useToast } from '../../components/FeedbackProvider';
 import { MinhaEscalaPage } from './MinhaEscalaPage';
 import { MeuRodizio } from '../../components/MeuRodizio';
+import { InstalarAppCard } from '../../components/InstalarAppCard';
 
 function SecaoCalendario() {
   const { urlHttps, urlWebcal, carregando } = useCalendarioToken();
@@ -86,6 +87,7 @@ export function AreaColaboradorPage() {
 
   return (
     <div>
+      <InstalarAppCard />
       {colaboradorId && periodoDoResumo && (
         <ErrorBoundary fallback={null}>
           <ResumoOperador colaboradorId={colaboradorId} periodo={periodoDoResumo} />

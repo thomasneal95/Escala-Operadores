@@ -1,5 +1,6 @@
 import { usePainelAdmin } from '../../features/schedules/usePainelAdmin';
 import { Skeleton } from '../../components/Skeleton';
+import { InstalarAppCard } from '../../components/InstalarAppCard';
 
 function formatarData(data: string) {
   const [ano, mes, dia] = data.split('-');
@@ -61,6 +62,7 @@ export function PainelAdminPage({ aoNavegar }: PainelAdminPageProps) {
 
     return (
     <div>
+      <InstalarAppCard />
 
       <p className="font-mono text-xs font-medium uppercase tracking-widest text-ceruleo">
         Painel
