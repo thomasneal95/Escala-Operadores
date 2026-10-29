@@ -210,7 +210,7 @@ export function AdminApp() {
     <div className="min-h-screen bg-nuvem">
       {/* Barra superior — menu sanduíche em qualquer tamanho de tela, para o
           conteúdo (tabelas) ocupar a largura toda. */}
-      <header className="sticky top-0 z-20 bg-tinta pt-[env(safe-area-inset-top)]">
+      <header className="sticky top-0 z-20 bg-tinta topo-seguro">
         <div className="flex items-center justify-between gap-3 px-4 py-3 sm:px-6">
           <div className="flex min-w-0 items-center gap-3">
             <button
@@ -277,7 +277,7 @@ export function AdminApp() {
           role="dialog"
           aria-modal="true"
           aria-label="Menu"
-          className={`flex h-full w-64 max-w-[80%] flex-col bg-tinta pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)] shadow-xl transition-transform ${
+          className={`flex h-full w-64 max-w-[80%] flex-col bg-tinta topo-seguro pb-[env(safe-area-inset-bottom)] shadow-xl transition-transform ${
             menuAberto ? 'translate-x-0' : '-translate-x-full'
           }`}
           onClick={(e) => e.stopPropagation()}

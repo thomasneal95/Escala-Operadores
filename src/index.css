@@ -38,3 +38,15 @@ body {
 .animate-fade-in-up {
   animation: fade-in-up 0.5s ease-out;
 }
+
+/* App instalado (PWA): o conteúdo vai até o topo da tela, por baixo da
+   barra de status do celular. Este espaço deixa o topo abaixo do relógio,
+   com uma folga extra só no app instalado. */
+.topo-seguro {
+  padding-top: env(safe-area-inset-top);
+}
+@media (display-mode: standalone) {
+  .topo-seguro {
+    padding-top: calc(env(safe-area-inset-top) + 1rem);
+  }
+}

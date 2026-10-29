@@ -148,7 +148,7 @@ export function OperatorApp() {
       <TourOperador />
 
       {/* Cabeçalho — só aparece no celular (desktop usa a barra lateral) */}
-      <header className="bg-tinta pt-[env(safe-area-inset-top)] sm:hidden">
+      <header className="bg-tinta topo-seguro sm:hidden">
         <div className="flex items-center justify-between px-6 py-4">
           <div className="flex items-center gap-3">
             <button
@@ -244,7 +244,7 @@ export function OperatorApp() {
         onClick={() => setMenuAberto(false)}
       >
         <div
-          className={`h-full w-64 max-w-[80%] overflow-y-auto bg-tinta pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)] shadow-xl transition-transform ${
+          className={`h-full w-64 max-w-[80%] overflow-y-auto bg-tinta topo-seguro pb-[env(safe-area-inset-bottom)] shadow-xl transition-transform ${
             menuAberto ? 'translate-x-0' : '-translate-x-full'
           }`}
           onClick={(e) => e.stopPropagation()}
