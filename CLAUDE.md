@@ -19,7 +19,8 @@ dependência deve ser compartilhado ou copiado entre eles.
 - Supabase (Postgres com RLS, Auth, Realtime, Edge Functions) via
   `@supabase/supabase-js` — cliente em `src/lib/supabase/client.ts`
 - npm, Git, oxlint
-- Hospedagem: Vercel (https://escala-operadores.vercel.app)
+- Hospedagem: Vercel (https://jornada360-hub.vercel.app; o endereço antigo
+  escala-operadores.vercel.app redireciona para ele)
 - PWA: `public/manifest.webmanifest` + `public/sw.js` (só guarda os arquivos
   do site; dados do Supabase nunca passam pelo service worker)
 
