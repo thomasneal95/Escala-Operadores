@@ -1,4 +1,4 @@
-# Escala Operadores
+# Jornada 360 (antigo Escala Operadores)
 
 ## Contexto do projeto
 
@@ -19,7 +19,10 @@ dependência deve ser compartilhado ou copiado entre eles.
 - Supabase (Postgres com RLS, Auth, Realtime, Edge Functions) via
   `@supabase/supabase-js` — cliente em `src/lib/supabase/client.ts`
 - npm, Git, oxlint
-- Hospedagem: Vercel (https://escala-operadores.vercel.app)
+- Hospedagem: Vercel (https://jornada360.vercel.app; o endereço antigo
+  escala-operadores.vercel.app continua no mesmo projeto)
+- PWA: `public/manifest.webmanifest` + `public/sw.js` (só guarda os arquivos
+  do site; dados do Supabase nunca passam pelo service worker)
 
 Não usar TanStack Start nem Lovable (ou qualquer ferramenta relacionada).
 

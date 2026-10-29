@@ -66,11 +66,9 @@ export function LoginPage() {
 
         <div className="px-9 py-11">
           <div className="flex flex-col items-center text-center">
-            <div className="relative flex h-11 w-11 items-center justify-center">
-              <div className="absolute h-11 w-11 rounded-full border-2 border-esmeralda/30" />
-              <div className="h-3 w-3 rounded-full bg-esmeralda" />
-            </div>
-            <h2 className="mt-4 font-display text-2xl font-semibold text-tinta">Entrar</h2>
+            <img src="/favicon.svg" alt="" className="h-12 w-12" />
+            <p className="mt-3 font-mono text-xs font-medium uppercase tracking-widest text-esmeralda">Jornada 360</p>
+            <h2 className="mt-2 font-display text-2xl font-semibold text-tinta">Entrar</h2>
             <p className="mt-1.5 text-sm text-slate-500">
               Acesse sua conta para continuar.
             </p>

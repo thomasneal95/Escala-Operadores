@@ -179,7 +179,7 @@ export function OperatorApp() {
       <aside className="fixed inset-y-0 left-0 z-10 hidden w-64 flex-col bg-tinta sm:flex">
         <div className="border-b border-white/10 px-6 py-6">
           <p className="font-mono text-xs font-medium uppercase tracking-widest text-esmeralda">
-            Escala Operadores
+            Jornada 360
           </p>
           <p className="mt-1 font-display text-lg font-semibold text-white">Olá, {perfil?.nome_completo?.split(' ')[0]}</p>
         </div>

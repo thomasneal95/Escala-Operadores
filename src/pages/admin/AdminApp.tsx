@@ -226,7 +226,7 @@ export function AdminApp() {
             </button>
             <div className="min-w-0">
               <p className="font-mono text-[10px] font-medium uppercase tracking-widest text-esmeralda">
-                Escala Operadores · Administração
+                Jornada 360 · Administração
               </p>
               <p className="truncate font-display font-medium text-white">{rotuloAtivo}</p>
             </div>
@@ -285,7 +285,7 @@ export function AdminApp() {
           <div className="flex items-center justify-between border-b border-white/10 px-5 py-4">
             <div>
               <p className="font-mono text-xs font-medium uppercase tracking-widest text-esmeralda">
-                Escala Operadores
+                Jornada 360
               </p>
               <p className="mt-0.5 font-display font-semibold text-white">Administração</p>
             </div>

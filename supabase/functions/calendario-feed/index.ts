@@ -49,7 +49,7 @@ Deno.serve(async (req) => {
   const linhas: string[] = [
     "BEGIN:VCALENDAR",
     "VERSION:2.0",
-    "PRODID:-//Escala Operadores//PT-BR",
+    "PRODID:-//Jornada 360//PT-BR",
     "CALSCALE:GREGORIAN",
     "X-WR-CALNAME:Minha Escala",
     "REFRESH-INTERVAL;VALUE=DURATION:PT12H",
