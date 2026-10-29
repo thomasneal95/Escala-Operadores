@@ -148,7 +148,7 @@ export function OperatorApp() {
       <TourOperador />
 
       {/* Cabeçalho — só aparece no celular (desktop usa a barra lateral) */}
-      <header className="bg-tinta sm:hidden">
+      <header className="bg-tinta pt-[env(safe-area-inset-top)] sm:hidden">
         <div className="flex items-center justify-between px-6 py-4">
           <div className="flex items-center gap-3">
             <button
@@ -221,7 +221,7 @@ export function OperatorApp() {
       </aside>
 
       {/* Conteúdo principal */}
-      <main className="px-6 py-10 sm:ml-64">
+      <main className="px-6 pt-10 pb-[calc(2.5rem+env(safe-area-inset-bottom))] sm:ml-64">
         <div className="mx-auto max-w-2xl">
           <ErrorBoundary key={abaAtiva} fallback={<FallbackErroTela />}>
             {abaAtiva === 'minha-area' && <AreaColaboradorPage />}
@@ -244,7 +244,7 @@ export function OperatorApp() {
         onClick={() => setMenuAberto(false)}
       >
         <div
-          className={`h-full w-64 max-w-[80%] bg-tinta shadow-xl transition-transform ${
+          className={`h-full w-64 max-w-[80%] overflow-y-auto bg-tinta pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)] shadow-xl transition-transform ${
             menuAberto ? 'translate-x-0' : '-translate-x-full'
           }`}
           onClick={(e) => e.stopPropagation()}
