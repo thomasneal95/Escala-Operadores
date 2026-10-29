@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
 import type { Session } from '@supabase/supabase-js';
 import { supabase } from '../../lib/supabase/client';
+import { desligarPushDesteAparelho } from '../notificacoes/push';
 
 type Papel = 'administrador' | 'colaborador';
 
@@ -86,6 +87,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   async function sair() {
+    await desligarPushDesteAparelho();
     await supabase.auth.signOut();
   }
 

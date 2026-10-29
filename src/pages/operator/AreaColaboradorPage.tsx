@@ -9,6 +9,7 @@ import { useToast } from '../../components/FeedbackProvider';
 import { MinhaEscalaPage } from './MinhaEscalaPage';
 import { MeuRodizio } from '../../components/MeuRodizio';
 import { InstalarAppCard } from '../../components/InstalarAppCard';
+import { AtivarNotificacoesCard } from '../../components/AtivarNotificacoesCard';
 
 function SecaoCalendario() {
   const { urlHttps, urlWebcal, carregando } = useCalendarioToken();
@@ -88,6 +89,7 @@ export function AreaColaboradorPage() {
   return (
     <div>
       <InstalarAppCard />
+      <AtivarNotificacoesCard textoExtra="Saiba na hora quando sua escala sair, quando chegar um pedido de troca e quando suas vendas forem conferidas." />
       {colaboradorId && periodoDoResumo && (
         <ErrorBoundary fallback={null}>
           <ResumoOperador colaboradorId={colaboradorId} periodo={periodoDoResumo} />

@@ -19,6 +19,8 @@ import { ErrorBoundary } from '../../components/ErrorBoundary';
 import { FallbackErroTela } from '../../components/FallbackErroTela';
 import { NotificacaoBadge } from '../../components/NotificacaoBadge';
 import { useNotificacoesAdmin } from '../../features/notificacoes/useNotificacoesAdmin';
+import { ControleNotificacoes } from '../../components/AtivarNotificacoesCard';
+import { abaDaUrl } from '../../lib/abaDaUrl';
 
 type Aba =
   | 'painel'
@@ -171,7 +173,12 @@ const iconeSair = (
 
 export function AdminApp() {
   const { perfil, sair } = useAuth();
-  const [abaAtiva, setAbaAtiva] = useState<Aba>('painel');
+  const [abaAtiva, setAbaAtiva] = useState<Aba>(() =>
+    abaDaUrl(
+      abas.map((a) => a.id),
+      'painel'
+    )
+  );
   const [menuAberto, setMenuAberto] = useState(false);
   const { trocasPendentes, multasPendentes, escalaParaMontar, presencasPendentes, infoprodutosPendentes } =
     useNotificacoesAdmin();
@@ -322,6 +329,7 @@ export function AdminApp() {
               <p className="text-xs text-slate-400">Logado como</p>
               <p className="truncate text-sm font-medium text-white">{perfil?.nome_completo}</p>
             </div>
+            <ControleNotificacoes />
             <button
               onClick={sair}
               tabIndex={menuAberto ? 0 : -1}

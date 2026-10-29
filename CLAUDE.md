@@ -23,6 +23,11 @@ dependência deve ser compartilhado ou copiado entre eles.
   escala-operadores.vercel.app redireciona para ele)
 - PWA: `public/manifest.webmanifest` + `public/sw.js` (só guarda os arquivos
   do site; dados do Supabase nunca passam pelo service worker)
+- Notificações (Web Push): gatilhos do banco enfileiram em `push_fila`
+  (migration `20261103000000_notificacoes_push.sql`) e a edge function
+  `enviar-push` envia. Precisa dos secrets `VAPID_PUBLIC_KEY` e
+  `VAPID_PRIVATE_KEY` no Supabase (a chave privada nunca vai para o Git; a
+  pública está em `src/features/notificacoes/push.ts`).
 
 Não usar TanStack Start nem Lovable (ou qualquer ferramenta relacionada).
 

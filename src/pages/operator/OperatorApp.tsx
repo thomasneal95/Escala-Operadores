@@ -14,6 +14,8 @@ import { ErrorBoundary } from '../../components/ErrorBoundary';
 import { FallbackErroTela } from '../../components/FallbackErroTela';
 import { NotificacaoBadge } from '../../components/NotificacaoBadge';
 import { useNotificacoesOperador } from '../../features/notificacoes/useNotificacoesOperador';
+import { ControleNotificacoes } from '../../components/AtivarNotificacoesCard';
+import { abaDaUrl } from '../../lib/abaDaUrl';
 
 type Aba = 'minha-area' | 'equipe' | 'trocas' | 'ganhos' | 'desempenho' | 'infoprodutos' | 'multas' | 'historico';
 
@@ -101,7 +103,12 @@ const iconeSair = (
 
 export function OperatorApp() {
   const { perfil, sair } = useAuth();
-  const [abaAtiva, setAbaAtiva] = useState<Aba>('minha-area');
+  const [abaAtiva, setAbaAtiva] = useState<Aba>(() =>
+    abaDaUrl(
+      abas.map((a) => a.id),
+      'minha-area'
+    )
+  );
   const [menuAberto, setMenuAberto] = useState(false);
   const {
     escalasNovas,
@@ -210,6 +217,7 @@ export function OperatorApp() {
             <p className="text-xs text-slate-400">Logado como</p>
             <p className="truncate text-sm font-medium text-white">{perfil?.nome_completo}</p>
           </div>
+          <ControleNotificacoes />
           <button
             onClick={sair}
             className="mt-1 flex w-full items-center gap-3 rounded-md px-3 py-2.5 text-left text-sm font-medium text-slate-300 transition hover:bg-white/10 hover:text-white"
@@ -278,6 +286,9 @@ export function OperatorApp() {
               </button>
             ))}
           </nav>
+          <div className="mt-4 border-t border-white/10 px-3 py-3">
+            <ControleNotificacoes />
+          </div>
         </div>
       </div>
     </div>
