@@ -15,8 +15,9 @@ import { InfoprodutosComissao } from './InfoprodutosComissao';
 import { ResumoJoao } from './ResumoJoao';
 import { DesligamentosComissao } from './DesligamentosComissao';
 import { OutrasOperacoesComissao } from './OutrasOperacoesComissao';
-import { PagamentoGeral } from './PagamentoGeral';
+import { QuadroGeral } from './QuadroGeral';
 import { useOutrasOperacoes } from '../../features/operacoes/useOutrasOperacoes';
+import { OPERACAO_PRINCIPAL } from '../../features/operacoes/calculoOperacoes';
 
 function mesAtualFormatoInput() {
   const hoje = new Date();
@@ -77,7 +78,7 @@ export function ComissionamentoPage() {
     | 'painel'
     | 'infoprodutos'
     | 'operacoes'
-    | 'pagamento-geral'
+    | 'quadro-geral'
     | 'resumo-joao'
     | 'desligamentos'
     | 'historico'
@@ -186,21 +187,22 @@ export function ComissionamentoPage() {
       </p>
       <h1 className="mt-1 font-display text-2xl font-semibold text-tinta">Fechamento mensal</h1>
       <p className="mt-2 text-sm text-slate-500">
-        Envie a base de vendas do Excel (aba "Base" da planilha de comissões). O fechamento soma
+        {OPERACAO_PRINCIPAL}: envie a base de vendas do Excel (aba "Base" da planilha de comissões). O fechamento soma
         Auxílio + Comissão de equipe (dias úteis) + Comissão de fim de semana + Comissão de
-        infoprodutos − Adiantamento, com as regras e valores definidos em "Parâmetros das regras".
+        infoprodutos − Adiantamento, com as regras e valores definidos em "Parâmetros das regras". As
+        outras operações têm aba própria, e o "Quadro geral" junta tudo num valor só por pessoa.
       </p>
 
       <div className="mt-5 inline-flex flex-wrap rounded-md border border-slate-200 bg-slate-50 p-0.5 text-sm">
         {(
           [
-            ['fechamento', 'Fechamento do mês'],
-            ['painel', 'Painel'],
+            ['fechamento', `Fechamento ${OPERACAO_PRINCIPAL}`],
+            ['painel', `Painel ${OPERACAO_PRINCIPAL}`],
             ['infoprodutos', 'Infoprodutos'],
-            ['operacoes', 'Outras operações'],
-            ['pagamento-geral', 'Pagamento geral'],
             ['resumo-joao', 'Resumo João'],
             ['desligamentos', 'Desligamentos'],
+            ['operacoes', 'Outras operações'],
+            ['quadro-geral', 'Quadro geral'],
             ['historico', 'Histórico'],
           ] as const
         ).map(([id, rotulo]) => (
@@ -244,7 +246,7 @@ export function ComissionamentoPage() {
           disabled={importando}
           className="rounded-md bg-esmeralda px-4 py-2 font-medium text-white transition hover:bg-esmeralda-dark disabled:cursor-not-allowed disabled:opacity-60"
         >
-          {importando ? 'Importando...' : '📤 Enviar base (Excel)'}
+          {importando ? 'Importando...' : `📤 Enviar base ${OPERACAO_PRINCIPAL} (Excel)`}
         </button>
         <button
           onClick={recalcular}
@@ -304,10 +306,10 @@ export function ComissionamentoPage() {
             onAlterou={recalcular}
           />
         </div>
-      ) : aba === 'pagamento-geral' ? (
+      ) : aba === 'quadro-geral' ? (
         dados && (
           <div className="mt-6">
-            <PagamentoGeral linhas={linhas} ops={outras} taxa={cadastros.config?.taxa_total_a_pagar ?? 0.02} />
+            <QuadroGeral linhas={linhas} ops={outras} taxa={cadastros.config?.taxa_total_a_pagar ?? 0.02} />
           </div>
         )
       ) : aba === 'desligamentos' ? (
@@ -331,7 +333,7 @@ export function ComissionamentoPage() {
           <div className="mt-6">
             {dados.totalFtds === 0 ? (
               <p className="rounded-md bg-slate-100 px-4 py-3 text-sm text-slate-600">
-                Não há vendas importadas para este mês. Use "Enviar base (Excel)".
+                Não há vendas importadas para este mês. Use "Enviar base {OPERACAO_PRINCIPAL} (Excel)".
               </p>
             ) : (
               <PaineisComissao dados={dados} />
@@ -351,7 +353,7 @@ export function ComissionamentoPage() {
 
           {dados.totalFtds === 0 && (
             <p className="mt-4 rounded-md bg-slate-100 px-4 py-3 text-sm text-slate-600">
-              Não há vendas importadas para este mês. Use "Enviar base (Excel)".
+              Não há vendas importadas para este mês. Use "Enviar base {OPERACAO_PRINCIPAL} (Excel)".
             </p>
           )}
 

@@ -135,7 +135,7 @@ function LinhaGerenciar({ ops, id, nome, ativo }: { ops: OutrasOperacoes; id: st
     if (
       ativo &&
       !(await confirmar(
-        `Desativar "${nome}"? Ela some das abas e do pagamento geral, mas a base e as divisões ficam guardadas.`
+        `Desativar "${nome}"? Ela some das abas e do quadro geral, mas a base e as divisões ficam guardadas.`
       ))
     )
       return;
@@ -250,7 +250,7 @@ function FechamentoOperacao({
       </div>
 
       <p className="mt-3 text-sm text-slate-500">
-        A planilha segue o mesmo formato da base principal (Operador, Etapa ou Status, Data e Hora). Enviar de
+        A planilha segue o mesmo formato da base da TNT (Operador, Etapa ou Status, Data e Hora). Enviar de
         novo substitui só os meses que vierem no arquivo, só nesta operação. Vendas "Rejeitado" não contam.
       </p>
 

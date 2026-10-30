@@ -3,6 +3,7 @@ import { supabase } from '../../lib/supabase/client';
 import {
   calcularOperacao,
   normalizarNome,
+  OPERACAO_PRINCIPAL,
   type DivisaoPessoa,
   type ModoDivisao,
   type ResultadoOperacao,
@@ -11,7 +12,7 @@ import {
 
 // Outras operações: cadastro, base de vendas (Excel) e divisão do mês de
 // cada uma. O fechamento é calculado aqui no navegador (calculoOperacoes) e
-// somado ao da operação principal na aba "Pagamento geral".
+// somado ao da TNT (operação principal) na aba "Quadro geral".
 
 export interface Operacao {
   id: string;
@@ -31,6 +32,8 @@ interface Vinculo {
   nome_base: string;
   colaborador_id: string | null;
 }
+
+const ehPrincipal = (nome: string) => normalizarNome(nome) === normalizarNome(OPERACAO_PRINCIPAL);
 
 function ultimoDiaDoMes(mes: string) {
   const [a, m] = mes.split('-').map(Number);
@@ -122,7 +125,7 @@ export function useOutrasOperacoes(mes: string, horaVirada: number) {
   }, [carregar]);
 
   // Nome na base → colaborador: o vínculo salvo na operação; senão, quem tem
-  // o mesmo "nome na base" (operação principal) ou o mesmo nome completo.
+  // o mesmo "nome na base" da TNT ou o mesmo nome completo.
   const colaboradorDe = useCallback(
     (operacaoId: string, nomeBase: string) => {
       const chave = normalizarNome(nomeBase);
@@ -200,10 +203,14 @@ export function useOutrasOperacoes(mes: string, horaVirada: number) {
     erro,
     recarregar: carregar,
     importar,
-    criarOperacao: (nome: string) =>
-      executar(supabase.from('operacoes').insert({ nome: nome.trim() }), 'Não foi possível criar a operação.'),
-    renomearOperacao: (id: string, nome: string) =>
-      executar(
+    criarOperacao: async (nome: string) =>
+      ehPrincipal(nome)
+        ? { erro: `${OPERACAO_PRINCIPAL} já é a operação principal.` }
+        : executar(supabase.from('operacoes').insert({ nome: nome.trim() }), 'Não foi possível criar a operação.'),
+    renomearOperacao: async (id: string, nome: string) =>
+      ehPrincipal(nome)
+        ? { erro: `${OPERACAO_PRINCIPAL} já é a operação principal.` }
+        : executar(
         supabase.from('operacoes').update({ nome: nome.trim() }).eq('id', id),
         'Não foi possível renomear a operação.'
       ),

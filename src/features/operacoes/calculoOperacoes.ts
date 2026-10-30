@@ -1,6 +1,6 @@
 import { diaReal } from '../../../supabase/functions/_shared/calculoFechamento';
 
-// Fechamento das outras operações. Mesmas regras da base principal para
+// Fechamento das outras operações. Mesmas regras da base da TNT para
 // contar as vendas (Dia Real pela hora de virada e "Rejeitado" não conta);
 // a divisão é escolhida pelo admin mês a mês:
 //
@@ -10,6 +10,10 @@ import { diaReal } from '../../../supabase/functions/_shared/calculoFechamento';
 //   - sem pagamento: aparece na lista, mas não recebe.
 //
 // Quem não tem divisão definida no mês recebe como individual.
+
+// Nome da operação que já existia no site (base de FTDs, equipes, FDS,
+// infoprodutos). As demais são cadastradas em "Outras operações".
+export const OPERACAO_PRINCIPAL = 'TNT';
 
 export type ModoDivisao = 'individual' | 'equipe' | 'sem_pagamento';
 
