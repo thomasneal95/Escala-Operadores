@@ -14,6 +14,9 @@ import { PaineisComissao } from './PaineisComissao';
 import { InfoprodutosComissao } from './InfoprodutosComissao';
 import { ResumoJoao } from './ResumoJoao';
 import { DesligamentosComissao } from './DesligamentosComissao';
+import { OutrasOperacoesComissao } from './OutrasOperacoesComissao';
+import { PagamentoGeral } from './PagamentoGeral';
+import { useOutrasOperacoes } from '../../features/operacoes/useOutrasOperacoes';
 
 function mesAtualFormatoInput() {
   const hoje = new Date();
@@ -70,7 +73,14 @@ export function ComissionamentoPage() {
   const toast = useToast();
   const confirmar = useConfirm();
   const [aba, setAba] = useState<
-    'fechamento' | 'painel' | 'infoprodutos' | 'resumo-joao' | 'desligamentos' | 'historico'
+    | 'fechamento'
+    | 'painel'
+    | 'infoprodutos'
+    | 'operacoes'
+    | 'pagamento-geral'
+    | 'resumo-joao'
+    | 'desligamentos'
+    | 'historico'
   >(
     'fechamento'
   );
@@ -83,6 +93,7 @@ export function ComissionamentoPage() {
 
   const mes = `${mesInput}-01`;
   const adminId = session?.user?.id ?? null;
+  const outras = useOutrasOperacoes(mes, cadastros.config?.hora_virada_dia ?? 6);
 
   useEffect(() => {
     if (adminId) calcular(mes);
@@ -156,6 +167,18 @@ export function ComissionamentoPage() {
     .filter((c) => !c.ativo)
     .sort((a, b) => (b.desativado_em ?? '').localeCompare(a.desativado_em ?? ''));
 
+  const seletorMes = (
+    <div>
+      <label className="block text-sm font-medium text-slate-700">Mês</label>
+      <input
+        type="month"
+        value={mesInput}
+        onChange={(e) => setMesInput(e.target.value)}
+        className="mt-1 rounded-md border border-slate-300 px-3 py-2 text-tinta focus:border-esmeralda focus:outline-none focus:ring-1 focus:ring-esmeralda"
+      />
+    </div>
+  );
+
   return (
     <div>
       <p className="font-mono text-xs font-medium uppercase tracking-widest text-ceruleo">
@@ -174,6 +197,8 @@ export function ComissionamentoPage() {
             ['fechamento', 'Fechamento do mês'],
             ['painel', 'Painel'],
             ['infoprodutos', 'Infoprodutos'],
+            ['operacoes', 'Outras operações'],
+            ['pagamento-geral', 'Pagamento geral'],
             ['resumo-joao', 'Resumo João'],
             ['desligamentos', 'Desligamentos'],
             ['historico', 'Histórico'],
@@ -195,18 +220,17 @@ export function ComissionamentoPage() {
         <div className="mt-6">
           <HistoricoComissoes historico={historico} />
         </div>
+      ) : aba === 'operacoes' ? (
+        <>
+          <div className="mt-5">{seletorMes}</div>
+          <div className="mt-6">
+            <OutrasOperacoesComissao ops={outras} onMesDoArquivo={setMesInput} />
+          </div>
+        </>
       ) : (
       <>
       <div className="mt-5 flex flex-wrap items-end gap-3">
-        <div>
-          <label className="block text-sm font-medium text-slate-700">Mês</label>
-          <input
-            type="month"
-            value={mesInput}
-            onChange={(e) => setMesInput(e.target.value)}
-            className="mt-1 rounded-md border border-slate-300 px-3 py-2 text-tinta focus:border-esmeralda focus:outline-none focus:ring-1 focus:ring-esmeralda"
-          />
-        </div>
+        {seletorMes}
 
         <input
           ref={entradaArquivo}
@@ -280,6 +304,12 @@ export function ComissionamentoPage() {
             onAlterou={recalcular}
           />
         </div>
+      ) : aba === 'pagamento-geral' ? (
+        dados && (
+          <div className="mt-6">
+            <PagamentoGeral linhas={linhas} ops={outras} taxa={cadastros.config?.taxa_total_a_pagar ?? 0.02} />
+          </div>
+        )
       ) : aba === 'desligamentos' ? (
         dados && (
           <div className="mt-6">

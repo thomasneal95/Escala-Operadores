@@ -65,6 +65,7 @@ src/
 │   ├── faltas/
 │   ├── multas/
 │   ├── notificacoes/
+│   ├── operacoes/       # outras operações (base própria e divisão do mês)
 │   └── schedules/       # escala, períodos, turnos, equipes, comissionamento,
 │                        # fechamento mensal, análises, trocas, histórico
 ├── pages/
