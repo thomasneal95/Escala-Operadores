@@ -12,7 +12,7 @@ import { diaReal } from '../../../supabase/functions/_shared/calculoFechamento';
 // Quem não tem divisão definida no mês recebe como individual.
 
 // Nome da operação que já existia no site (base de FTDs, equipes, FDS,
-// infoprodutos). As demais são cadastradas em "Outras operações".
+// infoprodutos). As demais são cadastradas em "+ Operação".
 export const OPERACAO_PRINCIPAL = 'TNT';
 
 export type ModoDivisao = 'individual' | 'equipe' | 'sem_pagamento';

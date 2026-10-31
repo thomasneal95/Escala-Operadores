@@ -263,7 +263,7 @@ export function AdminApp() {
             {abaAtiva === 'mapa' && <MapaCoberturaPage />}
             {abaAtiva === 'assiduidade' && <AssiduidadePage />}
             {abaAtiva === 'faltas' && <FaltasPage />}
-            {abaAtiva === 'comissionamento' && <ComissionamentoPage />}
+            {abaAtiva === 'comissionamento' && <ComissionamentoPage infoprodutosPendentes={infoprodutosPendentes} />}
             {abaAtiva === 'multas' && <MultasAdminPage />}
             {abaAtiva === 'historico' && <HistoricoAdminPage />}
             {abaAtiva === 'acesso' && <GestaoAcessoPage />}

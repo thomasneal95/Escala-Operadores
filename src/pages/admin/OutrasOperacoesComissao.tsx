@@ -19,100 +19,90 @@ function formatarData(data: string | null) {
 const campo =
   'rounded-md border border-slate-300 px-3 py-2 text-sm text-tinta focus:border-esmeralda focus:outline-none focus:ring-1 focus:ring-esmeralda';
 
-// Aba "Outras operações" do comissionamento: cada operação tem a sua base
-// (Excel) e o seu fechamento; a divisão é escolhida a cada mês.
-export function OutrasOperacoesComissao({
+// Seção de uma outra operação no comissionamento: base (Excel), valor por
+// venda e divisão do mês; embaixo, o nome e a desativação da operação.
+export function OperacaoComissao({
   ops,
+  operacaoId,
+  nome,
   onMesDoArquivo,
 }: {
   ops: OutrasOperacoes;
+  operacaoId: string;
+  nome: string;
   onMesDoArquivo: (mes: string) => void;
 }) {
-  const toast = useToast();
-  const [selecionadaId, setSelecionadaId] = useState<string | null>(null);
-  const [novoNome, setNovoNome] = useState('');
-
-  const ativas = ops.operacoes.filter((o) => o.ativo);
-  const selecionada = ativas.find((o) => o.id === selecionadaId) ?? ativas[0] ?? null;
-
-  async function criar() {
-    if (!novoNome.trim()) return;
-    const { erro } = await ops.criarOperacao(novoNome);
-    if (erro) toast(erro, 'erro');
-    else {
-      toast(`Operação "${novoNome.trim()}" criada.`);
-      setNovoNome('');
-    }
-  }
-
   return (
     <div>
       {ops.erro && <p className="mb-4 rounded-md bg-red-50 px-4 py-3 text-sm text-red-700">{ops.erro}</p>}
-
-      {ativas.length === 0 && !ops.carregando ? (
-        <p className="rounded-md bg-slate-100 px-4 py-3 text-sm text-slate-600">
-          Nenhuma operação cadastrada. Crie a primeira abaixo, com o nome da operação (ex.: o nome do
-          produto ou do cliente).
-        </p>
-      ) : (
-        <div className="flex flex-wrap gap-2">
-          {ativas.map((o) => (
-            <button
-              key={o.id}
-              onClick={() => setSelecionadaId(o.id)}
-              className={`rounded-full border px-4 py-1.5 text-sm font-medium transition ${
-                selecionada?.id === o.id
-                  ? 'border-esmeralda bg-esmeralda text-white'
-                  : 'border-slate-300 text-slate-600 hover:border-esmeralda hover:text-esmeralda'
-              }`}
-            >
-              {o.nome}
-            </button>
-          ))}
-        </div>
-      )}
-
-      {selecionada && (
-        <FechamentoOperacao
-          key={selecionada.id}
-          ops={ops}
-          operacaoId={selecionada.id}
-          nome={selecionada.nome}
-          onMesDoArquivo={onMesDoArquivo}
-        />
-      )}
-
+      <FechamentoOperacao ops={ops} operacaoId={operacaoId} nome={nome} onMesDoArquivo={onMesDoArquivo} />
       <div className="mt-8">
-        <SecaoRecolhivel titulo="Gerenciar operações" padraoAberta={ativas.length === 0}>
-          <div className="flex flex-wrap items-end gap-3">
-            <div>
-              <label className="block text-sm font-medium text-slate-700">Nova operação</label>
-              <input
-                value={novoNome}
-                onChange={(e) => setNovoNome(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && criar()}
-                placeholder="Nome da operação"
-                className={`mt-1 ${campo}`}
-              />
-            </div>
-            <button
-              onClick={criar}
-              disabled={!novoNome.trim()}
-              className="rounded-md bg-esmeralda px-4 py-2 text-sm font-medium text-white hover:bg-esmeralda-dark disabled:opacity-50"
-            >
-              Criar
-            </button>
-          </div>
-
-          {ops.operacoes.length > 0 && (
-            <ul className="mt-5 divide-y divide-slate-100 rounded-md border border-slate-200">
-              {ops.operacoes.map((o) => (
-                <LinhaGerenciar key={o.id} ops={ops} id={o.id} nome={o.nome} ativo={o.ativo} />
-              ))}
-            </ul>
-          )}
+        <h2 className="mb-3 text-xs font-medium uppercase tracking-wide text-slate-400">Configurações de {nome}</h2>
+        <SecaoRecolhivel titulo="Nome e status da operação" padraoAberta={false}>
+          <ul className="divide-y divide-slate-100 rounded-md border border-slate-200">
+            <LinhaGerenciar ops={ops} id={operacaoId} nome={nome} ativo />
+          </ul>
         </SecaoRecolhivel>
       </div>
+    </div>
+  );
+}
+
+// Seção "+ Operação": cria uma operação nova e reativa as desativadas.
+export function NovaOperacao({ ops, onCriada }: { ops: OutrasOperacoes; onCriada: (id: string) => void }) {
+  const toast = useToast();
+  const [novoNome, setNovoNome] = useState('');
+  const desativadas = ops.operacoes.filter((o) => !o.ativo);
+
+  async function criar() {
+    if (!novoNome.trim()) return;
+    const { erro, id } = await ops.criarOperacao(novoNome);
+    if (erro || !id) {
+      toast(erro ?? 'Não foi possível criar a operação.', 'erro');
+      return;
+    }
+    toast(`Operação "${novoNome.trim()}" criada. Agora envie a base dela.`);
+    setNovoNome('');
+    onCriada(id);
+  }
+
+  return (
+    <div className="max-w-xl">
+      <h2 className="font-display text-lg font-semibold text-tinta">Nova operação</h2>
+      <p className="mt-1 text-sm text-slate-500">
+        Crie uma operação para cada frente além da TNT. Ela ganha uma aba própria aqui no comissionamento, com
+        base e fechamento separados, e entra no Quadro geral.
+      </p>
+      <div className="mt-4 flex flex-wrap items-end gap-3">
+        <div className="min-w-0 flex-1">
+          <label className="block text-sm font-medium text-slate-700">Nome da operação</label>
+          <input
+            value={novoNome}
+            onChange={(e) => setNovoNome(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && criar()}
+            placeholder="Ex.: nome do produto ou do cliente"
+            className={`mt-1 w-full ${campo}`}
+          />
+        </div>
+        <button
+          onClick={criar}
+          disabled={!novoNome.trim()}
+          className="rounded-md bg-esmeralda px-4 py-2 text-sm font-medium text-white hover:bg-esmeralda-dark disabled:opacity-50"
+        >
+          Criar operação
+        </button>
+      </div>
+
+      {desativadas.length > 0 && (
+        <div className="mt-8">
+          <p className="text-xs font-medium uppercase tracking-wide text-slate-400">Operações desativadas</p>
+          <ul className="mt-2 divide-y divide-slate-100 rounded-md border border-slate-200">
+            {desativadas.map((o) => (
+              <LinhaGerenciar key={o.id} ops={ops} id={o.id} nome={o.nome} ativo={false} />
+            ))}
+          </ul>
+        </div>
+      )}
     </div>
   );
 }
@@ -135,7 +125,7 @@ function LinhaGerenciar({ ops, id, nome, ativo }: { ops: OutrasOperacoes; id: st
     if (
       ativo &&
       !(await confirmar(
-        `Desativar "${nome}"? Ela some das abas e do quadro geral, mas a base e as divisões ficam guardadas.`
+        `Desativar "${nome}"? Ela sai das abas e do Quadro geral, mas a base e as divisões ficam guardadas (dá para reativar em "+ Operação").`
       ))
     )
       return;

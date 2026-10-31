@@ -14,7 +14,7 @@ import { PaineisComissao } from './PaineisComissao';
 import { InfoprodutosComissao } from './InfoprodutosComissao';
 import { ResumoJoao } from './ResumoJoao';
 import { DesligamentosComissao } from './DesligamentosComissao';
-import { OutrasOperacoesComissao } from './OutrasOperacoesComissao';
+import { NovaOperacao, OperacaoComissao } from './OutrasOperacoesComissao';
 import { QuadroGeral } from './QuadroGeral';
 import { useOutrasOperacoes } from '../../features/operacoes/useOutrasOperacoes';
 import { OPERACAO_PRINCIPAL } from '../../features/operacoes/calculoOperacoes';
@@ -69,22 +69,18 @@ const rotuloTipo: Partial<Record<LinhaFechamento['tipo'], string>> = {
 const classeCampo =
   'mt-1 w-full rounded-md border border-slate-300 px-2 py-1.5 text-sm text-tinta focus:border-esmeralda focus:outline-none focus:ring-1 focus:ring-esmeralda';
 
-export function ComissionamentoPage() {
+// Navegação em dois níveis: no topo, o mês e as seções (Quadro geral, uma
+// por operação — TNT e as outras —, "+ Operação" e Histórico); dentro da
+// TNT, as abas dela (fechamento, painel, infoprodutos...).
+type Secao = 'geral' | 'tnt' | 'nova-operacao' | 'historico' | `op:${string}`;
+type AbaTnt = 'fechamento' | 'painel' | 'infoprodutos' | 'resumo-joao' | 'desligamentos';
+
+export function ComissionamentoPage({ infoprodutosPendentes = 0 }: { infoprodutosPendentes?: number }) {
   const { session } = useAuth();
   const toast = useToast();
   const confirmar = useConfirm();
-  const [aba, setAba] = useState<
-    | 'fechamento'
-    | 'painel'
-    | 'infoprodutos'
-    | 'operacoes'
-    | 'quadro-geral'
-    | 'resumo-joao'
-    | 'desligamentos'
-    | 'historico'
-  >(
-    'fechamento'
-  );
+  const [secao, setSecao] = useState<Secao>('geral');
+  const [aba, setAba] = useState<AbaTnt>('fechamento');
   const historico = useHistoricoComissoes();
   const [mesInput, setMesInput] = useState(mesAtualFormatoInput()); // "YYYY-MM"
   const { dados, carregando, importando, erro, calcular, importar, editarAdiantamento } =
@@ -95,6 +91,13 @@ export function ComissionamentoPage() {
   const mes = `${mesInput}-01`;
   const adminId = session?.user?.id ?? null;
   const outras = useOutrasOperacoes(mes, cadastros.config?.hora_virada_dia ?? 6);
+  const operacoesAtivas = outras.operacoes.filter((o) => o.ativo);
+  const operacaoAberta = operacoesAtivas.find((o) => `op:${o.id}` === secao) ?? null;
+
+  // Operação desativada (ou que não existe mais): volta para o Quadro geral.
+  useEffect(() => {
+    if (secao.startsWith('op:') && !outras.carregando && !operacaoAberta) setSecao('geral');
+  }, [secao, outras.carregando, operacaoAberta]);
 
   useEffect(() => {
     if (adminId) calcular(mes);
@@ -180,60 +183,112 @@ export function ComissionamentoPage() {
     </div>
   );
 
+  const abaSecao = (id: Secao, rotulo: string, extra?: { badge?: number; discreto?: boolean }) => (
+    <button
+      key={id}
+      onClick={(e) => {
+        setSecao(id);
+        // No celular a barra rola de lado: mantém a seção escolhida à vista.
+        e.currentTarget.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+      }}
+      className={`-mb-px flex shrink-0 items-center gap-2 border-b-2 px-4 py-2.5 text-sm font-medium transition ${
+        secao === id
+          ? 'border-esmeralda text-tinta'
+          : `border-transparent hover:border-slate-300 hover:text-tinta ${extra?.discreto ? 'text-slate-400' : 'text-slate-500'}`
+      }`}
+    >
+      {rotulo}
+      {!!extra?.badge && (
+        <span className="rounded-full bg-amber-500 px-1.5 text-[11px] font-semibold text-white">{extra.badge}</span>
+      )}
+    </button>
+  );
+
   return (
     <div>
-      <p className="font-mono text-xs font-medium uppercase tracking-widest text-ceruleo">
-        Comissionamento
-      </p>
-      <h1 className="mt-1 font-display text-2xl font-semibold text-tinta">Fechamento mensal</h1>
-      <p className="mt-2 text-sm text-slate-500">
-        {OPERACAO_PRINCIPAL}: envie a base de vendas do Excel (aba "Base" da planilha de comissões). O fechamento soma
-        Auxílio + Comissão de equipe (dias úteis) + Comissão de fim de semana + Comissão de
-        infoprodutos − Adiantamento, com as regras e valores definidos em "Parâmetros das regras". As
-        outras operações têm aba própria, e o "Quadro geral" junta tudo num valor só por pessoa.
+      <div className="flex flex-wrap items-end justify-between gap-4">
+        <div>
+          <p className="font-mono text-xs font-medium uppercase tracking-widest text-ceruleo">Comissionamento</p>
+          <h1 className="mt-1 font-display text-2xl font-semibold text-tinta">Fechamento mensal</h1>
+          <p className="mt-2 max-w-2xl text-sm text-slate-500">
+            Escolha o mês, envie a base de cada operação e confira no Quadro geral quanto pagar a cada pessoa.
+          </p>
+        </div>
+        {secao !== 'historico' && seletorMes}
+      </div>
+
+      <nav className="mt-6 flex items-stretch overflow-x-auto border-b border-slate-200 [scrollbar-width:none]" aria-label="Seções do comissionamento">
+        {abaSecao('geral', 'Quadro geral')}
+        <span className="mx-2 my-2.5 w-px shrink-0 bg-slate-200" aria-hidden />
+        {abaSecao('tnt', OPERACAO_PRINCIPAL, { badge: infoprodutosPendentes })}
+        {operacoesAtivas.map((o) => abaSecao(`op:${o.id}`, o.nome))}
+        {abaSecao('nova-operacao', '+ Operação', { discreto: true })}
+        <span className="flex-1" />
+        {abaSecao('historico', 'Histórico')}
+      </nav>
+
+      {secao === 'historico' ? (
+        <div className="mt-6">
+          <HistoricoComissoes historico={historico} />
+        </div>
+      ) : secao === 'nova-operacao' ? (
+        <div className="mt-6">
+          <NovaOperacao ops={outras} onCriada={(id) => setSecao(`op:${id}`)} />
+        </div>
+      ) : operacaoAberta ? (
+        <div className="mt-6">
+          <OperacaoComissao
+            key={operacaoAberta.id}
+            ops={outras}
+            operacaoId={operacaoAberta.id}
+            nome={operacaoAberta.nome}
+            onMesDoArquivo={setMesInput}
+          />
+        </div>
+      ) : secao === 'geral' ? (
+        <div className="mt-6">
+          {(erro || outras.erro) && (
+            <p className="mb-4 rounded-md bg-red-50 px-4 py-3 text-sm text-red-700">{erro ?? outras.erro}</p>
+          )}
+          {carregando && !dados && <p className="text-sm text-slate-400">Calculando...</p>}
+          {dados && <QuadroGeral linhas={linhas} ops={outras} taxa={cadastros.config?.taxa_total_a_pagar ?? 0.02} />}
+        </div>
+      ) : (
+      <>
+      <p className="mt-5 max-w-3xl text-sm text-slate-500">
+        Envie a base de vendas da {OPERACAO_PRINCIPAL} (aba "Base" da planilha de comissões). O fechamento soma
+        Auxílio + Comissão de equipe (dias úteis) + Comissão de fim de semana + Comissão de infoprodutos −
+        Adiantamento, com as regras e valores definidos em "Parâmetros das regras".
       </p>
 
-      <div className="mt-5 inline-flex flex-wrap rounded-md border border-slate-200 bg-slate-50 p-0.5 text-sm">
+      <div className="mt-4 inline-flex max-w-full flex-wrap rounded-md border border-slate-200 bg-slate-50 p-0.5 text-sm">
         {(
           [
-            ['fechamento', `Fechamento ${OPERACAO_PRINCIPAL}`],
-            ['painel', `Painel ${OPERACAO_PRINCIPAL}`],
+            ['fechamento', 'Fechamento'],
+            ['painel', 'Painel'],
             ['infoprodutos', 'Infoprodutos'],
             ['resumo-joao', 'Resumo João'],
             ['desligamentos', 'Desligamentos'],
-            ['operacoes', 'Outras operações'],
-            ['quadro-geral', 'Quadro geral'],
-            ['historico', 'Histórico'],
           ] as const
         ).map(([id, rotulo]) => (
           <button
             key={id}
             onClick={() => setAba(id)}
-            className={`rounded px-3 py-1.5 font-medium transition ${
+            className={`flex items-center gap-1.5 rounded px-3 py-1.5 font-medium transition ${
               aba === id ? 'bg-white text-tinta shadow-sm' : 'text-slate-500 hover:text-tinta'
             }`}
           >
             {rotulo}
+            {id === 'infoprodutos' && infoprodutosPendentes > 0 && (
+              <span className="rounded-full bg-amber-500 px-1.5 text-[11px] font-semibold text-white">
+                {infoprodutosPendentes}
+              </span>
+            )}
           </button>
         ))}
       </div>
 
-      {aba === 'historico' ? (
-        <div className="mt-6">
-          <HistoricoComissoes historico={historico} />
-        </div>
-      ) : aba === 'operacoes' ? (
-        <>
-          <div className="mt-5">{seletorMes}</div>
-          <div className="mt-6">
-            <OutrasOperacoesComissao ops={outras} onMesDoArquivo={setMesInput} />
-          </div>
-        </>
-      ) : (
-      <>
-      <div className="mt-5 flex flex-wrap items-end gap-3">
-        {seletorMes}
-
+      <div className="mt-4 flex flex-wrap items-center gap-3">
         <input
           ref={entradaArquivo}
           type="file"
@@ -306,12 +361,6 @@ export function ComissionamentoPage() {
             onAlterou={recalcular}
           />
         </div>
-      ) : aba === 'quadro-geral' ? (
-        dados && (
-          <div className="mt-6">
-            <QuadroGeral linhas={linhas} ops={outras} taxa={cadastros.config?.taxa_total_a_pagar ?? 0.02} />
-          </div>
-        )
       ) : aba === 'desligamentos' ? (
         dados && (
           <div className="mt-6">
@@ -441,6 +490,9 @@ export function ComissionamentoPage() {
       )}
 
       <div className="mt-8 space-y-4">
+        <h2 className="text-xs font-medium uppercase tracking-wide text-slate-400">
+          Configurações da {OPERACAO_PRINCIPAL}
+        </h2>
         {cadastros.config && (
           <SecaoRecolhivel titulo="Parâmetros das regras" padraoAberta={false}>
             <FormularioParametros

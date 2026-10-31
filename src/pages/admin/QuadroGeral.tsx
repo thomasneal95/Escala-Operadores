@@ -118,8 +118,7 @@ export function QuadroGeral({
           ))}
           {semCadastro.length > 0 && (
             <p>
-              ⚠ Sem colaborador ligado (aparecem separados): {semCadastro.map((l) => l.nome).join(', ')}. Ligue na aba
-              "Outras operações".
+              ⚠ Sem colaborador ligado (aparecem separados): {semCadastro.map((l) => l.nome).join(', ')}. Ligue na aba da operação, na coluna "Colaborador".
             </p>
           )}
         </div>

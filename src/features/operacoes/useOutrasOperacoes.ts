@@ -203,10 +203,15 @@ export function useOutrasOperacoes(mes: string, horaVirada: number) {
     erro,
     recarregar: carregar,
     importar,
-    criarOperacao: async (nome: string) =>
-      ehPrincipal(nome)
-        ? { erro: `${OPERACAO_PRINCIPAL} já é a operação principal.` }
-        : executar(supabase.from('operacoes').insert({ nome: nome.trim() }), 'Não foi possível criar a operação.'),
+    criarOperacao: async (nome: string): Promise<{ erro: string | null; id?: string }> => {
+      if (ehPrincipal(nome)) return { erro: `${OPERACAO_PRINCIPAL} já é a operação principal.` };
+      const { data, error } = await supabase.from('operacoes').insert({ nome: nome.trim() }).select('id').single();
+      if (error) {
+        return { erro: error.code === '23505' ? 'Já existe uma operação com esse nome.' : 'Não foi possível criar a operação.' };
+      }
+      await carregar();
+      return { erro: null, id: data.id as string };
+    },
     renomearOperacao: async (id: string, nome: string) =>
       ehPrincipal(nome)
         ? { erro: `${OPERACAO_PRINCIPAL} já é a operação principal.` }
