@@ -48,7 +48,7 @@ const NOMES_MESES = [
 // Aba "Quadro geral": junta, por pessoa, o total a pagar da TNT e o das
 // outras operações num valor só, com o detalhe de onde vem cada parte. As
 // outras operações recebem a mesma taxa do "total a pagar" da TNT. Os
-// salários fixos do quadro geral entram só no Total a pagar.
+// salários fixos do quadro geral entram na coluna TNT.
 
 export function QuadroGeral({
   mes,
@@ -104,12 +104,13 @@ export function QuadroGeral({
   // A comissão de infoprodutos vem no fechamento da TNT, mas aparece numa
   // coluna própria (com a mesma taxa); a coluna TNT fica com o resto.
   const valorInfo = (l: LinhaGeral) => l.tnt.reduce((s, t) => s + comTaxa(t.comissao_infoprodutos), 0);
-  const valorTnt = (l: LinhaGeral) => l.tnt.reduce((s, t) => s + t.total_a_pagar - comTaxa(t.comissao_infoprodutos), 0);
+  const valorFixo = (l: LinhaGeral) => comTaxa(l.fixos.reduce((s, p) => s + p.valor, 0));
+  const valorTnt = (l: LinhaGeral) =>
+    l.tnt.reduce((s, t) => s + t.total_a_pagar - comTaxa(t.comissao_infoprodutos), 0) + valorFixo(l);
   const valorOperacao = (l: LinhaGeral, opId: string) =>
     comTaxa((l.outras.get(opId) ?? []).reduce((s, p) => s + p.pessoa.valor, 0));
-  const valorFixo = (l: LinhaGeral) => comTaxa(l.fixos.reduce((s, p) => s + p.valor, 0));
   const total = (l: LinhaGeral) =>
-    valorTnt(l) + operacoes.reduce((s, o) => s + valorOperacao(l, o.id), 0) + valorInfo(l) + valorFixo(l);
+    valorTnt(l) + operacoes.reduce((s, o) => s + valorOperacao(l, o.id), 0) + valorInfo(l);
 
   const lista = [...mapa.values()]
     .filter((l) => l.tnt.some((t) => t.total_a_pagar !== 0) || l.outras.size > 0 || l.fixos.length > 0)
@@ -323,7 +324,7 @@ export function QuadroGeral({
                                 />
                               ))}
                             {l.fixos.map((p) => (
-                              <Bloco key={p.id} titulo="Salário fixo" subtitulo="Entra só no quadro geral">
+                              <Bloco key={p.id} titulo={`Salário fixo (${OPERACAO_PRINCIPAL})`} subtitulo="Só no quadro geral">
                                 <Item rotulo="Salário" valor={p.valor} />
                                 <Item rotulo={`Taxa (${percentual})`} valor={arredondar(comTaxa(p.valor) - p.valor)} />
                                 <Item rotulo="Total" valor={comTaxa(p.valor)} forte />
@@ -430,7 +431,7 @@ function SalariosFixos({ fixos, mes }: { fixos: ReturnType<typeof usePagamentosQ
     <SecaoRecolhivel
       titulo={`Salários fixos do quadro geral (${fixos.pagamentos.length})`}
       padraoAberta={false}
-      descricao="Salários pagos junto com os dos operadores que não fazem parte de nenhuma operação (ex.: o seu). Aparecem só nesta tela, no Total a pagar, com a taxa, em todo mês a partir do mês de início."
+      descricao={`Salários pagos junto com os dos operadores que não fazem parte de nenhuma operação (ex.: o seu). Aparecem só nesta tela, na coluna ${OPERACAO_PRINCIPAL}, com a taxa, em todo mês a partir do mês de início.`}
     >
       {fixos.erro && <p className="mb-3 text-sm text-red-600">{fixos.erro}</p>}
       {fixos.pagamentos.length > 0 && (

@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { supabase } from '../../lib/supabase/client';
 
 // Salários fixos que entram só no Quadro geral (ex.: o do administrador):
-// somam no Total a pagar, com a taxa, em todo mês a partir de `desde`.
+// somam na coluna TNT, com a taxa, em todo mês a partir de `desde`.
 
 export interface PagamentoQuadroGeral {
   id: string;
