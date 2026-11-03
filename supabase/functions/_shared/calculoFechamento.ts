@@ -66,18 +66,6 @@ export interface VendaInfoproduto {
   data: string; // YYYY-MM-DD
   operador: string;
   valor: number;
-  produto?: string;
-}
-
-// Uma venda de infoproduto e a parte da comissão que coube a uma pessoa.
-export interface ParteInfoproduto {
-  data: string;
-  produto: string | null;
-  operador: string;
-  valor: number;
-  comissao: number;
-  dividido_por: number;
-  parte: number;
 }
 
 export interface PagamentoFixo {
@@ -146,8 +134,6 @@ export interface PaineisFechamento {
     colaborador_id: string;
     dias: { dia: string; ftds: number; comissao_equipe: number; comissao_fds: number; comissao_infoprodutos: number }[];
   }[];
-  // De onde vem a comissão de infoprodutos de cada linha (pela chave).
-  infoprodutosPorLinha: { chave: string; vendas: ParteInfoproduto[] }[];
   // Resumo dos operadores externos pagos por FTD (aba "Resumo João"):
   // registros por dia e etapa (sem os rejeitados).
   resumoExternos: {
@@ -399,20 +385,6 @@ export function calcularFechamento(entrada: EntradaFechamento): ResultadoFechame
 
   // Comissão de infoprodutos (só vendas com data dentro do mês).
   const infoPorChave = new Map<string, number>();
-  const infoVendasPorChave = new Map<string, ParteInfoproduto[]>();
-  const guardarParte = (chave: string, venda: VendaInfoproduto, comissao: number, divididoPor: number) => {
-    const lista = infoVendasPorChave.get(chave) ?? [];
-    lista.push({
-      data: venda.data,
-      produto: venda.produto ?? null,
-      operador: venda.operador.trim(),
-      valor: venda.valor,
-      comissao: arredondar(comissao),
-      dividido_por: divididoPor,
-      parte: arredondar(comissao / divididoPor),
-    });
-    infoVendasPorChave.set(chave, lista);
-  };
   const infoprodutosSemOperador: { operador: string; valor: number }[] = [];
   for (const venda of entrada.infoprodutos ?? []) {
     if (venda.data < mes || venda.data > fimDoMes) continue;
@@ -436,12 +408,10 @@ export function calcularFechamento(entrada: EntradaFechamento): ResultadoFechame
       for (const m of quem) {
         infoPorChave.set(m.id, (infoPorChave.get(m.id) ?? 0) + comissao / quem.length);
         somarNoDia(m.id, venda.data, 'info', comissao / quem.length);
-        guardarParte(m.id, venda, comissao, quem.length);
       }
     } else if (externo && externo.valor_por_ftd !== null) {
       const chave = `externo:${nome}`;
       infoPorChave.set(chave, (infoPorChave.get(chave) ?? 0) + comissao);
-      guardarParte(chave, venda, comissao, 1);
     } else {
       infoprodutosSemOperador.push({ operador: venda.operador, valor: venda.valor });
     }
@@ -686,10 +656,6 @@ export function calcularFechamento(entrada: EntradaFechamento): ResultadoFechame
     rejeitadosNoMes,
     ativos,
     detalheDesligados,
-    infoprodutosPorLinha: [...infoVendasPorChave].map(([chave, vendas]) => ({
-      chave,
-      vendas: vendas.sort((a, b) => a.data.localeCompare(b.data)),
-    })),
     resumoExternos: externos
       .filter((e) => e.valor_por_ftd !== null)
       .map((e) => {

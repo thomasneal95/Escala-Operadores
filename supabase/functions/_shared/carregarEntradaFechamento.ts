@@ -81,7 +81,7 @@ export async function carregarEntradaFechamento(
       db.from("pagamentos_fixos").select("id, nome, tipo, valor, data_inicio, adiantamento").eq("ativo", true),
       db
         .from("vendas_infoprodutos")
-        .select("data, operador, valor, produto")
+        .select("data, operador, valor")
         .eq("status", "confirmada")
         .gte("data", mes)
         .lte("data", ultimoDiaDoMes(mes)),
@@ -163,7 +163,6 @@ export async function carregarEntradaFechamento(
       data: v.data,
       operador: v.operador,
       valor: Number(v.valor),
-      produto: v.produto,
     })),
     config: {
       inicio_regra_nova: config.inicio_regra_nova,

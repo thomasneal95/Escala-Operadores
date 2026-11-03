@@ -1,5 +1,5 @@
 import { Fragment, useState, type ReactNode } from 'react';
-import type { LinhaFechamento, ParteInfoproduto } from '../../features/schedules/useFechamentoMensal';
+import type { LinhaFechamento } from '../../features/schedules/useFechamentoMensal';
 import type { useOutrasOperacoes } from '../../features/operacoes/useOutrasOperacoes';
 import {
   normalizarNome,
@@ -15,11 +15,6 @@ function formatarMoeda(valor: number) {
 }
 
 const arredondar = (v: number) => Math.round(v * 100) / 100;
-
-function formatarData(data: string) {
-  const [, m, d] = data.split('-');
-  return `${d}/${m}`;
-}
 
 interface ParteOperacao {
   pessoa: PessoaOperacao;
@@ -41,13 +36,10 @@ interface LinhaGeral {
 // outras operações recebem a mesma taxa do "total a pagar" da TNT.
 export function QuadroGeral({
   linhas,
-  infoprodutos,
   ops,
   taxa,
 }: {
   linhas: LinhaFechamento[];
-  // Vendas de infoprodutos que geraram comissão para cada linha da TNT.
-  infoprodutos: Map<string, ParteInfoproduto[]>;
   ops: OutrasOperacoes;
   taxa: number;
 }) {
@@ -85,10 +77,14 @@ export function QuadroGeral({
   }
 
   const comTaxa = (v: number) => arredondar(v * (1 + taxa));
-  const valorTnt = (l: LinhaGeral) => l.tnt.reduce((s, t) => s + t.total_a_pagar, 0);
+  // A comissão de infoprodutos vem no fechamento da TNT, mas aparece numa
+  // coluna própria (com a mesma taxa); a coluna TNT fica com o resto.
+  const valorInfo = (l: LinhaGeral) => l.tnt.reduce((s, t) => s + comTaxa(t.comissao_infoprodutos), 0);
+  const valorTnt = (l: LinhaGeral) => l.tnt.reduce((s, t) => s + t.total_a_pagar - comTaxa(t.comissao_infoprodutos), 0);
   const valorOperacao = (l: LinhaGeral, opId: string) =>
     comTaxa((l.outras.get(opId) ?? []).reduce((s, p) => s + p.pessoa.valor, 0));
-  const total = (l: LinhaGeral) => valorTnt(l) + operacoes.reduce((s, o) => s + valorOperacao(l, o.id), 0);
+  const total = (l: LinhaGeral) =>
+    valorTnt(l) + operacoes.reduce((s, o) => s + valorOperacao(l, o.id), 0) + valorInfo(l);
 
   const lista = [...mapa.values()]
     .filter((l) => l.tnt.some((t) => t.total_a_pagar !== 0) || l.outras.size > 0)
@@ -101,22 +97,23 @@ export function QuadroGeral({
   });
   const semCadastro = lista.filter((l) => l.semCadastro);
   const direita = 'whitespace-nowrap px-3 py-2 text-right tabular-nums';
-  const colunas = 3 + operacoes.length;
+  const colunas = 4 + operacoes.length;
   const percentual = `${(taxa * 100).toLocaleString('pt-BR')}%`;
 
   return (
     <div>
       <p className="text-sm text-slate-500">
-        Quanto pagar a cada pessoa no mês, somando a {OPERACAO_PRINCIPAL} e as outras operações. Cada coluna já
+        Quanto pagar a cada pessoa no mês, somando a {OPERACAO_PRINCIPAL}, as outras operações e os infoprodutos. Cada coluna já
         tem a taxa de {percentual} do total a pagar. Clique numa pessoa para ver de onde vem cada valor.
       </p>
 
-      <div className="mt-5 grid grid-cols-2 gap-4 lg:grid-cols-4">
+      <div className="mt-5 grid grid-cols-2 gap-4 lg:grid-cols-5">
         <Cartao titulo="Total geral a pagar" valor={formatarMoeda(soma(total))} destaque />
         <Cartao titulo={OPERACAO_PRINCIPAL} valor={formatarMoeda(soma(valorTnt))} />
         {operacoes.map((o) => (
           <Cartao key={o.id} titulo={o.nome} valor={formatarMoeda(soma((l) => valorOperacao(l, o.id)))} />
         ))}
+        <Cartao titulo="Infoprodutos" valor={formatarMoeda(soma(valorInfo))} />
       </div>
 
       {(semValor.length > 0 || semCadastro.length > 0) && (
@@ -143,6 +140,7 @@ export function QuadroGeral({
                   {o.nome}
                 </th>
               ))}
+              <th className="whitespace-nowrap px-3 py-3 text-right font-medium">Infoprodutos</th>
               <th className="whitespace-nowrap px-3 py-3 text-right font-medium">Total a pagar</th>
               <th className="w-8" />
             </tr>
@@ -171,12 +169,13 @@ export function QuadroGeral({
                           </span>
                         )}
                       </td>
-                      <td className={direita}>{l.tnt.length ? formatarMoeda(valorTnt(l)) : '—'}</td>
+                      <td className={direita}>{valorTnt(l) !== 0 ? formatarMoeda(valorTnt(l)) : '—'}</td>
                       {operacoes.map((o) => (
                         <td key={o.id} className={direita}>
                           {l.outras.has(o.id) ? formatarMoeda(valorOperacao(l, o.id)) : '—'}
                         </td>
                       ))}
+                      <td className={direita}>{valorInfo(l) !== 0 ? formatarMoeda(valorInfo(l)) : '—'}</td>
                       <td className={`${direita} font-semibold text-esmeralda-dark`}>{formatarMoeda(total(l))}</td>
                       <td className="px-2 text-center text-slate-400" aria-hidden>
                         {estaAberta ? '▴' : '▾'}
@@ -187,12 +186,7 @@ export function QuadroGeral({
                         <td colSpan={colunas + 1} className="px-3 pb-4 pt-1">
                           <div className="grid grid-cols-[repeat(auto-fill,minmax(16rem,1fr))] gap-3">
                             {l.tnt.map((t) => (
-                              <DetalheTnt
-                                key={t.chave}
-                                linha={t}
-                                infoprodutos={infoprodutos.get(t.chave) ?? []}
-                                percentual={percentual}
-                              />
+                              <DetalheTnt key={t.chave} linha={t} infoComTaxa={comTaxa(t.comissao_infoprodutos)} percentual={percentual} />
                             ))}
                             {operacoes
                               .filter((o) => l.outras.has(o.id))
@@ -205,6 +199,16 @@ export function QuadroGeral({
                                   percentual={percentual}
                                 />
                               ))}
+                            {valorInfo(l) !== 0 && (
+                              <Bloco titulo="Infoprodutos">
+                                <Item rotulo="Comissão de infoprodutos" valor={l.tnt.reduce((s, t) => s + t.comissao_infoprodutos, 0)} />
+                                <Item
+                                  rotulo={`Taxa (${percentual})`}
+                                  valor={arredondar(valorInfo(l) - l.tnt.reduce((s, t) => s + t.comissao_infoprodutos, 0))}
+                                />
+                                <Item rotulo="Total infoprodutos" valor={valorInfo(l)} forte />
+                              </Bloco>
+                            )}
                           </div>
                           <p className="mt-3 text-right text-sm font-semibold text-tinta">
                             Total a pagar: {formatarMoeda(total(l))}
@@ -227,6 +231,7 @@ export function QuadroGeral({
                     {formatarMoeda(soma((l) => valorOperacao(l, o.id)))}
                   </td>
                 ))}
+                <td className={direita}>{formatarMoeda(soma(valorInfo))}</td>
                 <td className={`${direita} text-esmeralda-dark`}>{formatarMoeda(soma(total))}</td>
                 <td />
               </tr>
@@ -261,15 +266,18 @@ function Bloco({ titulo, subtitulo, children }: { titulo: string; subtitulo?: st
   );
 }
 
+// Bloco da TNT sem a comissão de infoprodutos (que tem bloco e coluna próprios).
 function DetalheTnt({
   linha: t,
-  infoprodutos,
+  infoComTaxa,
   percentual,
 }: {
   linha: LinhaFechamento;
-  infoprodutos: ParteInfoproduto[];
+  infoComTaxa: number;
   percentual: string;
 }) {
+  const salario = arredondar(t.salario_total - t.comissao_infoprodutos);
+  const totalTnt = arredondar(t.total_a_pagar - infoComTaxa);
   const porFtd = t.tipo === 'externo' || t.tipo === 'individual';
   const rotuloBase =
     t.tipo === 'salario_fixo' ? 'Salário fixo' : t.tipo === 'auxilio_fixo' ? 'Auxílio fixo' : 'Auxílio';
@@ -284,37 +292,12 @@ function DetalheTnt({
       {t.comissao_fds !== 0 && (
         <Item rotulo={porFtd ? 'FTDs no fim de semana' : 'Comissão de fim de semana'} valor={t.comissao_fds} />
       )}
-      {t.comissao_infoprodutos !== 0 && <Item rotulo="Comissão de infoprodutos" valor={t.comissao_infoprodutos} />}
-      {infoprodutos.length > 0 && <VendasInfoprodutos vendas={infoprodutos} />}
       {t.adiantamento !== 0 && <Item rotulo="Adiantamento" valor={t.adiantamento} negativo />}
       {t.ja_pago !== 0 && <Item rotulo="Já pago (acerto)" valor={t.ja_pago} negativo />}
-      <Item rotulo="Salário" valor={t.salario_total} forte />
-      <Item rotulo={`Taxa (${percentual})`} valor={arredondar(t.total_a_pagar - t.salario_total)} />
-      <Item rotulo={`Total ${OPERACAO_PRINCIPAL}`} valor={t.total_a_pagar} forte />
+      <Item rotulo="Salário" valor={salario} forte />
+      <Item rotulo={`Taxa (${percentual})`} valor={arredondar(totalTnt - salario)} />
+      <Item rotulo={`Total ${OPERACAO_PRINCIPAL}`} valor={totalTnt} forte />
     </Bloco>
-  );
-}
-
-// Cada venda de infoproduto que entrou na comissão: quem vendeu, o valor, a
-// comissão da venda e, quando dividida com a equipe, a parte da pessoa.
-function VendasInfoprodutos({ vendas }: { vendas: ParteInfoproduto[] }) {
-  return (
-    <div className="-mt-0.5 space-y-1 border-l-2 border-slate-100 pl-2 text-xs text-slate-500">
-      {vendas.map((v, i) => (
-        <div key={i}>
-          <div className="flex justify-between gap-3">
-            <span className="min-w-0 truncate">
-              {formatarData(v.data)} · {v.produto || 'Infoproduto'} · {v.operador}
-            </span>
-            <span className="whitespace-nowrap tabular-nums text-slate-600">{formatarMoeda(v.parte)}</span>
-          </div>
-          <p className="text-[11px] text-slate-400">
-            Venda {formatarMoeda(v.valor)} → comissão {formatarMoeda(v.comissao)}
-            {v.dividido_por > 1 ? ` ÷ ${v.dividido_por}` : ''}
-          </p>
-        </div>
-      ))}
-    </div>
   );
 }
 
