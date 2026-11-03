@@ -1,7 +1,13 @@
-import { Fragment, useRef, useState, type ReactNode } from 'react';
-import { useToast } from '../../components/FeedbackProvider';
+import { Fragment, useRef, useState, type FormEvent, type ReactNode } from 'react';
+import { useConfirm, useToast } from '../../components/FeedbackProvider';
+import { SecaoRecolhivel } from '../../components/SecaoRecolhivel';
+import { SeletorMes } from '../../components/SeletorMes';
 import type { LinhaFechamento } from '../../features/schedules/useFechamentoMensal';
 import type { useOutrasOperacoes } from '../../features/operacoes/useOutrasOperacoes';
+import {
+  usePagamentosQuadroGeral,
+  type PagamentoQuadroGeral,
+} from '../../features/operacoes/usePagamentosQuadroGeral';
 import {
   normalizarNome,
   OPERACAO_PRINCIPAL,
@@ -30,15 +36,19 @@ interface LinhaGeral {
   tnt: LinhaFechamento[];
   // Por operação: o que a pessoa recebe (sem taxa) e de onde vem.
   outras: Map<string, ParteOperacao[]>;
+  // Salários fixos que só entram no quadro geral (sem taxa).
+  fixos: PagamentoQuadroGeral[];
 }
 
-// Aba "Quadro geral": junta, por pessoa, o total a pagar da TNT e o das
-// outras operações num valor só, com o detalhe de onde vem cada parte. As
-// outras operações recebem a mesma taxa do "total a pagar" da TNT.
 const NOMES_MESES = [
   'Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
   'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro',
 ];
+
+// Aba "Quadro geral": junta, por pessoa, o total a pagar da TNT e o das
+// outras operações num valor só, com o detalhe de onde vem cada parte. As
+// outras operações recebem a mesma taxa do "total a pagar" da TNT. Os
+// salários fixos do quadro geral entram só no Total a pagar.
 
 export function QuadroGeral({
   mes,
@@ -55,6 +65,7 @@ export function QuadroGeral({
   const [aberta, setAberta] = useState<string | null>(null);
   const [capturando, setCapturando] = useState(false);
   const imagem = useRef<HTMLDivElement>(null);
+  const fixos = usePagamentosQuadroGeral();
   const operacoes = ops.operacoes.filter((o) => o.ativo);
   const mapa = new Map<string, LinhaGeral>();
   const nomeColaborador = new Map(ops.colaboradores.map((c) => [c.id, c.nome]));
@@ -62,7 +73,7 @@ export function QuadroGeral({
   function linha(chave: string, nome: string, semCadastro: boolean) {
     let l = mapa.get(chave);
     if (!l) {
-      l = { chave, nome, semCadastro, tnt: [], outras: new Map() };
+      l = { chave, nome, semCadastro, tnt: [], outras: new Map(), fixos: [] };
       mapa.set(chave, l);
     }
     return l;
@@ -87,6 +98,8 @@ export function QuadroGeral({
     }
   }
 
+  for (const p of fixos.doMes(mes)) linha(`q:${p.id}`, p.nome, false).fixos.push(p);
+
   const comTaxa = (v: number) => arredondar(v * (1 + taxa));
   // A comissão de infoprodutos vem no fechamento da TNT, mas aparece numa
   // coluna própria (com a mesma taxa); a coluna TNT fica com o resto.
@@ -94,11 +107,12 @@ export function QuadroGeral({
   const valorTnt = (l: LinhaGeral) => l.tnt.reduce((s, t) => s + t.total_a_pagar - comTaxa(t.comissao_infoprodutos), 0);
   const valorOperacao = (l: LinhaGeral, opId: string) =>
     comTaxa((l.outras.get(opId) ?? []).reduce((s, p) => s + p.pessoa.valor, 0));
+  const valorFixo = (l: LinhaGeral) => comTaxa(l.fixos.reduce((s, p) => s + p.valor, 0));
   const total = (l: LinhaGeral) =>
-    valorTnt(l) + operacoes.reduce((s, o) => s + valorOperacao(l, o.id), 0) + valorInfo(l);
+    valorTnt(l) + operacoes.reduce((s, o) => s + valorOperacao(l, o.id), 0) + valorInfo(l) + valorFixo(l);
 
   const lista = [...mapa.values()]
-    .filter((l) => l.tnt.some((t) => t.total_a_pagar !== 0) || l.outras.size > 0)
+    .filter((l) => l.tnt.some((t) => t.total_a_pagar !== 0) || l.outras.size > 0 || l.fixos.length > 0)
     .sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
   const soma = (f: (l: LinhaGeral) => number) => lista.reduce((s, l) => s + f(l), 0);
 
@@ -308,6 +322,13 @@ export function QuadroGeral({
                                   percentual={percentual}
                                 />
                               ))}
+                            {l.fixos.map((p) => (
+                              <Bloco key={p.id} titulo="Salário fixo" subtitulo="Entra só no quadro geral">
+                                <Item rotulo="Salário" valor={p.valor} />
+                                <Item rotulo={`Taxa (${percentual})`} valor={arredondar(comTaxa(p.valor) - p.valor)} />
+                                <Item rotulo="Total" valor={comTaxa(p.valor)} forte />
+                              </Bloco>
+                            ))}
                             {valorInfo(l) !== 0 && (
                               <Bloco titulo="Infoprodutos">
                                 <Item rotulo="Comissão de infoprodutos" valor={l.tnt.reduce((s, t) => s + t.comissao_infoprodutos, 0)} />
@@ -348,7 +369,139 @@ export function QuadroGeral({
           )}
         </table>
       </div>
+
+      <div className="mt-6">
+        <SalariosFixos fixos={fixos} mes={mes} />
+      </div>
     </div>
+  );
+}
+
+// Cadastro dos salários fixos que entram só no quadro geral.
+function SalariosFixos({ fixos, mes }: { fixos: ReturnType<typeof usePagamentosQuadroGeral>; mes: string }) {
+  const toast = useToast();
+  const confirmar = useConfirm();
+  const [editando, setEditando] = useState<string | null>(null);
+  const [nome, setNome] = useState('');
+  const [valor, setValor] = useState('');
+  const [desde, setDesde] = useState(mes.slice(0, 7));
+  const [salvando, setSalvando] = useState(false);
+
+  function limpar() {
+    setEditando(null);
+    setNome('');
+    setValor('');
+    setDesde(mes.slice(0, 7));
+  }
+
+  async function salvar(e: FormEvent) {
+    e.preventDefault();
+    const numero = Number(valor.replace(',', '.'));
+    if (!nome.trim() || !Number.isFinite(numero) || numero < 0 || !desde) {
+      toast('Preencha o nome, o valor e o mês de início.', 'erro');
+      return;
+    }
+    setSalvando(true);
+    const dados = { nome, valor: numero, desde: `${desde}-01` };
+    const { erro } = editando ? await fixos.atualizar(editando, dados) : await fixos.adicionar(dados.nome, dados.valor, dados.desde);
+    setSalvando(false);
+    if (erro) {
+      toast(erro, 'erro');
+      return;
+    }
+    toast(editando ? 'Salário atualizado.' : 'Salário adicionado ao quadro geral.');
+    limpar();
+  }
+
+  async function remover(p: PagamentoQuadroGeral) {
+    if (!(await confirmar(`Tirar o salário de ${p.nome} do quadro geral? Ele some de todos os meses.`))) return;
+    const { erro } = await fixos.remover(p.id);
+    if (erro) toast(erro, 'erro');
+    else {
+      toast('Salário removido do quadro geral.');
+      if (editando === p.id) limpar();
+    }
+  }
+
+  const campo =
+    'mt-1 block w-full rounded-md border border-slate-300 px-3 py-2 text-sm text-tinta focus:border-esmeralda focus:outline-none focus:ring-1 focus:ring-esmeralda';
+
+  return (
+    <SecaoRecolhivel
+      titulo={`Salários fixos do quadro geral (${fixos.pagamentos.length})`}
+      padraoAberta={false}
+      descricao="Salários pagos junto com os dos operadores que não fazem parte de nenhuma operação (ex.: o seu). Aparecem só nesta tela, no Total a pagar, com a taxa, em todo mês a partir do mês de início."
+    >
+      {fixos.erro && <p className="mb-3 text-sm text-red-600">{fixos.erro}</p>}
+      {fixos.pagamentos.length > 0 && (
+        <ul className="mb-4 divide-y divide-slate-100 text-sm">
+          {fixos.pagamentos.map((p) => (
+            <li key={p.id} className="flex flex-wrap items-center justify-between gap-2 py-2">
+              <span>
+                <span className="font-medium text-tinta">{p.nome}</span>
+                <span className="text-slate-500">
+                  {' '}
+                  · {formatarMoeda(p.valor)} por mês · desde {p.desde.slice(5, 7)}/{p.desde.slice(0, 4)}
+                </span>
+              </span>
+              <span className="flex gap-3">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setEditando(p.id);
+                    setNome(p.nome);
+                    setValor(String(p.valor));
+                    setDesde(p.desde.slice(0, 7));
+                  }}
+                  className="font-medium text-ceruleo hover:underline"
+                >
+                  Editar
+                </button>
+                <button type="button" onClick={() => remover(p)} className="font-medium text-red-600 hover:underline">
+                  Remover
+                </button>
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
+      <form onSubmit={salvar} className="grid gap-3 md:grid-cols-[1fr_10rem_auto_auto] md:items-end">
+        <label className="text-sm text-slate-700">
+          Nome
+          <input value={nome} onChange={(e) => setNome(e.target.value)} className={campo} placeholder="Ex.: Thomas" />
+        </label>
+        <label className="text-sm text-slate-700">
+          Valor por mês (US$)
+          <input
+            value={valor}
+            onChange={(e) => setValor(e.target.value)}
+            inputMode="decimal"
+            className={campo}
+            placeholder="0,00"
+          />
+        </label>
+        <div className="text-sm text-slate-700">
+          A partir de
+          <div className="mt-1">
+            <SeletorMes valor={desde} onMudar={setDesde} />
+          </div>
+        </div>
+        <div className="flex gap-2">
+          <button
+            type="submit"
+            disabled={salvando}
+            className="rounded-md bg-esmeralda px-4 py-2 text-sm font-medium text-white transition hover:bg-esmeralda-dark disabled:opacity-60"
+          >
+            {editando ? 'Salvar' : 'Adicionar'}
+          </button>
+          {editando && (
+            <button type="button" onClick={limpar} className="rounded-md px-3 py-2 text-sm text-slate-500 hover:text-tinta">
+              Cancelar
+            </button>
+          )}
+        </div>
+      </form>
+    </SecaoRecolhivel>
   );
 }
 
