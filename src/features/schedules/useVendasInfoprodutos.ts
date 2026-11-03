@@ -19,6 +19,12 @@ export interface VendaInfoproduto {
   colaborador_id: string | null;
 }
 
+// Venda que foi excluída e está na lixeira (pode ser restaurada).
+export interface VendaExcluida extends VendaInfoproduto {
+  excluido_em: string;
+  excluido_por: string | null;
+}
+
 export type NovaVendaInfoproduto = Omit<VendaInfoproduto, 'id' | 'status' | 'colaborador_id'>;
 
 function ultimoDiaDoMes(mes: string) {
@@ -30,13 +36,14 @@ export function useVendasInfoprodutos(mes: string) {
   const { session } = useAuth();
   const [vendas, setVendas] = useState<VendaInfoproduto[]>([]);
   // Meses (YYYY-MM) de outras vendas pendentes, para o admin não esquecer.
+  const [excluidas, setExcluidas] = useState<VendaExcluida[]>([]);
   const [pendentesEmOutrosMeses, setPendentesEmOutrosMeses] = useState<string[]>([]);
   const [carregando, setCarregando] = useState(true);
   const [erro, setErro] = useState<string | null>(null);
   const [processando, setProcessando] = useState(false);
 
   const carregar = useCallback(async () => {
-    const [vendasRes, pendentesRes] = await Promise.all([
+    const [vendasRes, pendentesRes, excluidasRes] = await Promise.all([
       supabase
         .from('vendas_infoprodutos')
         .select('id, data, produto, email_lead, operador, valor, status, colaborador_id')
@@ -45,6 +52,12 @@ export function useVendasInfoprodutos(mes: string) {
         .order('data')
         .order('criado_em'),
       supabase.from('vendas_infoprodutos').select('data').eq('status', 'pendente'),
+      supabase
+        .from('vendas_infoprodutos_excluidas')
+        .select('id, dados, excluido_em, perfis(nome_completo)')
+        .gte('data', mes)
+        .lte('data', ultimoDiaDoMes(mes))
+        .order('excluido_em', { ascending: false }),
     ]);
 
     if (vendasRes.error) {
@@ -54,6 +67,18 @@ export function useVendasInfoprodutos(mes: string) {
     }
 
     setVendas((vendasRes.data ?? []).map((v) => ({ ...v, valor: Number(v.valor) })));
+    setExcluidas(
+      (excluidasRes.data ?? []).map((e) => {
+        const d = e.dados as VendaInfoproduto;
+        return {
+          ...d,
+          id: e.id,
+          valor: Number(d.valor),
+          excluido_em: e.excluido_em,
+          excluido_por: (e.perfis as unknown as { nome_completo: string } | null)?.nome_completo ?? null,
+        };
+      })
+    );
     setPendentesEmOutrosMeses(
       [...new Set((pendentesRes.data ?? []).map((p) => (p.data as string).slice(0, 7)))]
         .filter((m) => m !== mes.slice(0, 7))
@@ -86,6 +111,7 @@ export function useVendasInfoprodutos(mes: string) {
 
   return {
     vendas,
+    excluidas,
     pendentesEmOutrosMeses,
     carregando,
     erro,
@@ -113,6 +139,12 @@ export function useVendasInfoprodutos(mes: string) {
           .in('id', ids),
         'Não foi possível salvar a conferência.'
       ),
+    restaurar: (id: string) =>
+      executar(
+        supabase.rpc('restaurar_venda_infoproduto', { p_id: id }),
+        'Não foi possível restaurar a venda.'
+      ),
+    // A venda excluída vai para a lixeira (vendas_infoprodutos_excluidas).
     remover: (id: string) =>
       executar(supabase.from('vendas_infoprodutos').delete().eq('id', id), 'Não foi possível excluir a venda.'),
     // Importação única da aba "Vendas Infoprodutos" do Excel.

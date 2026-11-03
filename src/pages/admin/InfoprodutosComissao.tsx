@@ -2,9 +2,11 @@ import { useRef, useState, type ChangeEvent, type FormEvent } from 'react';
 import {
   useVendasInfoprodutos,
   type NovaVendaInfoproduto,
+  type VendaExcluida,
   type VendaInfoproduto,
 } from '../../features/schedules/useVendasInfoprodutos';
 import { useConfirm, useToast } from '../../components/FeedbackProvider';
+import { SecaoRecolhivel } from '../../components/SecaoRecolhivel';
 import { PRODUTOS_INFOPRODUTOS } from '../../lib/produtosInfoprodutos';
 
 const classeCampo =
@@ -63,11 +65,18 @@ export function InfoprodutosComissao({
   }
 
   async function handleExcluir(v: VendaInfoproduto) {
-    const confirmou = await confirmar(`Excluir a venda de ${v.operador} (${v.produto}, ${moeda(v.valor)}) de ${dataBr(v.data)}?`);
+    const confirmou = await confirmar(
+      `Excluir a venda de ${v.operador} (${v.produto}, ${moeda(v.valor)}) de ${dataBr(v.data)}? ` +
+        'Ela vai para "Vendas excluídas", no fim da página, de onde pode ser restaurada.'
+    );
     if (!confirmou) return;
     const ok = await depois(await info.remover(v.id), 'Venda excluída.');
     // Excluiu a venda que estava aberta no formulário: sai da edição.
     if (ok && editando?.id === v.id) setEditando(null);
+  }
+
+  async function handleRestaurar(v: VendaExcluida) {
+    await depois(await info.restaurar(v.id), `Venda de ${v.operador} (${v.produto}) restaurada.`);
   }
 
   async function handleConferir(ids: string[], status: 'confirmada' | 'recusada') {
@@ -278,6 +287,39 @@ export function InfoprodutosComissao({
           </tbody>
         </table>
       </div>
+
+      {info.excluidas.length > 0 && (
+        <SecaoRecolhivel
+          titulo={`Vendas excluídas (${info.excluidas.length})`}
+          padraoAberta={false}
+          descricao="Vendas deste mês que foram excluídas. Nada se perde: restaure se a exclusão foi por engano."
+        >
+          <ul className="divide-y divide-slate-100 text-sm">
+            {info.excluidas.map((v) => (
+              <li key={v.id} className="flex flex-wrap items-center justify-between gap-2 py-2">
+                <span>
+                  <span className="text-tinta">
+                    {dataBr(v.data)} · <span className="font-medium">{v.operador}</span> · {v.produto} · {moeda(v.valor)}
+                    {v.email_lead && <span className="text-slate-500"> · {v.email_lead}</span>}
+                  </span>
+                  <span className="block text-xs text-slate-400">
+                    {v.status === 'confirmada' ? 'Confirmada' : v.status === 'pendente' ? 'Pendente' : 'Recusada'} ·
+                    excluída em {new Date(v.excluido_em).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })}
+                    {v.excluido_por && ` por ${v.excluido_por}`}
+                  </span>
+                </span>
+                <button
+                  onClick={() => handleRestaurar(v)}
+                  disabled={info.processando}
+                  className="text-sm font-medium text-esmeralda-dark hover:underline disabled:opacity-50"
+                >
+                  Restaurar
+                </button>
+              </li>
+            ))}
+          </ul>
+        </SecaoRecolhivel>
+      )}
 
       <div className="flex flex-wrap items-center gap-3 text-xs text-slate-500">
         <input ref={entradaArquivo} type="file" accept=".xlsx,.xlsm,.xls" onChange={handleImportar} className="hidden" />
