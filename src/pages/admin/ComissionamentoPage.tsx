@@ -242,7 +242,7 @@ export function ComissionamentoPage({ infoprodutosPendentes = 0 }: { infoproduto
             <p className="mb-4 rounded-md bg-red-50 px-4 py-3 text-sm text-red-700">{erro ?? outras.erro}</p>
           )}
           {carregando && !dados && <p className="text-sm text-slate-400">Calculando...</p>}
-          {dados && <QuadroGeral linhas={linhas} ops={outras} taxa={cadastros.config?.taxa_total_a_pagar ?? 0.02} />}
+          {dados && <QuadroGeral mes={mes} linhas={linhas} ops={outras} taxa={cadastros.config?.taxa_total_a_pagar ?? 0.02} />}
         </div>
       ) : (
       <>

@@ -1,4 +1,5 @@
-import { Fragment, useState, type ReactNode } from 'react';
+import { Fragment, useRef, useState, type ReactNode } from 'react';
+import { useToast } from '../../components/FeedbackProvider';
 import type { LinhaFechamento } from '../../features/schedules/useFechamentoMensal';
 import type { useOutrasOperacoes } from '../../features/operacoes/useOutrasOperacoes';
 import {
@@ -34,16 +35,26 @@ interface LinhaGeral {
 // Aba "Quadro geral": junta, por pessoa, o total a pagar da TNT e o das
 // outras operações num valor só, com o detalhe de onde vem cada parte. As
 // outras operações recebem a mesma taxa do "total a pagar" da TNT.
+const NOMES_MESES = [
+  'Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
+  'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro',
+];
+
 export function QuadroGeral({
+  mes,
   linhas,
   ops,
   taxa,
 }: {
+  mes: string; // YYYY-MM-01
   linhas: LinhaFechamento[];
   ops: OutrasOperacoes;
   taxa: number;
 }) {
+  const toast = useToast();
   const [aberta, setAberta] = useState<string | null>(null);
+  const [capturando, setCapturando] = useState(false);
+  const imagem = useRef<HTMLDivElement>(null);
   const operacoes = ops.operacoes.filter((o) => o.ativo);
   const mapa = new Map<string, LinhaGeral>();
   const nomeColaborador = new Map(ops.colaboradores.map((c) => [c.id, c.nome]));
@@ -97,15 +108,113 @@ export function QuadroGeral({
   });
   const semCadastro = lista.filter((l) => l.semCadastro);
   const direita = 'whitespace-nowrap px-3 py-2 text-right tabular-nums';
+  const compacta = 'whitespace-nowrap px-3 py-1 text-right tabular-nums';
   const colunas = 4 + operacoes.length;
   const percentual = `${(taxa * 100).toLocaleString('pt-BR')}%`;
+  const [ano, numMes] = mes.split('-').map(Number);
+  const nomeMes = `${NOMES_MESES[numMes - 1]} de ${ano}`;
+
+  // Gera um PNG com a tabela inteira (versão compacta, montada fora da tela
+  // só durante a captura), para mandar como print.
+  async function baixarImagem() {
+    setCapturando(true);
+    try {
+      // Espera o React montar a versão compacta.
+      await new Promise((r) => setTimeout(r, 50));
+      const no = imagem.current;
+      if (!no) throw new Error();
+      const { toPng } = await import('html-to-image');
+      const opcoes = { pixelRatio: 2, backgroundColor: '#ffffff' };
+      // Se as fontes não puderem ser embutidas, gera com as do sistema.
+      const url = await toPng(no, opcoes).catch(() => toPng(no, { ...opcoes, skipFonts: true }));
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `quadro-geral-${mes.slice(0, 7)}.png`;
+      link.click();
+    } catch {
+      toast('Não foi possível gerar a imagem.', 'erro');
+    } finally {
+      setCapturando(false);
+    }
+  }
 
   return (
     <div>
-      <p className="text-sm text-slate-500">
-        Quanto pagar a cada pessoa no mês, somando a {OPERACAO_PRINCIPAL}, as outras operações e os infoprodutos. Cada coluna já
-        tem a taxa de {percentual} do total a pagar. Clique numa pessoa para ver de onde vem cada valor.
-      </p>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <p className="max-w-3xl text-sm text-slate-500">
+          Quanto pagar a cada pessoa no mês, somando a {OPERACAO_PRINCIPAL}, as outras operações e os infoprodutos. Cada
+          coluna já tem a taxa de {percentual} do total a pagar. Clique numa pessoa para ver de onde vem cada valor.
+        </p>
+        <button
+          type="button"
+          onClick={baixarImagem}
+          disabled={capturando || lista.length === 0}
+          className="shrink-0 rounded-md border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-tinta transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
+        >
+          {capturando ? 'Gerando imagem...' : 'Baixar imagem'}
+        </button>
+      </div>
+
+      {capturando && (
+        <div className="pointer-events-none fixed left-[-10000px] top-0" aria-hidden>
+          <div ref={imagem} className="w-max min-w-[40rem] bg-white p-6 text-tinta">
+            <p className="font-mono text-xs font-medium uppercase tracking-widest text-ceruleo">Quadro geral</p>
+            <p className="mt-1 font-display text-2xl font-semibold">{nomeMes}</p>
+            <p className="mt-1 text-xs text-slate-400">Valores já com a taxa de {percentual}.</p>
+            <div className="mt-4 flex gap-3">
+              <Cartao titulo="Total geral a pagar" valor={formatarMoeda(soma(total))} destaque />
+              <Cartao titulo={OPERACAO_PRINCIPAL} valor={formatarMoeda(soma(valorTnt))} />
+              {operacoes.map((o) => (
+                <Cartao key={o.id} titulo={o.nome} valor={formatarMoeda(soma((l) => valorOperacao(l, o.id)))} />
+              ))}
+              <Cartao titulo="Infoprodutos" valor={formatarMoeda(soma(valorInfo))} />
+            </div>
+            <table className="mt-4 w-full border border-slate-200 text-left text-[13px]">
+              <thead className="border-b border-slate-200 bg-slate-50 text-slate-500">
+                <tr>
+                  <th className="px-3 py-1.5 font-medium">Nome</th>
+                  <th className="px-3 py-1.5 text-right font-medium">{OPERACAO_PRINCIPAL}</th>
+                  {operacoes.map((o) => (
+                    <th key={o.id} className="whitespace-nowrap px-3 py-1.5 text-right font-medium">
+                      {o.nome}
+                    </th>
+                  ))}
+                  <th className="px-3 py-1.5 text-right font-medium">Infoprodutos</th>
+                  <th className="whitespace-nowrap px-3 py-1.5 text-right font-medium">Total a pagar</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {lista.map((l, i) => (
+                  <tr key={l.chave} className={i % 2 ? 'bg-slate-50/60' : ''}>
+                    <td className="whitespace-nowrap px-3 py-1 font-medium">{l.nome}</td>
+                    <td className={compacta}>{valorTnt(l) !== 0 ? formatarMoeda(valorTnt(l)) : '—'}</td>
+                    {operacoes.map((o) => (
+                      <td key={o.id} className={compacta}>
+                        {l.outras.has(o.id) ? formatarMoeda(valorOperacao(l, o.id)) : '—'}
+                      </td>
+                    ))}
+                    <td className={compacta}>{valorInfo(l) !== 0 ? formatarMoeda(valorInfo(l)) : '—'}</td>
+                    <td className={`${compacta} font-semibold text-esmeralda-dark`}>{formatarMoeda(total(l))}</td>
+                  </tr>
+                ))}
+              </tbody>
+              <tfoot className="border-t border-slate-200 bg-slate-50 font-semibold">
+                <tr>
+                  <td className="px-3 py-1.5">Total</td>
+                  <td className={compacta}>{formatarMoeda(soma(valorTnt))}</td>
+                  {operacoes.map((o) => (
+                    <td key={o.id} className={compacta}>
+                      {formatarMoeda(soma((l) => valorOperacao(l, o.id)))}
+                    </td>
+                  ))}
+                  <td className={compacta}>{formatarMoeda(soma(valorInfo))}</td>
+                  <td className={`${compacta} text-esmeralda-dark`}>{formatarMoeda(soma(total))}</td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        </div>
+      )}
 
       <div className="mt-5 grid grid-cols-2 gap-4 lg:grid-cols-5">
         <Cartao titulo="Total geral a pagar" valor={formatarMoeda(soma(total))} destaque />
