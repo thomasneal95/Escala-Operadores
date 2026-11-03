@@ -81,6 +81,7 @@ export function InfoprodutosComissao({
   // Só as confirmadas contam no fechamento (e nos totais abaixo).
   const pendentes = info.vendas.filter((v) => v.status === 'pendente');
   const confirmadas = info.vendas.filter((v) => v.status === 'confirmada');
+  const recusadas = info.vendas.filter((v) => v.status === 'recusada');
   const total = confirmadas.reduce((s, v) => s + v.valor, 0);
   const agrupar = (chave: (v: VendaInfoproduto) => string) => {
     const mapa = new Map<string, { nome: string; qtd: number; valor: number }>();
@@ -173,6 +174,14 @@ export function InfoprodutosComissao({
         </div>
       )}
 
+      {recusadas.length > 0 && (
+        <p className="rounded-md bg-red-50 px-4 py-3 text-sm text-red-700">
+          {recusadas.length} venda(s) recusada(s) neste mês, fora da comissão:{' '}
+          {recusadas.map((v) => `${dataBr(v.data)} · ${v.operador} · ${v.produto} · ${moeda(v.valor)}`).join('; ')}. Se
+          foi engano, use "Confirmar" na tabela abaixo.
+        </p>
+      )}
+
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
         <Cartao titulo="Vendas confirmadas" valor={String(confirmadas.length)} />
         <Cartao titulo="Total vendido" valor={moeda(total)} />
@@ -240,6 +249,16 @@ export function InfoprodutosComissao({
                     {v.status === 'confirmada' ? moeda(v.valor * percentual) : '—'}
                   </td>
                   <td className="whitespace-nowrap px-3 py-2 text-right">
+                    {/* Recusada por engano (ou corrigida depois): volta a valer. */}
+                    {v.status === 'recusada' && (
+                      <button
+                        onClick={() => handleConferir([v.id], 'confirmada')}
+                        disabled={info.processando}
+                        className="mr-3 text-sm font-medium text-esmeralda-dark hover:underline"
+                      >
+                        Confirmar
+                      </button>
+                    )}
                     <button onClick={() => setEditando(v)} className="mr-3 text-sm font-medium text-ceruleo hover:underline">
                       Editar
                     </button>
