@@ -64,7 +64,10 @@ export function InfoprodutosComissao({
 
   async function handleExcluir(v: VendaInfoproduto) {
     const confirmou = await confirmar(`Excluir a venda de ${v.operador} (${v.produto}, ${moeda(v.valor)}) de ${dataBr(v.data)}?`);
-    if (confirmou) await depois(await info.remover(v.id), 'Venda excluída.');
+    if (!confirmou) return;
+    const ok = await depois(await info.remover(v.id), 'Venda excluída.');
+    // Excluiu a venda que estava aberta no formulário: sai da edição.
+    if (ok && editando?.id === v.id) setEditando(null);
   }
 
   async function handleConferir(ids: string[], status: 'confirmada' | 'recusada') {
@@ -107,9 +110,12 @@ export function InfoprodutosComissao({
           processando={info.processando}
           onCancelar={editando ? () => setEditando(null) : undefined}
           onSalvar={async (v) => {
+            // Data em outro mês: a venda sai desta lista — o aviso diz para onde foi.
+            const outroMes = v.data.slice(0, 7) !== mes.slice(0, 7);
+            const ondeFoi = outroMes ? ` Ela está agora em ${v.data.slice(5, 7)}/${v.data.slice(0, 4)}.` : '';
             const ok = await depois(
               editando ? await info.atualizar(editando.id, v) : await info.adicionar(v),
-              editando ? 'Venda atualizada.' : 'Venda lançada.'
+              (editando ? 'Venda atualizada.' : 'Venda lançada.') + ondeFoi
             );
             if (ok) setEditando(null);
             return ok;

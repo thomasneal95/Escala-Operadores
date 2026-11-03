@@ -92,11 +92,19 @@ export function useVendasInfoprodutos(mes: string) {
     processando,
     adicionar: (v: NovaVendaInfoproduto) =>
       executar(supabase.from('vendas_infoprodutos').insert(limpar(v)), 'Não foi possível salvar a venda.'),
-    atualizar: (id: string, v: NovaVendaInfoproduto) =>
-      executar(
-        supabase.from('vendas_infoprodutos').update(limpar(v)).eq('id', id),
-        'Não foi possível salvar a venda.'
-      ),
+    // Confere quantas linhas mudaram: se a venda foi excluída enquanto estava
+    // aberta para edição, o update não acha nada e isso precisa aparecer.
+    atualizar: async (id: string, v: NovaVendaInfoproduto) => {
+      setProcessando(true);
+      const { data, error } = await supabase.from('vendas_infoprodutos').update(limpar(v)).eq('id', id).select('id');
+      await carregar();
+      setProcessando(false);
+      if (error) return { erro: 'Não foi possível salvar a venda.' };
+      if (!data || data.length === 0) {
+        return { erro: 'Esta venda não existe mais (foi excluída). Cancele a edição e lance de novo como venda nova.' };
+      }
+      return { erro: null };
+    },
     conferir: (ids: string[], status: 'confirmada' | 'recusada') =>
       executar(
         supabase
