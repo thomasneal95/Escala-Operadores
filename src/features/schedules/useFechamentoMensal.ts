@@ -2,10 +2,11 @@ import { useCallback, useState } from 'react';
 import { supabase } from '../../lib/supabase/client';
 import type {
   LinhaFechamento,
+  ParteInfoproduto,
   ResultadoFechamento,
 } from '../../../supabase/functions/_shared/calculoFechamento';
 
-export type { LinhaFechamento };
+export type { LinhaFechamento, ParteInfoproduto };
 
 export interface DadosFechamento extends ResultadoFechamento {
   calculadoEm: string;

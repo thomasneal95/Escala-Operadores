@@ -1,5 +1,5 @@
 import { Fragment, useState, type ReactNode } from 'react';
-import type { LinhaFechamento } from '../../features/schedules/useFechamentoMensal';
+import type { LinhaFechamento, ParteInfoproduto } from '../../features/schedules/useFechamentoMensal';
 import type { useOutrasOperacoes } from '../../features/operacoes/useOutrasOperacoes';
 import {
   normalizarNome,
@@ -15,6 +15,11 @@ function formatarMoeda(valor: number) {
 }
 
 const arredondar = (v: number) => Math.round(v * 100) / 100;
+
+function formatarData(data: string) {
+  const [, m, d] = data.split('-');
+  return `${d}/${m}`;
+}
 
 interface ParteOperacao {
   pessoa: PessoaOperacao;
@@ -36,10 +41,13 @@ interface LinhaGeral {
 // outras operações recebem a mesma taxa do "total a pagar" da TNT.
 export function QuadroGeral({
   linhas,
+  infoprodutos,
   ops,
   taxa,
 }: {
   linhas: LinhaFechamento[];
+  // Vendas de infoprodutos que geraram comissão para cada linha da TNT.
+  infoprodutos: Map<string, ParteInfoproduto[]>;
   ops: OutrasOperacoes;
   taxa: number;
 }) {
@@ -179,7 +187,12 @@ export function QuadroGeral({
                         <td colSpan={colunas + 1} className="px-3 pb-4 pt-1">
                           <div className="grid grid-cols-[repeat(auto-fill,minmax(16rem,1fr))] gap-3">
                             {l.tnt.map((t) => (
-                              <DetalheTnt key={t.chave} linha={t} percentual={percentual} />
+                              <DetalheTnt
+                                key={t.chave}
+                                linha={t}
+                                infoprodutos={infoprodutos.get(t.chave) ?? []}
+                                percentual={percentual}
+                              />
                             ))}
                             {operacoes
                               .filter((o) => l.outras.has(o.id))
@@ -248,7 +261,15 @@ function Bloco({ titulo, subtitulo, children }: { titulo: string; subtitulo?: st
   );
 }
 
-function DetalheTnt({ linha: t, percentual }: { linha: LinhaFechamento; percentual: string }) {
+function DetalheTnt({
+  linha: t,
+  infoprodutos,
+  percentual,
+}: {
+  linha: LinhaFechamento;
+  infoprodutos: ParteInfoproduto[];
+  percentual: string;
+}) {
   const porFtd = t.tipo === 'externo' || t.tipo === 'individual';
   const rotuloBase =
     t.tipo === 'salario_fixo' ? 'Salário fixo' : t.tipo === 'auxilio_fixo' ? 'Auxílio fixo' : 'Auxílio';
@@ -264,12 +285,36 @@ function DetalheTnt({ linha: t, percentual }: { linha: LinhaFechamento; percentu
         <Item rotulo={porFtd ? 'FTDs no fim de semana' : 'Comissão de fim de semana'} valor={t.comissao_fds} />
       )}
       {t.comissao_infoprodutos !== 0 && <Item rotulo="Comissão de infoprodutos" valor={t.comissao_infoprodutos} />}
+      {infoprodutos.length > 0 && <VendasInfoprodutos vendas={infoprodutos} />}
       {t.adiantamento !== 0 && <Item rotulo="Adiantamento" valor={t.adiantamento} negativo />}
       {t.ja_pago !== 0 && <Item rotulo="Já pago (acerto)" valor={t.ja_pago} negativo />}
       <Item rotulo="Salário" valor={t.salario_total} forte />
       <Item rotulo={`Taxa (${percentual})`} valor={arredondar(t.total_a_pagar - t.salario_total)} />
       <Item rotulo={`Total ${OPERACAO_PRINCIPAL}`} valor={t.total_a_pagar} forte />
     </Bloco>
+  );
+}
+
+// Cada venda de infoproduto que entrou na comissão: quem vendeu, o valor, a
+// comissão da venda e, quando dividida com a equipe, a parte da pessoa.
+function VendasInfoprodutos({ vendas }: { vendas: ParteInfoproduto[] }) {
+  return (
+    <div className="-mt-0.5 space-y-1 border-l-2 border-slate-100 pl-2 text-xs text-slate-500">
+      {vendas.map((v, i) => (
+        <div key={i}>
+          <div className="flex justify-between gap-3">
+            <span className="min-w-0 truncate">
+              {formatarData(v.data)} · {v.produto || 'Infoproduto'} · {v.operador}
+            </span>
+            <span className="whitespace-nowrap tabular-nums text-slate-600">{formatarMoeda(v.parte)}</span>
+          </div>
+          <p className="text-[11px] text-slate-400">
+            Venda {formatarMoeda(v.valor)} → comissão {formatarMoeda(v.comissao)}
+            {v.dividido_por > 1 ? ` ÷ ${v.dividido_por}` : ''}
+          </p>
+        </div>
+      ))}
+    </div>
   );
 }
 

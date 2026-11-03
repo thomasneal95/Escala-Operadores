@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useRef, useState, type ChangeEvent } from 'react';
+import { Fragment, useEffect, useMemo, useRef, useState, type ChangeEvent } from 'react';
 import { useAuth } from '../../features/auth/AuthContext';
 import { useFechamentoMensal, type LinhaFechamento } from '../../features/schedules/useFechamentoMensal';
 import {
@@ -163,6 +163,11 @@ export function ComissionamentoPage({ infoprodutosPendentes = 0 }: { infoproduto
   }
 
   const linhas = dados?.linhas ?? [];
+  // Enquanto a função publicada não manda o detalhe, fica vazio.
+  const infoprodutosPorLinha = useMemo(
+    () => new Map((dados?.paineis.infoprodutosPorLinha ?? []).map((i) => [i.chave, i.vendas])),
+    [dados]
+  );
   const total = (campo: keyof LinhaFechamento) =>
     linhas.reduce((soma, l) => soma + (typeof l[campo] === 'number' ? (l[campo] as number) : 0), 0);
   const colaboradoresSemNome = cadastros.colaboradores.filter((c) => c.ativo && !c.nome_base);
@@ -251,7 +256,14 @@ export function ComissionamentoPage({ infoprodutosPendentes = 0 }: { infoproduto
             <p className="mb-4 rounded-md bg-red-50 px-4 py-3 text-sm text-red-700">{erro ?? outras.erro}</p>
           )}
           {carregando && !dados && <p className="text-sm text-slate-400">Calculando...</p>}
-          {dados && <QuadroGeral linhas={linhas} ops={outras} taxa={cadastros.config?.taxa_total_a_pagar ?? 0.02} />}
+          {dados && (
+            <QuadroGeral
+              linhas={linhas}
+              infoprodutos={infoprodutosPorLinha}
+              ops={outras}
+              taxa={cadastros.config?.taxa_total_a_pagar ?? 0.02}
+            />
+          )}
         </div>
       ) : (
       <>
