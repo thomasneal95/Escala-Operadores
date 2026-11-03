@@ -18,7 +18,7 @@ export function MeusGanhosPage() {
         <h1 className="mt-1 font-display text-2xl font-semibold text-tinta">Quanto vou receber</h1>
       </div>
 
-      <SeletorMes valor={mes} onMudar={setMes} />
+      <SeletorMes valor={mes} onMudar={setMes} max={mesAtual()} />
 
       {erro && <p className="rounded-md bg-red-50 px-4 py-3 text-sm text-red-700">{erro}</p>}
       {carregando && !dados && <p className="text-sm text-slate-400">Calculando...</p>}

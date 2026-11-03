@@ -16,6 +16,7 @@ import { ResumoJoao } from './ResumoJoao';
 import { DesligamentosComissao } from './DesligamentosComissao';
 import { NovaOperacao, OperacaoComissao } from './OutrasOperacoesComissao';
 import { QuadroGeral } from './QuadroGeral';
+import { SeletorMes } from '../../components/SeletorMes';
 import { useOutrasOperacoes } from '../../features/operacoes/useOutrasOperacoes';
 import { OPERACAO_PRINCIPAL } from '../../features/operacoes/calculoOperacoes';
 
@@ -171,17 +172,7 @@ export function ComissionamentoPage({ infoprodutosPendentes = 0 }: { infoproduto
     .filter((c) => !c.ativo)
     .sort((a, b) => (b.desativado_em ?? '').localeCompare(a.desativado_em ?? ''));
 
-  const seletorMes = (
-    <div>
-      <label className="block text-sm font-medium text-slate-700">Mês</label>
-      <input
-        type="month"
-        value={mesInput}
-        onChange={(e) => setMesInput(e.target.value)}
-        className="mt-1 rounded-md border border-slate-300 px-3 py-2 text-tinta focus:border-esmeralda focus:outline-none focus:ring-1 focus:ring-esmeralda"
-      />
-    </div>
-  );
+  const seletorMes = <SeletorMes valor={mesInput} onMudar={setMesInput} />;
 
   const abaSecao = (id: Secao, rotulo: string, extra?: { badge?: number; discreto?: boolean }) => (
     <button

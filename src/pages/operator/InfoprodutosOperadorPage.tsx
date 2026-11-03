@@ -170,7 +170,7 @@ export function InfoprodutosOperadorPage() {
         </div>
       </form>
 
-      <SeletorMes valor={mes} onMudar={setMes} />
+      <SeletorMes valor={mes} onMudar={setMes} max={mesAtual()} />
 
       <section className="rounded-lg border border-slate-200 bg-white p-5">
         <div className="flex flex-wrap items-baseline justify-between gap-2">
