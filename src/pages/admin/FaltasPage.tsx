@@ -212,6 +212,11 @@ export function FaltasPage() {
         Registro de faltas nos dias normais (fora da escala de fim de semana). Lance só as
         exceções — quem faltou e quando.
       </p>
+      <p className="mt-2 rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-800">
+        A partir de novembro de 2026, quem tem falta <strong>não justificada</strong> fica fora da
+        divisão da comissão da equipe (FTDs e infoprodutos) naquele dia. Falta justificada não
+        altera o comissionamento.
+      </p>
 
       <form
         onSubmit={handleRegistrar}

@@ -66,6 +66,7 @@ export async function carregarEntradaFechamento(
     infoprodutosRes,
     acertosRes,
     desligadosForaRes,
+    faltasRes,
   ] =
     await Promise.all([
       db
@@ -92,6 +93,12 @@ export async function carregarEntradaFechamento(
         .eq("ativo", false)
         .not("nome_base", "is", null)
         .or(`desativado_em.is.null,desativado_em.lt.${mes}`),
+      db
+        .from("faltas")
+        .select("colaborador_id, data")
+        .eq("justificada", false)
+        .gte("data", mes)
+        .lte("data", ultimoDiaDoMes(mes)),
     ]);
 
   const falha = [
@@ -104,6 +111,7 @@ export async function carregarEntradaFechamento(
     infoprodutosRes,
     acertosRes,
     desligadosForaRes,
+    faltasRes,
   ].find(
     (r) => r.error
   );
@@ -159,6 +167,7 @@ export async function carregarEntradaFechamento(
     acertosPagos: new Map(
       (acertosRes.data ?? []).map((a) => [a.colaborador_id, Number(a.valor_pago)])
     ),
+    faltasNaoJustificadas: faltasRes.data ?? [],
     infoprodutos: (infoprodutosRes.data ?? []).map((v) => ({
       data: v.data,
       operador: v.operador,

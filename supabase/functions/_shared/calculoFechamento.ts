@@ -25,6 +25,10 @@
 //     dividido igualmente entre todos da equipe do vendedor na data; no fim
 //     de semana, só entre quem da equipe teve FTD no dia, mais quem vendeu
 //     (o externo pago por FTD, ex.: João, fica com tudo). Soma no salário.
+//   - Falta não justificada (a partir de INICIO_REGRA_FALTAS): naquele dia a
+//     pessoa sai da divisão da comissão da equipe (FTDs e infoprodutos). Os
+//     FTDs dela continuam contando para o bolo da equipe. Falta justificada
+//     não muda nada.
 //   - Casos especiais: operador externo com valor fixo por FTD (ex.: João),
 //     colaborador de comissionamento individual, salário fixo e auxílio fixo.
 //
@@ -218,6 +222,9 @@ function proporcional(valor: number, admissao: string | null, desativacao: strin
 
 const arredondar = (v: number) => Math.round(v * 100) / 100 || 0;
 
+// Faltas não justificadas só tiram a pessoa da divisão a partir desta data.
+export const INICIO_REGRA_FALTAS = '2026-11-01';
+
 export interface EntradaFechamento {
   mes: string; // YYYY-MM-01
   vendas: Venda[];
@@ -233,6 +240,8 @@ export interface EntradaFechamento {
   desligadosForaDoMes?: { nome: string; nome_base: string; desativado_em: string | null }[];
   // Acertos de desligamento já pagos no mês: colaborador_id -> valor pago.
   acertosPagos?: Map<string, number>;
+  // Faltas não justificadas do mês (colaborador_id + data).
+  faltasNaoJustificadas?: { colaborador_id: string; data: string }[];
   config: ConfiguracaoComissao;
   // Detalhe dia a dia de uma pessoa (portal do operador).
   detalheDe?: string;
@@ -278,6 +287,18 @@ export function calcularFechamento(entrada: EntradaFechamento): ResultadoFechame
     }
     return c.equipe_id;
   }
+
+  // Quem tem falta não justificada no dia fica fora da divisão da equipe.
+  const faltas = new Set(
+    (entrada.faltasNaoJustificadas ?? [])
+      .filter((f) => f.data >= INICIO_REGRA_FALTAS)
+      .map((f) => `${f.colaborador_id}|${f.data}`)
+  );
+  // Se todos faltaram, divide entre todos para o bolo não se perder.
+  const semFaltas = <T extends { id: string }>(lista: T[], dia: string) => {
+    const presentes = lista.filter((x) => !faltas.has(`${x.id}|${dia}`));
+    return presentes.length > 0 ? presentes : lista;
+  };
 
   // Colaboradores que entram no rateio de equipe (não individuais).
   const deEquipe = colaboradores.filter((c) => !c.comissionamento_individual);
@@ -371,14 +392,19 @@ export function calcularFechamento(entrada: EntradaFechamento): ResultadoFechame
     const [equipe, dia] = k.split('|');
     const bolo = qtd * valorDoDia(dia);
     if (ehFimDeSemana(dia)) {
-      const quem = [...(quemTeveFtdPorEquipeEDia.get(k) ?? [])];
+      const quem = semFaltas([...(quemTeveFtdPorEquipeEDia.get(k) ?? [])].map((id) => ({ id })), dia).map(
+        (x) => x.id
+      );
       for (const id of quem) somar(comissaoFds, id, bolo / quem.length, dia);
     } else {
-      const ativos = deEquipe.filter((c) => {
-        const inicio = primeiroLancamento.get(c.id);
-        const aindaAtivo = !c.desativado_em || dia <= c.desativado_em;
-        return inicio !== undefined && inicio <= dia && aindaAtivo && equipeNoDia(c, dia) === equipe;
-      });
+      const ativos = semFaltas(
+        deEquipe.filter((c) => {
+          const inicio = primeiroLancamento.get(c.id);
+          const aindaAtivo = !c.desativado_em || dia <= c.desativado_em;
+          return inicio !== undefined && inicio <= dia && aindaAtivo && equipeNoDia(c, dia) === equipe;
+        }),
+        dia
+      );
       for (const c of ativos) somar(comissaoEquipe, c.id, bolo / ativos.length, dia);
     }
   }
@@ -402,7 +428,10 @@ export function calcularFechamento(entrada: EntradaFechamento): ResultadoFechame
       const trabalhou = (x: ColaboradorFechamento) =>
         !ehFimDeSemana(venda.data) || x.id === c.id || ftdsPorColaboradorEDia.has(`${x.id}|${venda.data}`);
       const membros = equipe
-        ? colaboradores.filter((x) => ativosNaData(x) && equipeNoDia(x, venda.data) === equipe && trabalhou(x))
+        ? semFaltas(
+            colaboradores.filter((x) => ativosNaData(x) && equipeNoDia(x, venda.data) === equipe && trabalhou(x)),
+            venda.data
+          )
         : [c];
       const quem = membros.length > 0 ? membros : [c];
       for (const m of quem) {
