@@ -2,12 +2,8 @@ import { Fragment, useRef, useState, type ReactNode } from 'react';
 import { useToast } from '../../components/FeedbackProvider';
 import type { LinhaFechamento } from '../../features/schedules/useFechamentoMensal';
 import type { useOutrasOperacoes } from '../../features/operacoes/useOutrasOperacoes';
-import {
-  normalizarNome,
-  OPERACAO_PRINCIPAL,
-  type EquipeOperacao,
-  type PessoaOperacao,
-} from '../../features/operacoes/calculoOperacoes';
+import { OPERACAO_PRINCIPAL } from '../../features/operacoes/calculoOperacoes';
+import { montarQuadroGeral, type LinhaGeral, type ParteOperacao } from '../../features/operacoes/quadroGeral';
 
 type OutrasOperacoes = ReturnType<typeof useOutrasOperacoes>;
 
@@ -16,21 +12,6 @@ function formatarMoeda(valor: number) {
 }
 
 const arredondar = (v: number) => Math.round(v * 100) / 100;
-
-interface ParteOperacao {
-  pessoa: PessoaOperacao;
-  equipe: EquipeOperacao | null;
-  valorPorFtd: number;
-}
-
-interface LinhaGeral {
-  chave: string;
-  nome: string;
-  semCadastro: boolean;
-  tnt: LinhaFechamento[];
-  // Por operação: o que a pessoa recebe (sem taxa) e de onde vem.
-  outras: Map<string, ParteOperacao[]>;
-}
 
 // Aba "Quadro geral": junta, por pessoa, o total a pagar da TNT e o das
 // outras operações num valor só, com o detalhe de onde vem cada parte. As
@@ -55,51 +36,7 @@ export function QuadroGeral({
   const [aberta, setAberta] = useState<string | null>(null);
   const [capturando, setCapturando] = useState(false);
   const imagem = useRef<HTMLDivElement>(null);
-  const operacoes = ops.operacoes.filter((o) => o.ativo);
-  const mapa = new Map<string, LinhaGeral>();
-  const nomeColaborador = new Map(ops.colaboradores.map((c) => [c.id, c.nome]));
-
-  function linha(chave: string, nome: string, semCadastro: boolean) {
-    let l = mapa.get(chave);
-    if (!l) {
-      l = { chave, nome, semCadastro, tnt: [], outras: new Map() };
-      mapa.set(chave, l);
-    }
-    return l;
-  }
-
-  for (const l of linhas) {
-    const chave = l.colaborador_id ? `c:${l.colaborador_id}` : `n:${normalizarNome(l.nome)}`;
-    linha(chave, l.nome, false).tnt.push(l);
-  }
-  for (const op of operacoes) {
-    const resultado = ops.resultados.get(op.id);
-    for (const p of resultado?.pessoas ?? []) {
-      if (p.valor === 0) continue;
-      const l = p.colaborador_id
-        ? linha(`c:${p.colaborador_id}`, nomeColaborador.get(p.colaborador_id) ?? p.nome_base, false)
-        : linha(`n:${normalizarNome(p.nome_base)}`, p.nome_base, true);
-      const equipe =
-        p.modo === 'equipe' && p.equipe
-          ? (resultado?.equipes.find((e) => normalizarNome(e.nome) === normalizarNome(p.equipe!)) ?? null)
-          : null;
-      l.outras.set(op.id, [...(l.outras.get(op.id) ?? []), { pessoa: p, equipe, valorPorFtd: resultado!.valorPorFtd }]);
-    }
-  }
-
-  const comTaxa = (v: number) => arredondar(v * (1 + taxa));
-  // A comissão de infoprodutos vem no fechamento da TNT, mas aparece numa
-  // coluna própria (com a mesma taxa); a coluna TNT fica com o resto.
-  const valorInfo = (l: LinhaGeral) => l.tnt.reduce((s, t) => s + comTaxa(t.comissao_infoprodutos), 0);
-  const valorTnt = (l: LinhaGeral) => l.tnt.reduce((s, t) => s + t.total_a_pagar - comTaxa(t.comissao_infoprodutos), 0);
-  const valorOperacao = (l: LinhaGeral, opId: string) =>
-    comTaxa((l.outras.get(opId) ?? []).reduce((s, p) => s + p.pessoa.valor, 0));
-  const total = (l: LinhaGeral) =>
-    valorTnt(l) + operacoes.reduce((s, o) => s + valorOperacao(l, o.id), 0) + valorInfo(l);
-
-  const lista = [...mapa.values()]
-    .filter((l) => l.tnt.some((t) => t.total_a_pagar !== 0) || l.outras.size > 0)
-    .sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
+  const { operacoes, lista, comTaxa, valorInfo, valorTnt, valorOperacao, total } = montarQuadroGeral(linhas, ops, taxa);
   const soma = (f: (l: LinhaGeral) => number) => lista.reduce((s, l) => s + f(l), 0);
 
   const semValor = operacoes.filter((o) => {

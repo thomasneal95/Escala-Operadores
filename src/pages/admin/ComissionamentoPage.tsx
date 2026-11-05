@@ -16,6 +16,7 @@ import { ResumoJoao } from './ResumoJoao';
 import { DesligamentosComissao } from './DesligamentosComissao';
 import { NovaOperacao, OperacaoComissao } from './OutrasOperacoesComissao';
 import { QuadroGeral } from './QuadroGeral';
+import { PagamentosComissao } from './PagamentosComissao';
 import { SeletorMes } from '../../components/SeletorMes';
 import { useOutrasOperacoes } from '../../features/operacoes/useOutrasOperacoes';
 import { OPERACAO_PRINCIPAL } from '../../features/operacoes/calculoOperacoes';
@@ -70,10 +71,10 @@ const rotuloTipo: Partial<Record<LinhaFechamento['tipo'], string>> = {
 const classeCampo =
   'mt-1 w-full rounded-md border border-slate-300 px-2 py-1.5 text-sm text-tinta focus:border-esmeralda focus:outline-none focus:ring-1 focus:ring-esmeralda';
 
-// Navegação em dois níveis: no topo, o mês e as seções (Quadro geral, uma
-// por operação — TNT e as outras —, "+ Operação" e Histórico); dentro da
-// TNT, as abas dela (fechamento, painel, infoprodutos...).
-type Secao = 'geral' | 'tnt' | 'nova-operacao' | 'historico' | `op:${string}`;
+// Navegação em dois níveis: no topo, o mês e as seções (Quadro geral,
+// Pagamentos, uma por operação — TNT e as outras —, "+ Operação" e
+// Histórico); dentro da TNT, as abas dela (fechamento, painel, infoprodutos...).
+type Secao = 'geral' | 'pagamentos' | 'tnt' | 'nova-operacao' | 'historico' | `op:${string}`;
 type AbaTnt = 'fechamento' | 'painel' | 'infoprodutos' | 'resumo-joao' | 'desligamentos';
 
 export function ComissionamentoPage({ infoprodutosPendentes = 0 }: { infoprodutosPendentes?: number }) {
@@ -210,6 +211,7 @@ export function ComissionamentoPage({ infoprodutosPendentes = 0 }: { infoproduto
 
       <nav className="mt-6 flex items-stretch overflow-x-auto border-b border-slate-200 [scrollbar-width:none]" aria-label="Seções do comissionamento">
         {abaSecao('geral', 'Quadro geral')}
+        {abaSecao('pagamentos', 'Pagamentos')}
         <span className="mx-2 my-2.5 w-px shrink-0 bg-slate-200" aria-hidden />
         {abaSecao('tnt', OPERACAO_PRINCIPAL, { badge: infoprodutosPendentes })}
         {operacoesAtivas.map((o) => abaSecao(`op:${o.id}`, o.nome))}
@@ -243,6 +245,16 @@ export function ComissionamentoPage({ infoprodutosPendentes = 0 }: { infoproduto
           )}
           {carregando && !dados && <p className="text-sm text-slate-400">Calculando...</p>}
           {dados && <QuadroGeral mes={mes} linhas={linhas} ops={outras} taxa={cadastros.config?.taxa_total_a_pagar ?? 0.02} />}
+        </div>
+      ) : secao === 'pagamentos' ? (
+        <div className="mt-6">
+          {(erro || outras.erro) && (
+            <p className="mb-4 rounded-md bg-red-50 px-4 py-3 text-sm text-red-700">{erro ?? outras.erro}</p>
+          )}
+          {carregando && !dados && <p className="text-sm text-slate-400">Calculando...</p>}
+          {dados && (
+            <PagamentosComissao mes={mes} linhas={linhas} ops={outras} taxa={cadastros.config?.taxa_total_a_pagar ?? 0.02} />
+          )}
         </div>
       ) : (
       <>
