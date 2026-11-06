@@ -35,7 +35,7 @@ export function MeuComissionamentoExternoPage() {
                 </p>
               </div>
             )}
-            <ResumoExterno externo={dados.externo} linha={linha} />
+            <ResumoExterno externo={dados.externo} linha={linha} doOperador />
           </>
         ) : (
           <p className="rounded-md bg-slate-100 px-4 py-3 text-sm text-slate-600">

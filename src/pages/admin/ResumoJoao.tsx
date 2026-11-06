@@ -39,7 +39,17 @@ export function ResumoJoao({ dados }: { dados: DadosFechamento }) {
   return <ResumoExterno externo={joao} linha={linha} />;
 }
 
-export function ResumoExterno({ externo: joao, linha: linhaFechamento }: { externo: Externo; linha: LinhaFechamento | null }) {
+// `doOperador`: na tela do próprio João, o card de "Confirmados" dá lugar à
+// comissão de infoprodutos.
+export function ResumoExterno({
+  externo: joao,
+  linha: linhaFechamento,
+  doOperador = false,
+}: {
+  externo: Externo;
+  linha: LinhaFechamento | null;
+  doOperador?: boolean;
+}) {
   const valor = joao.valor_por_ftd;
   const registros = joao.registros;
   const total = registros.reduce((s, r) => s + r.qtd, 0);
@@ -71,7 +81,11 @@ export function ResumoExterno({ externo: joao, linha: linhaFechamento }: { exter
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <Cartao titulo="Comissão total (FTDs)" valor={moeda(total * valor)} destaque />
         <Cartao titulo="Total de registros" valor={String(total)} />
-        <Cartao titulo="Confirmados" valor={String(confirmados)} />
+        {doOperador ? (
+          <Cartao titulo="Comissão de infoprodutos" valor={moeda(comissaoInfo)} />
+        ) : (
+          <Cartao titulo="Confirmados" valor={String(confirmados)} />
+        )}
         <Cartao titulo="Comissão confirmada" valor={moeda(confirmados * valor)} />
         <Cartao titulo="Comissão média / registro" valor={moeda(total ? valor : 0)} />
         <Cartao titulo="Dias com registro" valor={String(dias.length)} />
