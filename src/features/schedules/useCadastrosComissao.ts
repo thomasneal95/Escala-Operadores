@@ -43,6 +43,9 @@ export function useCadastrosComissao() {
   const [externos, setExternos] = useState<OperadorExterno[]>([]);
   const [fixos, setFixos] = useState<PagamentoFixo[]>([]);
   const [colaboradores, setColaboradores] = useState<ColaboradorNomeBase[]>([]);
+  // Logins de operadores externos (ex.: João): ficam fora do fechamento como
+  // colaborador, mas o nome na base liga o login ao externo.
+  const [externosComLogin, setExternosComLogin] = useState<ColaboradorNomeBase[]>([]);
   const [erro, setErro] = useState<string | null>(null);
 
   const carregar = useCallback(async () => {
@@ -90,6 +93,23 @@ export function useCadastrosComissao() {
         adiantamento: Number(f.adiantamento),
       }))
     );
+    const paraLista = (c: NonNullable<typeof colaboradoresRes.data>[number]) => ({
+      id: c.id,
+      nome: (c.perfis as unknown as { nome_completo: string } | null)?.nome_completo ?? '(sem nome)',
+      nome_base: c.nome_base,
+      ativo: c.ativo,
+      desativado_em: c.desativado_em,
+    });
+    setExternosComLogin(
+      (colaboradoresRes.data ?? [])
+        .filter(
+          (c) =>
+            (c.perfis as unknown as { papel: string } | null)?.papel !== 'administrador' &&
+            c.comissionamento_individual &&
+            c.ativo
+        )
+        .map(paraLista)
+    );
     setColaboradores(
       (colaboradoresRes.data ?? [])
         // Mesmos critérios do fechamento: sem admins e sem "individual".
@@ -98,13 +118,7 @@ export function useCadastrosComissao() {
             (c.perfis as unknown as { papel: string } | null)?.papel !== 'administrador' &&
             !c.comissionamento_individual
         )
-        .map((c) => ({
-          id: c.id,
-          nome: (c.perfis as unknown as { nome_completo: string } | null)?.nome_completo ?? '(sem nome)',
-          nome_base: c.nome_base,
-          ativo: c.ativo,
-          desativado_em: c.desativado_em,
-        }))
+        .map(paraLista)
         .sort((a, b) => a.nome.localeCompare(b.nome))
     );
     setErro(null);
@@ -130,6 +144,7 @@ export function useCadastrosComissao() {
     externos,
     fixos,
     colaboradores,
+    externosComLogin,
     erro,
     recarregar: carregar,
     salvarConfig: (novo: ConfiguracaoComissao) =>

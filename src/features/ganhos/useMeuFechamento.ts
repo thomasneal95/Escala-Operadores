@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { supabase } from '../../lib/supabase/client';
-import type { LinhaFechamento } from '../../../supabase/functions/_shared/calculoFechamento';
+import type { LinhaFechamento, PaineisFechamento } from '../../../supabase/functions/_shared/calculoFechamento';
 
 // "Meus ganhos" do operador (função meu-fechamento): o mesmo cálculo do
 // fechamento do admin, só com os dados da própria pessoa e números
@@ -20,6 +20,8 @@ export interface MeuFechamento {
   arquivadoEm: string | null;
   nomeNaBaseConfigurado: boolean;
   minhaLinha: LinhaFechamento | null;
+  // Só para operador externo pago por FTD (ex.: João): o resumo dos FTDs dele.
+  externo?: PaineisFechamento['resumoExternos'][number] | null;
   meusDias: DiaMeu[];
   ftdsMesAnterior: number | null;
   rejeitadas: { dia: string; hora: string; cliente: string | null }[];

@@ -9,6 +9,8 @@ import { MultasPage } from './MultasPage';
 import { MeusGanhosPage } from './MeusGanhosPage';
 import { DesempenhoPage } from './DesempenhoPage';
 import { InfoprodutosOperadorPage } from './InfoprodutosOperadorPage';
+import { MeuComissionamentoExternoPage } from './MeuComissionamentoExternoPage';
+import { useSouExterno } from '../../features/ganhos/useSouExterno';
 import { TourOperador } from '../../components/TourOperador';
 import { ErrorBoundary } from '../../components/ErrorBoundary';
 import { FallbackErroTela } from '../../components/FallbackErroTela';
@@ -28,6 +30,13 @@ const abas: { id: Aba; rotulo: string }[] = [
   { id: 'infoprodutos', rotulo: 'Infoprodutos' },
   { id: 'multas', rotulo: 'Multas' },
   { id: 'historico', rotulo: 'Histórico' },
+];
+
+// Operador externo pago por FTD (ex.: João): só o comissionamento e os
+// infoprodutos dele.
+const abasExterno: { id: Aba; rotulo: string }[] = [
+  { id: 'ganhos', rotulo: 'Meu comissionamento' },
+  { id: 'infoprodutos', rotulo: 'Infoprodutos' },
 ];
 
 const iconeMenu = (
@@ -110,6 +119,13 @@ export function OperatorApp() {
     )
   );
   const [menuAberto, setMenuAberto] = useState(false);
+  const { externo, carregando: carregandoAcesso } = useSouExterno();
+  const abasVisiveis = carregandoAcesso ? [] : externo ? abasExterno : abas;
+
+  // O externo não tem as outras abas: abre no comissionamento dele.
+  useEffect(() => {
+    if (externo && !abasExterno.some((a) => a.id === abaAtiva)) setAbaAtiva('ganhos');
+  }, [externo, abaAtiva]);
   const {
     escalasNovas,
     trocasPendentes,
@@ -142,7 +158,7 @@ export function OperatorApp() {
   // Não conta a aba em que a pessoa já está — ela já está vendo o que
   // precisa ver ali, o ponto no menu é só pra avisar de OUTRA aba.
   const totalNotificacoes = Object.entries(contagemPorAba)
-    .filter(([id]) => id !== abaAtiva)
+    .filter(([id]) => id !== abaAtiva && abasVisiveis.some((a) => a.id === id))
     .reduce((soma, [, valor]) => soma + (valor ?? 0), 0);
 
   function selecionarAba(aba: Aba) {
@@ -152,7 +168,7 @@ export function OperatorApp() {
 
   return (
     <div className="min-h-screen bg-nuvem">
-      <TourOperador />
+      {!carregandoAcesso && !externo && <TourOperador />}
 
       {/* Cabeçalho — só aparece no celular (desktop usa a barra lateral) */}
       <header className="bg-tinta topo-seguro sm:hidden">
@@ -192,7 +208,7 @@ export function OperatorApp() {
         </div>
 
         <nav className="flex-1 space-y-1 overflow-y-auto px-3 py-4">
-          {abas.map((aba) => {
+          {abasVisiveis.map((aba) => {
             const ativo = abaAtiva === aba.id;
             return (
               <button
@@ -230,16 +246,25 @@ export function OperatorApp() {
 
       {/* Conteúdo principal */}
       <main className="px-6 pt-10 pb-[calc(2.5rem+env(safe-area-inset-bottom))] sm:ml-64">
-        <div className="mx-auto max-w-2xl">
+        <div className={`mx-auto ${externo ? 'max-w-5xl' : 'max-w-2xl'}`}>
           <ErrorBoundary key={abaAtiva} fallback={<FallbackErroTela />}>
-            {abaAtiva === 'minha-area' && <AreaColaboradorPage />}
-            {abaAtiva === 'equipe' && <ColegasEquipePage />}
-            {abaAtiva === 'trocas' && <SolicitacoesTrocaPage />}
-            {abaAtiva === 'ganhos' && <MeusGanhosPage />}
-            {abaAtiva === 'desempenho' && <DesempenhoPage />}
-            {abaAtiva === 'infoprodutos' && <InfoprodutosOperadorPage />}
-            {abaAtiva === 'multas' && <MultasPage />}
-            {abaAtiva === 'historico' && <HistoricoEscalasPage />}
+            {carregandoAcesso ? null : externo ? (
+              <>
+                {abaAtiva === 'ganhos' && <MeuComissionamentoExternoPage />}
+                {abaAtiva === 'infoprodutos' && <InfoprodutosOperadorPage />}
+              </>
+            ) : (
+              <>
+                {abaAtiva === 'minha-area' && <AreaColaboradorPage />}
+                {abaAtiva === 'equipe' && <ColegasEquipePage />}
+                {abaAtiva === 'trocas' && <SolicitacoesTrocaPage />}
+                {abaAtiva === 'ganhos' && <MeusGanhosPage />}
+                {abaAtiva === 'desempenho' && <DesempenhoPage />}
+                {abaAtiva === 'infoprodutos' && <InfoprodutosOperadorPage />}
+                {abaAtiva === 'multas' && <MultasPage />}
+                {abaAtiva === 'historico' && <HistoricoEscalasPage />}
+              </>
+            )}
           </ErrorBoundary>
         </div>
       </main>
@@ -268,7 +293,7 @@ export function OperatorApp() {
             </button>
           </div>
           <nav className="mt-2 flex flex-col gap-1 px-2">
-            {abas.map((aba) => (
+            {abasVisiveis.map((aba) => (
               <button
                 key={aba.id}
                 onClick={() => selecionarAba(aba.id)}

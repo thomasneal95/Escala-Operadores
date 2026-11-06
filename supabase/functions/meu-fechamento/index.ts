@@ -17,6 +17,10 @@ function mesAnterior(mes: string) {
   return m === 1 ? `${a - 1}-12-01` : `${a}-${String(m - 1).padStart(2, "0")}-01`;
 }
 
+function normalizarNome(nome: string) {
+  return nome.normalize("NFC").trim().replace(/\s+/g, " ").toLowerCase();
+}
+
 // "+57 315 1927532" -> "•••• 7532"
 function mascarar(texto: string | null) {
   if (!texto) return null;
@@ -40,7 +44,7 @@ export default {
 
     const { data: eu } = await db
       .from("colaboradores")
-      .select("id, nome_base")
+      .select("id, nome_base, comissionamento_individual")
       .eq("perfil_id", ctx.userClaims.id)
       .maybeSingle();
 
@@ -55,7 +59,16 @@ export default {
 
     const resultado = calcularFechamento({ ...carregado.entrada, detalheDe: eu.id });
     const config = carregado.entrada.config;
-    const minhaLinha = resultado.linhas.find((l) => l.colaborador_id === eu.id) ?? null;
+    // Operador externo pago por FTD com login (ex.: João): o cadastro de
+    // colaborador é ligado ao externo pelo nome na base.
+    const externo =
+      eu.comissionamento_individual && eu.nome_base
+        ? resultado.paineis.resumoExternos.find((e) => normalizarNome(e.nome) === normalizarNome(eu.nome_base)) ?? null
+        : null;
+    const minhaLinha = externo
+      ? resultado.linhas.find((l) => l.tipo === "externo" && normalizarNome(l.nome) === normalizarNome(eu.nome_base)) ??
+        null
+      : resultado.linhas.find((l) => l.colaborador_id === eu.id) ?? null;
     const minhaEquipe = minhaLinha?.equipe ?? null;
     const nomeBase = (eu.nome_base ?? "").trim().toLowerCase();
 
@@ -99,6 +112,7 @@ export default {
       arquivadoEm: arquivado?.arquivado_em ?? null,
       nomeNaBaseConfigurado: !!eu.nome_base,
       minhaLinha,
+      externo,
       meusDias: resultado.paineis.detalheDesligados.find((d) => d.colaborador_id === eu.id)?.dias ?? [],
       ftdsMesAnterior,
       rejeitadas: rejeitadas

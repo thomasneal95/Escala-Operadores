@@ -1,7 +1,10 @@
-import type { DadosFechamento } from '../../features/schedules/useFechamentoMensal';
+import type { DadosFechamento, LinhaFechamento } from '../../features/schedules/useFechamentoMensal';
+
+type Externo = DadosFechamento['paineis']['resumoExternos'][number];
 
 // Aba "Resumo João" da planilha: painel das vendas (FTDs) do João no mês,
-// pago por FTD como operador externo.
+// pago por FTD como operador externo. O mesmo painel (ResumoExterno) aparece
+// para o próprio João no portal.
 
 const diasSemana = ['domingo', 'segunda-feira', 'terça-feira', 'quarta-feira', 'quinta-feira', 'sexta-feira', 'sábado'];
 const ordemSemana = [1, 2, 3, 4, 5, 6, 0];
@@ -32,6 +35,11 @@ export function ResumoJoao({ dados }: { dados: DadosFechamento }) {
     );
   }
 
+  const linha = dados.linhas.find((l) => l.tipo === 'externo' && l.nome === joao.nome) ?? null;
+  return <ResumoExterno externo={joao} linha={linha} />;
+}
+
+export function ResumoExterno({ externo: joao, linha: linhaFechamento }: { externo: Externo; linha: LinhaFechamento | null }) {
   const valor = joao.valor_por_ftd;
   const registros = joao.registros;
   const total = registros.reduce((s, r) => s + r.qtd, 0);
@@ -48,7 +56,6 @@ export function ResumoJoao({ dados }: { dados: DadosFechamento }) {
   const porSemana = new Map<number, number>();
   for (const [dia, qtd] of porDia) porSemana.set(diaDaSemana(dia), (porSemana.get(diaDaSemana(dia)) ?? 0) + qtd);
 
-  const linhaFechamento = dados.linhas.find((l) => l.tipo === 'externo' && l.nome === joao.nome);
   const comissaoInfo = linhaFechamento?.comissao_infoprodutos ?? 0;
 
   return (

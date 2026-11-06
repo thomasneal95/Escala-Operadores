@@ -513,6 +513,10 @@ export function ComissionamentoPage({ infoprodutosPendentes = 0 }: { infoproduto
           {[
             { titulo: null, lista: ativos },
             { titulo: 'Desligados', lista: desligados },
+            {
+              titulo: 'Operadores externos com login (o nome deve ser o mesmo do cadastro de operador externo)',
+              lista: cadastros.externosComLogin,
+            },
           ].map(({ titulo, lista }) =>
             lista.length === 0 ? null : (
           <div key={titulo ?? 'ativos'} className={titulo ? 'mt-5' : ''}>
