@@ -86,7 +86,7 @@ export function ResumoExterno({ externo: joao, linha: linhaFechamento }: { exter
         </p>
       )}
 
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
         <Tabela
           titulo="Comissão por etapa"
           cabecalho="Etapa"
@@ -137,24 +137,24 @@ function Tabela({
         <thead className="text-xs text-slate-400">
           <tr>
             <th className="py-1 text-left font-medium">{cabecalho}</th>
-            <th className="py-1 text-right font-medium">Registros</th>
-            <th className="py-1 text-right font-medium">Comissão</th>
+            <th className="py-1 pl-3 text-right font-medium">Registros</th>
+            <th className="py-1 pl-3 text-right font-medium">Comissão</th>
           </tr>
         </thead>
         <tbody className="divide-y divide-slate-100">
           {linhas.map(([nome, qtd, valor]) => (
             <tr key={nome}>
               <td className="py-1.5 text-slate-700">{nome}</td>
-              <td className="py-1.5 text-right text-slate-600">{qtd}</td>
-              <td className="py-1.5 text-right text-tinta">{moeda(valor)}</td>
+              <td className="py-1.5 pl-3 text-right tabular-nums text-slate-600">{qtd}</td>
+              <td className="whitespace-nowrap py-1.5 pl-3 text-right tabular-nums text-tinta">{moeda(valor)}</td>
             </tr>
           ))}
         </tbody>
         <tfoot className="border-t border-slate-200 font-semibold text-tinta">
           <tr>
             <td className="py-1.5">Total</td>
-            <td className="py-1.5 text-right">{total[0]}</td>
-            <td className="py-1.5 text-right">{moeda(total[1])}</td>
+            <td className="py-1.5 pl-3 text-right tabular-nums">{total[0]}</td>
+            <td className="whitespace-nowrap py-1.5 pl-3 text-right tabular-nums">{moeda(total[1])}</td>
           </tr>
         </tfoot>
       </table>
