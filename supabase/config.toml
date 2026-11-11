@@ -517,3 +517,9 @@ enabled = true
 verify_jwt = false
 import_map = "./functions/enviar-push/deno.json"
 entrypoint = "./functions/enviar-push/index.ts"
+
+[functions.entrar-como-colaborador]
+enabled = true
+verify_jwt = false
+import_map = "./functions/entrar-como-colaborador/deno.json"
+entrypoint = "./functions/entrar-como-colaborador/index.ts"

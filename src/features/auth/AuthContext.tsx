@@ -17,6 +17,36 @@ interface AuthContextValue {
   carregando: boolean;
   entrar: (email: string, senha: string) => Promise<{ erro: string | null }>;
   sair: () => Promise<void>;
+  // Admin dentro da conta de um colaborador ("Entrar na conta" na aba Acesso).
+  acessandoComo: boolean;
+  entrarComo: (perfilId: string) => Promise<{ erro: string | null }>;
+  voltarAoAdmin: () => Promise<void>;
+}
+
+// Sessão do admin guardada enquanto ele está na conta de um colaborador.
+const CHAVE_SESSAO_ADMIN = 'jornada360-sessao-admin';
+
+interface SessaoAdminGuardada {
+  admin_id: string;
+  access_token: string;
+  refresh_token: string;
+}
+
+function lerSessaoAdmin(): SessaoAdminGuardada | null {
+  try {
+    const texto = localStorage.getItem(CHAVE_SESSAO_ADMIN);
+    return texto ? (JSON.parse(texto) as SessaoAdminGuardada) : null;
+  } catch {
+    return null;
+  }
+}
+
+function apagarSessaoAdmin() {
+  try {
+    localStorage.removeItem(CHAVE_SESSAO_ADMIN);
+  } catch {
+    // nada a fazer
+  }
 }
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
@@ -25,6 +55,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [perfil, setPerfil] = useState<Perfil | null>(null);
   const [carregando, setCarregando] = useState(true);
+  const [acessandoComo, setAcessandoComo] = useState(false);
 
   async function carregarPerfil(userId: string) {
     const { data, error } = await supabase
@@ -53,6 +84,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     supabase.auth.getSession().then(async ({ data: { session } }) => {
       setSession(session);
+      // Recarregou a página no meio do acesso: segue na conta do colaborador.
+      const guardada = lerSessaoAdmin();
+      if (guardada && session?.user && session.user.id !== guardada.admin_id) setAcessandoComo(true);
+      else if (guardada) apagarSessaoAdmin();
       if (session?.user) {
         await carregarPerfil(session.user.id);
       }
@@ -87,12 +122,74 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   async function sair() {
+    if (lerSessaoAdmin()) {
+      await voltarAoAdmin();
+      return;
+    }
     await desligarPushDesteAparelho();
     await supabase.auth.signOut();
   }
 
+  async function entrarComo(perfilId: string) {
+    const { data: atual } = await supabase.auth.getSession();
+    if (!atual.session) return { erro: 'Sessão expirada. Entre novamente.' };
+
+    const { data, error } = await supabase.functions.invoke('entrar-como-colaborador', {
+      body: { perfil_id: perfilId },
+    });
+    if (error || data?.erro || !data?.token_hash) {
+      return { erro: (data?.erro as string) ?? 'Não foi possível entrar na conta.' };
+    }
+
+    const guardada: SessaoAdminGuardada = {
+      admin_id: atual.session.user.id,
+      access_token: atual.session.access_token,
+      refresh_token: atual.session.refresh_token,
+    };
+    try {
+      localStorage.setItem(CHAVE_SESSAO_ADMIN, JSON.stringify(guardada));
+    } catch {
+      return { erro: 'O navegador não permitiu guardar a sua sessão de admin.' };
+    }
+
+    setCarregando(true);
+    const { data: entrou, error: erroEntrada } = await supabase.auth.verifyOtp({
+      token_hash: data.token_hash,
+      type: 'magiclink',
+    });
+    if (erroEntrada || !entrou.user) {
+      apagarSessaoAdmin();
+      setCarregando(false);
+      return { erro: 'Não foi possível entrar na conta.' };
+    }
+    setAcessandoComo(true);
+    await carregarPerfil(entrou.user.id);
+    setCarregando(false);
+    return { erro: null };
+  }
+
+  // Encerra só a sessão aberta neste navegador (a pessoa continua logada nos
+  // aparelhos dela) e volta para a sessão do admin.
+  async function voltarAoAdmin() {
+    const guardada = lerSessaoAdmin();
+    apagarSessaoAdmin();
+    setAcessandoComo(false);
+    setCarregando(true);
+    await supabase.auth.signOut({ scope: 'local' });
+    if (guardada) {
+      const { data } = await supabase.auth.setSession({
+        access_token: guardada.access_token,
+        refresh_token: guardada.refresh_token,
+      });
+      if (data.user) await carregarPerfil(data.user.id);
+    }
+    setCarregando(false);
+  }
+
   return (
-    <AuthContext.Provider value={{ session, perfil, carregando, entrar, sair }}>
+    <AuthContext.Provider
+      value={{ session, perfil, carregando, entrar, sair, acessandoComo, entrarComo, voltarAoAdmin }}
+    >
       {children}
     </AuthContext.Provider>
   );

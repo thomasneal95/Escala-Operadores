@@ -21,12 +21,14 @@ function anunciar(estado: EstadoPush) {
 // Notificações no celular (Web Push). No iPhone só existe com o app
 // instalado na tela de início; fora dele o estado fica 'indisponivel'.
 export function usePushNotificacoes() {
-  const { session } = useAuth();
+  const { session, acessandoComo } = useAuth();
   const [estado, setEstado] = useState<EstadoPush>('carregando');
   const [processando, setProcessando] = useState(false);
 
   const verificar = useCallback(async () => {
-    if (!suportaPush()) {
+    // Admin na conta de um colaborador: o aparelho não pode passar a receber
+    // as notificações da pessoa.
+    if (acessandoComo || !suportaPush()) {
       setEstado('indisponivel');
       return;
     }
@@ -46,7 +48,7 @@ export function usePushNotificacoes() {
       return;
     }
     setEstado('inativo');
-  }, []);
+  }, [acessandoComo]);
 
   useEffect(() => {
     if (session?.user) verificar();

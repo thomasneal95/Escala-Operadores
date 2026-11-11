@@ -5,6 +5,15 @@ import { useAlterarSenhaColaborador } from '../../features/employees/useAlterarS
 import { useConfirm } from '../../components/FeedbackProvider';
 import { useAlterarEmailColaborador } from '../../features/employees/useAlterarEmailColaborador';
 import { useDiagnosticoAcesso, type DiagnosticoAcesso } from '../../features/employees/useDiagnosticoAcesso';
+import { useAuth } from '../../features/auth/AuthContext';
+
+const iconeEntrar = (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" className="h-5 w-5">
+    <path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4" />
+    <path d="M10 17l5-5-5-5" />
+    <path d="M15 12H3" />
+  </svg>
+);
 
 export function GestaoAcessoPage() {
   const { perfis, carregando, erro, processando, alterarPapel, recarregar } = useGestaoAcesso();
@@ -19,6 +28,24 @@ export function GestaoAcessoPage() {
   const { alterarEmail, processando: alterandoEmail } = useAlterarEmailColaborador();
   const [emailId, setEmailId] = useState<string | null>(null);
   const [novoEmail, setNovoEmail] = useState('');
+  const { entrarComo } = useAuth();
+  const [entrandoId, setEntrandoId] = useState<string | null>(null);
+
+  async function handleEntrarComo(perfilId: string, nome: string) {
+    const confirmou = await confirmar(
+      `Entrar na conta de "${nome}"?\n\n` +
+        'Você vai ver o portal exatamente como a pessoa vê. O que fizer lá fica ' +
+        'registrado como dela. Para sair, use "Voltar ao admin" (ou "Sair").'
+    );
+    if (!confirmou) return;
+    setErroLinha((atual) => ({ ...atual, [perfilId]: '' }));
+    setEntrandoId(perfilId);
+    const resultado = await entrarComo(perfilId);
+    setEntrandoId(null);
+    if (resultado.erro) {
+      setErroLinha((atual) => ({ ...atual, [perfilId]: resultado.erro as string }));
+    }
+  }
 
   function iniciarAlterarEmail(perfilId: string) {
     setSenhaId(null);
@@ -143,7 +170,8 @@ export function GestaoAcessoPage() {
       </h1>
       <p className="mt-2 text-sm text-slate-500">
         Defina quem tem acesso ao painel administrativo e quem acessa como
-        colaborador. Também é aqui que você altera a senha e o e-mail de login de qualquer pessoa.
+        colaborador. Também é aqui que você altera a senha e o e-mail de login de qualquer pessoa
+        e, pelo ícone ao lado do nome, entra na conta de um colaborador para ver o portal dele.
       </p>
 
       <div className="mt-6 overflow-hidden rounded-lg border border-slate-200 bg-white">
@@ -162,7 +190,20 @@ export function GestaoAcessoPage() {
               return (
                 <tr key={perfil.id}>
                   <td className="px-4 py-3">
-                    <p className="font-medium text-tinta">{perfil.nome_completo}</p>
+                    <div className="flex items-center gap-2">
+                      <p className="font-medium text-tinta">{perfil.nome_completo}</p>
+                      {perfil.papel === 'colaborador' && perfil.ativo && (
+                        <button
+                          onClick={() => handleEntrarComo(perfil.id, perfil.nome_completo)}
+                          disabled={entrandoId !== null}
+                          title="Entrar na conta"
+                          aria-label={`Entrar na conta de ${perfil.nome_completo}`}
+                          className="rounded-md p-1 text-ceruleo transition hover:bg-ceruleo-light disabled:opacity-50"
+                        >
+                          {iconeEntrar}
+                        </button>
+                      )}
+                    </div>
                     {perfil.papel === 'colaborador' && !perfil.temCadastroColaborador && (
                       <p className="mt-0.5 text-xs text-amber-600">
                         Sem cadastro de colaborador (equipe/telefone) — adicione na aba
