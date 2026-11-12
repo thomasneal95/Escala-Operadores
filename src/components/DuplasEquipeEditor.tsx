@@ -94,11 +94,11 @@ export function DuplasEquipeEditor({ duplas, membros, salvando, onSalvar }: Dupl
             >
               <p className="font-display font-semibold text-tinta">Dupla {d.numero}</p>
               <label className="block text-xs font-medium text-slate-600">
-                Manhã + Tarde
+                Manhã (08h–17h)
                 {seletor(d.numero, 'manha_tarde_id', d.manha_tarde_id)}
               </label>
               <label className="block text-xs font-medium text-slate-600">
-                Tarde + Noite
+                Noite (17h–02h)
                 {seletor(d.numero, 'tarde_noite_id', d.tarde_noite_id)}
               </label>
               <span

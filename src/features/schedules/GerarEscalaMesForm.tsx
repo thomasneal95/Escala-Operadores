@@ -31,7 +31,7 @@ export function GerarEscalaMesForm({
         Cria todos os fins de semana do mês e monta a escala pelas duplas de cada equipe
         (configuradas em Equipes): a cada fim de semana uma dupla trabalha no sábado, outra no
         domingo (home office) e a terceira folga, no rodízio Sábado → Domingo → Folga. Na dupla,
-        uma pessoa faz Manhã + Tarde e a outra Tarde + Noite. A escala fica em organização até
+        uma pessoa faz a Manhã (08h às 17h) e a outra a Noite (17h às 02h). A escala fica em organização até
         você confirmar.
       </p>
 

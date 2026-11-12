@@ -213,7 +213,7 @@ export function VisaoAdminPage() {
     const nome = (id: string | null) => (id ? nomePorId(id) : '—');
     return {
       numero: dupla.numero,
-      texto: `${nome(dupla.manha_tarde_id)} (Manhã + Tarde) e ${nome(dupla.tarde_noite_id)} (Tarde + Noite)`,
+      texto: `${nome(dupla.manha_tarde_id)} (Manhã) e ${nome(dupla.tarde_noite_id)} (Noite)`,
     };
   }
 

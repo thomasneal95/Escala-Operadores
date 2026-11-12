@@ -48,7 +48,7 @@ export function MeuRodizio() {
       <p className="mt-1 text-sm text-slate-500">
         Dupla {dupla.numero} da equipe {dupla.equipe}
         {dupla.parceiro ? ` com ${dupla.parceiro}` : ''} ·{' '}
-        {dupla.posicao === 'manha_tarde' ? 'manhã + tarde' : 'tarde + noite'}
+        {dupla.posicao === 'manha_tarde' ? 'manhã (08h às 17h)' : 'noite (17h às 02h)'}
       </p>
       <ul className="mt-3 grid grid-cols-3 gap-2 text-center text-xs">
         {proximosSabados(SEMANAS).map((sabado) => {

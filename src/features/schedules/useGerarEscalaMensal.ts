@@ -7,7 +7,8 @@ import type { PeriodoOperacao } from '../../types/database';
 // duplas_fim_de_semana). A cada fim de semana, uma dupla trabalha no
 // sábado, outra no domingo (home office) e a terceira folga, girando no
 // ciclo Sábado → Domingo → Folga (ver lib/rodizioDuplas). Na dupla, uma
-// pessoa faz Manhã + Tarde e a outra Tarde + Noite.
+// pessoa faz a Manhã (08h–17h) e a outra a Noite (17h–02h). Com três turnos
+// ativos (modelo antigo, até 13/11/2026), era Manhã + Tarde e Tarde + Noite.
 //
 // As escalas continuam sendo linhas normais de `escalas` (uma por turno), então
 // histórico, assiduidade, trocas e comissionamento seguem funcionando iguais.
@@ -88,13 +89,15 @@ export function useGerarEscalaMensal() {
     const ordenados = [...turnos].sort(
       (a, b) => (a.ordem_exibicao ?? 999) - (b.ordem_exibicao ?? 999)
     );
-    if (ordenados.length < 3) {
+    if (ordenados.length < 2) {
       return {
-        erro: 'São necessários 3 turnos ativos (Manhã, Tarde e Noite) para gerar a escala.',
+        erro: 'São necessários os turnos ativos de Manhã e Noite para gerar a escala.',
         ...SEM_RESULTADO,
       };
     }
-    const [manha, tarde, noite] = ordenados;
+    const manha = ordenados[0];
+    const noite = ordenados[ordenados.length - 1];
+    const tarde = ordenados.length >= 3 ? ordenados[1] : null;
 
     const { data: duplasData, error: erroDuplas } = await supabase
       .from('duplas_fim_de_semana')
@@ -152,8 +155,8 @@ export function useGerarEscalaMensal() {
         const membros = colaboradores.filter((c) => c.equipe_id === dupla.equipe_id);
 
         const posicoes = [
-          { pessoaId: dupla.manha_tarde_id, marcador: manha, turnosDaPosicao: [manha, tarde] },
-          { pessoaId: dupla.tarde_noite_id, marcador: noite, turnosDaPosicao: [tarde, noite] },
+          { pessoaId: dupla.manha_tarde_id, marcador: manha, turnosDaPosicao: tarde ? [manha, tarde] : [manha] },
+          { pessoaId: dupla.tarde_noite_id, marcador: noite, turnosDaPosicao: tarde ? [tarde, noite] : [noite] },
         ];
 
         for (const { pessoaId, marcador, turnosDaPosicao } of posicoes) {
