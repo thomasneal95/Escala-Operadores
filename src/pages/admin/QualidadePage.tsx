@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState, type ChangeEvent } from 'react';
+import { useEffect, useMemo, useRef, useState, type ChangeEvent, type DragEvent } from 'react';
 import {
   useRelatoriosQualidade,
   type OperadorQualidade,
@@ -90,10 +90,51 @@ export function QualidadePage() {
   const [filtroMes, setFiltroMes] = useState('');
   const [aberto, setAberto] = useState<string | null>(null);
 
-  async function handleArquivo(e: ChangeEvent<HTMLInputElement>) {
+  const [arrastando, setArrastando] = useState(false);
+
+  // Arquivo solto fora da área de envio: o navegador abriria o arquivo e
+  // sairia do site.
+  useEffect(() => {
+    const impedir = (e: globalThis.DragEvent) => {
+      if (e.dataTransfer?.types.includes('Files')) e.preventDefault();
+    };
+    window.addEventListener('dragover', impedir);
+    window.addEventListener('drop', impedir);
+    return () => {
+      window.removeEventListener('dragover', impedir);
+      window.removeEventListener('drop', impedir);
+    };
+  }, []);
+  const ocupado = lendo || salvando || carregando;
+
+  function handleArquivo(e: ChangeEvent<HTMLInputElement>) {
     const arquivo = e.target.files?.[0];
     e.target.value = '';
-    if (!arquivo) return;
+    if (arquivo) processarArquivo(arquivo);
+  }
+
+  function handleSoltar(e: DragEvent<HTMLDivElement>) {
+    e.preventDefault();
+    setArrastando(false);
+    if (ocupado) return;
+    const arquivos = [...e.dataTransfer.files];
+    if (arquivos.length === 0) return;
+    if (arquivos.length > 1) toast('Solte um relatório por vez. Vou abrir só o primeiro.', 'info');
+    const arquivo = arquivos[0];
+    if (!/\.(xlsx|xlsm|xls)$/i.test(arquivo.name)) {
+      toast('O relatório precisa ser um arquivo Excel (.xlsx), no modelo da aba Qualidade.', 'erro');
+      return;
+    }
+    processarArquivo(arquivo);
+  }
+
+  async function processarArquivo(arquivo: File) {
+    if (rascunho) {
+      const trocar = await confirmar(
+        `Já há um relatório em conferência (${rascunho.arquivo.name}) que ainda não foi salvo. Descartar e abrir ${arquivo.name}?`
+      );
+      if (!trocar) return;
+    }
     setLendo(true);
     try {
       const lido = await lerRelatorioQualidade(arquivo);
@@ -198,21 +239,44 @@ export function QualidadePage() {
         melhoria em tópicos para você conferir antes de salvar, e guarda o arquivo original.
       </p>
 
-      <div className="mt-4 flex flex-wrap gap-3">
-        <button
-          onClick={() => entradaArquivo.current?.click()}
-          disabled={lendo || salvando || carregando}
-          className="rounded-md bg-esmeralda px-4 py-2 text-sm font-medium text-white hover:bg-esmeralda-dark disabled:opacity-60"
-        >
-          {lendo ? 'Lendo arquivo...' : 'Enviar relatório'}
-        </button>
-        <a
-          href={MODELO_URL}
-          download="modelo-relatorio-qualidade.xlsx"
-          className="rounded-md border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
-        >
-          Baixar modelo em branco
-        </a>
+      <div
+        role="button"
+        tabIndex={0}
+        onClick={() => !ocupado && entradaArquivo.current?.click()}
+        onKeyDown={(e) => {
+          if ((e.key === 'Enter' || e.key === ' ') && !ocupado) {
+            e.preventDefault();
+            entradaArquivo.current?.click();
+          }
+        }}
+        onDragOver={(e) => {
+          e.preventDefault();
+          e.dataTransfer.dropEffect = ocupado ? 'none' : 'copy';
+          if (!arrastando) setArrastando(true);
+        }}
+        onDragLeave={(e) => {
+          if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setArrastando(false);
+        }}
+        onDrop={handleSoltar}
+        className={`mt-4 flex cursor-pointer flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed px-4 py-8 text-center transition ${
+          arrastando
+            ? 'border-esmeralda bg-esmeralda-light'
+            : 'border-slate-300 bg-white hover:border-esmeralda/60 hover:bg-slate-50'
+        } ${ocupado ? 'cursor-wait opacity-60' : ''}`}
+      >
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} className="h-8 w-8 text-esmeralda">
+          <path d="M12 15V4M7.5 8.5 12 4l4.5 4.5" strokeLinecap="round" strokeLinejoin="round" />
+          <path d="M4 14v4.5A1.5 1.5 0 0 0 5.5 20h13a1.5 1.5 0 0 0 1.5-1.5V14" strokeLinecap="round" />
+        </svg>
+        <p className="text-sm font-medium text-tinta">
+          {lendo ? 'Lendo arquivo...' : arrastando ? 'Solte o arquivo aqui' : 'Arraste o relatório aqui'}
+        </p>
+        {!lendo && !arrastando && (
+          <p className="text-xs text-slate-500">
+            ou <span className="font-medium text-esmeralda-dark underline">clique para escolher</span> · Excel
+            (.xlsx) no modelo
+          </p>
+        )}
         <input
           ref={entradaArquivo}
           type="file"
@@ -221,6 +285,13 @@ export function QualidadePage() {
           className="hidden"
         />
       </div>
+      <a
+        href={MODELO_URL}
+        download="modelo-relatorio-qualidade.xlsx"
+        className="mt-3 inline-block text-sm font-medium text-ceruleo hover:underline"
+      >
+        Baixar modelo em branco
+      </a>
 
       {erro && <p className="mt-4 rounded-md bg-red-50 px-4 py-3 text-sm text-red-700">{erro}</p>}
 
