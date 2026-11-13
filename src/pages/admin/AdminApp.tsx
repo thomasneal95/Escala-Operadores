@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactElement } from 'react';
 import { useAuth } from '../../features/auth/AuthContext';
 import { PainelAdminPage } from './PainelAdminPage';
@@ -18,10 +18,13 @@ import { MultasAdminPage } from './MultasAdminPage';
 import { QualidadePage } from './QualidadePage';
 import { ErrorBoundary } from '../../components/ErrorBoundary';
 import { FallbackErroTela } from '../../components/FallbackErroTela';
-import { NotificacaoBadge } from '../../components/NotificacaoBadge';
 import { useNotificacoesAdmin } from '../../features/notificacoes/useNotificacoesAdmin';
 import { ControleNotificacoes } from '../../components/AtivarNotificacoesCard';
 import { abaDaUrl } from '../../lib/abaDaUrl';
+import { Avatar, ListaNavegacao, MarcaJornada } from '../../components/layout/BarraLateral';
+import type { GrupoNavegacao } from '../../components/layout/BarraLateral';
+import { PaletaComandos, teclaAtalho, useAtalhoPaleta } from '../../components/layout/PaletaComandos';
+import type { ComandoPaleta } from '../../components/layout/PaletaComandos';
 
 type Aba =
   | 'painel'
@@ -57,6 +60,54 @@ const abas: { id: Aba; rotulo: string }[] = [
   { id: 'acesso', rotulo: 'Acesso' },
   { id: 'configuracoes', rotulo: 'Configurações' },
 ];
+
+// Menu agrupado por assunto (a ordem aqui é a ordem na barra lateral).
+const gruposDeAbas: { titulo: string; abas: Aba[] }[] = [
+  { titulo: 'Visão geral', abas: ['painel', 'mapa'] },
+  { titulo: 'Operação', abas: ['escala', 'turnos', 'equipes', 'trocas', 'faltas', 'assiduidade'] },
+  { titulo: 'Pessoas', abas: ['colaboradores', 'acesso'] },
+  { titulo: 'Resultados', abas: ['comissionamento', 'multas', 'qualidade'] },
+  { titulo: 'Sistema', abas: ['historico', 'configuracoes'] },
+];
+
+const descricaoDaAba: Partial<Record<Aba, string>> = {
+  painel: 'Resumo do dia e atalhos',
+  escala: 'Montar, editar e confirmar a escala',
+  mapa: 'Cobertura e análises da operação',
+  trocas: 'Aprovar trocas de turno',
+  comissionamento: 'Fechamento mensal e pagamentos',
+  qualidade: 'Relatórios e painel de qualidade',
+  acesso: 'Contas, senhas e acesso dos operadores',
+};
+
+// Texto de cada pendência na central de avisos.
+function textoPendencia(aba: Aba, n: number) {
+  const plural = n > 1;
+  switch (aba) {
+    case 'trocas':
+      return `${n} troca${plural ? 's' : ''} aguardando aprovação`;
+    case 'multas':
+      return `${n} multa${plural ? 's' : ''} para revisar`;
+    case 'escala':
+      return 'Escala do próximo período para montar';
+    case 'historico':
+      return `${n} presença${plural ? 's' : ''} para conferir`;
+    case 'comissionamento':
+      return `${n} venda${plural ? 's' : ''} de infoproduto para conferir`;
+    default:
+      return `${n} pendência${plural ? 's' : ''}`;
+  }
+}
+
+const CHAVE_MENU_FIXO = 'jornada360-menu-fixo';
+
+function lerMenuFixo() {
+  try {
+    return localStorage.getItem(CHAVE_MENU_FIXO) === '1';
+  } catch {
+    return false;
+  }
+}
 
 const iconeMenu = (
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8}>
@@ -173,6 +224,27 @@ const iconesPorAba: Record<Aba, ReactElement> = {
   ),
 };
 
+const iconeBusca = (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8}>
+    <circle cx="11" cy="11" r="6.5" />
+    <path d="m16 16 4.5 4.5" strokeLinecap="round" />
+  </svg>
+);
+
+const iconeSino = (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8}>
+    <path d="M6 16V11a6 6 0 1 1 12 0v5l1.5 2h-15L6 16Z" strokeLinejoin="round" />
+    <path d="M10 20.5a2.2 2.2 0 0 0 4 0" strokeLinecap="round" />
+  </svg>
+);
+
+const iconeAlfinete = (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8}>
+    <path d="M9 4h6l-1 5 3 3v2H7v-2l3-3-1-5Z" strokeLinejoin="round" />
+    <path d="M12 14v6" strokeLinecap="round" />
+  </svg>
+);
+
 const iconeSair = (
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8}>
     <path d="M15 17l5-5-5-5" strokeLinecap="round" strokeLinejoin="round" />
@@ -190,6 +262,15 @@ export function AdminApp() {
     )
   );
   const [menuAberto, setMenuAberto] = useState(false);
+  const [paletaAberta, setPaletaAberta] = useState(false);
+  const [avisosAbertos, setAvisosAbertos] = useState(false);
+  // Barra lateral do desktop: recolhida (só ícones) e abre ao passar o mouse;
+  // "fixar" deixa aberta e empurra o conteúdo.
+  const [menuFixo, setMenuFixo] = useState(lerMenuFixo);
+  const [sobreMenu, setSobreMenu] = useState(false);
+  const recolhida = !menuFixo && !sobreMenu;
+  const avisosRef = useRef<HTMLDivElement>(null);
+
   const { trocasPendentes, multasPendentes, escalaParaMontar, presencasPendentes, infoprodutosPendentes } =
     useNotificacoesAdmin();
 
@@ -202,90 +283,289 @@ export function AdminApp() {
   };
   // Não conta a aba em que a pessoa já está — ela já está vendo o que
   // precisa ver ali, o ponto no menu é só pra avisar de OUTRA aba.
-  const totalNotificacoes = Object.entries(contagemPorAba)
-    .filter(([id]) => id !== abaAtiva)
-    .reduce((soma, [, valor]) => soma + (valor ?? 0), 0);
+  const pendencias = (Object.entries(contagemPorAba) as [Aba, number][]).filter(
+    ([id, valor]) => id !== abaAtiva && valor > 0
+  );
+  const totalNotificacoes = pendencias.reduce((soma, [, valor]) => soma + valor, 0);
 
-  // Esc fecha o menu.
+  // Esc fecha o menu e a central de avisos.
   useEffect(() => {
-    if (!menuAberto) return;
+    if (!menuAberto && !avisosAbertos) return;
     const aoTeclar = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setMenuAberto(false);
+      if (e.key === 'Escape') {
+        setMenuAberto(false);
+        setAvisosAbertos(false);
+      }
     };
     window.addEventListener('keydown', aoTeclar);
     return () => window.removeEventListener('keydown', aoTeclar);
-  }, [menuAberto]);
+  }, [menuAberto, avisosAbertos]);
 
-  function selecionarAba(aba: Aba) {
+  // Clique fora fecha a central de avisos.
+  useEffect(() => {
+    if (!avisosAbertos) return;
+    const aoClicar = (e: MouseEvent) => {
+      if (!avisosRef.current?.contains(e.target as Node)) setAvisosAbertos(false);
+    };
+    window.addEventListener('mousedown', aoClicar);
+    return () => window.removeEventListener('mousedown', aoClicar);
+  }, [avisosAbertos]);
+
+  const selecionarAba = useCallback((aba: Aba) => {
     setAbaAtiva(aba);
     setMenuAberto(false);
+    setAvisosAbertos(false);
+    window.scrollTo({ top: 0 });
+  }, []);
+
+  function alternarMenuFixo() {
+    setMenuFixo((atual) => {
+      try {
+        localStorage.setItem(CHAVE_MENU_FIXO, atual ? '0' : '1');
+      } catch {
+        // sem armazenamento: vale só nesta visita
+      }
+      return !atual;
+    });
   }
 
-  const rotuloAtivo = abas.find((a) => a.id === abaAtiva)?.rotulo ?? '';
+  const abrirPaleta = useCallback(() => setPaletaAberta(true), []);
+  useAtalhoPaleta(abrirPaleta);
+
+  const rotuloDe = (id: Aba) => abas.find((a) => a.id === id)?.rotulo ?? '';
+  const grupoAtivo = gruposDeAbas.find((g) => g.abas.includes(abaAtiva))?.titulo ?? '';
+
+  const grupos: GrupoNavegacao<Aba>[] = gruposDeAbas.map((g) => ({
+    titulo: g.titulo,
+    itens: g.abas.map((id) => ({
+      id,
+      rotulo: rotuloDe(id),
+      icone: iconesPorAba[id],
+      contagem: contagemPorAba[id],
+    })),
+  }));
+
+  const comandos: ComandoPaleta[] = useMemo(
+    () => [
+      ...gruposDeAbas.flatMap((g) =>
+        g.abas.map((id) => ({
+          id,
+          rotulo: abas.find((a) => a.id === id)?.rotulo ?? id,
+          grupo: g.titulo,
+          descricao: descricaoDaAba[id],
+          icone: iconesPorAba[id],
+          sinonimos: id === 'mapa' ? 'mapa cobertura' : id === 'acesso' ? 'senha login conta entrar' : undefined,
+          executar: () => selecionarAba(id),
+        }))
+      ),
+      {
+        id: 'sair',
+        rotulo: 'Sair da conta',
+        grupo: 'Conta',
+        icone: iconeSair,
+        sinonimos: 'logout',
+        executar: sair,
+      },
+    ],
+    [selecionarAba, sair]
+  );
+
+  const rodapeNavegacao = (focavel: boolean, compacto: boolean) => (
+    <div className="border-t border-white/[0.07] px-3 py-3">
+      <div className="flex items-center gap-3 rounded-xl px-2 py-2">
+        <Avatar nome={perfil?.nome_completo} tamanho="sm" />
+        <div className={`min-w-0 transition-opacity duration-200 ${compacto ? 'opacity-0' : 'opacity-100'}`}>
+          <p className="truncate whitespace-nowrap text-sm font-medium text-white">{perfil?.nome_completo}</p>
+          <p className="whitespace-nowrap text-xs text-slate-500">Administrador</p>
+        </div>
+      </div>
+      <div className={compacto ? 'hidden' : ''}>
+        <ControleNotificacoes />
+      </div>
+      <button
+        onClick={sair}
+        tabIndex={focavel ? 0 : -1}
+        title={compacto ? 'Sair' : undefined}
+        className="mt-1 flex w-full items-center gap-3 rounded-xl px-4 py-2.5 text-left text-sm font-medium text-slate-400 transition-colors hover:bg-white/[0.06] hover:text-white"
+      >
+        <span className="h-5 w-5 shrink-0">{iconeSair}</span>
+        <span className={`whitespace-nowrap transition-opacity duration-200 ${compacto ? 'opacity-0' : 'opacity-100'}`}>
+          Sair
+        </span>
+      </button>
+    </div>
+  );
 
   return (
-    <div className="min-h-screen bg-nuvem">
-      {/* Barra superior — menu sanduíche em qualquer tamanho de tela, para o
-          conteúdo (tabelas) ocupar a largura toda. */}
-      <header className="sticky top-0 z-20 bg-tinta topo-seguro">
-        <div className="flex items-center justify-between gap-3 px-4 py-3 sm:px-6">
-          <div className="flex min-w-0 items-center gap-3">
+    <div className="fundo-app min-h-screen">
+      {/* Barra lateral do desktop */}
+      <aside
+        onMouseEnter={() => setSobreMenu(true)}
+        onMouseLeave={() => setSobreMenu(false)}
+        onFocus={() => setSobreMenu(true)}
+        onBlur={(e) => {
+          if (!e.currentTarget.contains(e.relatedTarget as Node)) setSobreMenu(false);
+        }}
+        className={`fundo-navegacao fixed inset-y-0 left-0 z-40 hidden flex-col overflow-hidden border-r border-white/[0.06] transition-[width,box-shadow] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] lg:flex ${
+          recolhida ? 'w-[76px]' : 'w-[264px]'
+        } ${!menuFixo && !recolhida ? 'shadow-2xl' : ''}`}
+        aria-label="Menu principal"
+      >
+        <div className="flex h-16 shrink-0 items-center justify-between px-[18px]">
+          <MarcaJornada subtitulo="Administração" compacta={recolhida} />
+          <button
+            onClick={alternarMenuFixo}
+            title={menuFixo ? 'Soltar o menu' : 'Fixar o menu aberto'}
+            aria-pressed={menuFixo}
+            className={`h-8 w-8 shrink-0 items-center justify-center rounded-lg transition ${
+              recolhida ? 'hidden' : 'flex'
+            } ${menuFixo ? 'bg-white/10 text-esmeralda' : 'text-slate-500 hover:bg-white/[0.06] hover:text-white'}`}
+          >
+            <span className={`h-4 w-4 transition-transform ${menuFixo ? '' : 'rotate-45'}`}>{iconeAlfinete}</span>
+          </button>
+        </div>
+        <nav className="flex-1 overflow-y-auto overflow-x-hidden px-3 pb-4 pt-2">
+          <ListaNavegacao grupos={grupos} ativo={abaAtiva} aoSelecionar={selecionarAba} recolhida={recolhida} />
+        </nav>
+        {rodapeNavegacao(true, recolhida)}
+      </aside>
+
+      <div
+        className={`transition-[padding] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] ${
+          menuFixo ? 'lg:pl-[264px]' : 'lg:pl-[76px]'
+        }`}
+      >
+        {/* Barra superior */}
+        <header className="vidro sticky top-0 z-30 border-b border-tinta/[0.06] topo-seguro">
+          <div className="flex h-16 items-center gap-3 px-4 sm:px-6 lg:px-8">
             <button
               onClick={() => setMenuAberto(true)}
-              className="relative rounded-md p-1.5 text-white hover:bg-white/10"
+              className="relative -ml-1 rounded-lg p-2 text-tinta transition hover:bg-tinta/5 lg:hidden"
               aria-label="Abrir menu"
               aria-expanded={menuAberto}
             >
               <span className="block h-6 w-6">{iconeMenu}</span>
               {totalNotificacoes > 0 && (
-                <span className="absolute right-1 top-1 h-2 w-2 rounded-full bg-red-500" />
+                <span className="pulso-notificacao absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-red-500" />
               )}
             </button>
-            <div className="min-w-0">
-              <p className="font-mono text-[10px] font-medium uppercase tracking-widest text-esmeralda">
-                Jornada 360 · Administração
+
+            <div className="min-w-0 flex-1">
+              <p className="flex items-center gap-1.5 font-mono text-[10px] font-medium uppercase tracking-[0.18em] text-slate-400">
+                <span className="hidden sm:inline">Administração</span>
+                <span className="hidden text-slate-300 sm:inline">/</span>
+                <span className="text-esmeralda-dark">{grupoAtivo}</span>
               </p>
-              <p className="truncate font-display font-medium text-white">{rotuloAtivo}</p>
+              <p key={abaAtiva} className="animate-fade-in truncate font-display text-[17px] font-semibold tracking-tight text-tinta">
+                {rotuloDe(abaAtiva)}
+              </p>
+            </div>
+
+            <button
+              onClick={abrirPaleta}
+              className="group flex items-center gap-2 rounded-xl border border-tinta/10 bg-white/70 p-2 text-sm text-slate-500 shadow-sm transition hover:border-tinta/20 hover:bg-white hover:text-tinta sm:w-56 sm:px-3"
+              aria-label="Buscar telas"
+            >
+              <span className="h-[18px] w-[18px] shrink-0">{iconeBusca}</span>
+              <span className="hidden flex-1 text-left sm:block">Buscar...</span>
+              <kbd className="hidden rounded-md border border-slate-200 bg-slate-50 px-1.5 py-0.5 font-mono text-[10px] text-slate-500 sm:block">
+                {teclaAtalho} K
+              </kbd>
+            </button>
+
+            <div ref={avisosRef} className="relative">
+              <button
+                onClick={() => setAvisosAbertos((a) => !a)}
+                className={`relative rounded-xl border p-2 shadow-sm transition ${
+                  avisosAbertos
+                    ? 'border-tinta bg-tinta text-white'
+                    : 'border-tinta/10 bg-white/70 text-slate-600 hover:border-tinta/20 hover:bg-white hover:text-tinta'
+                }`}
+                aria-label={`Pendências${totalNotificacoes ? ` (${totalNotificacoes})` : ''}`}
+                aria-expanded={avisosAbertos}
+              >
+                <span className="block h-[18px] w-[18px]">{iconeSino}</span>
+                {totalNotificacoes > 0 && (
+                  <span className="pulso-notificacao absolute -right-1.5 -top-1.5 flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold leading-none text-white ring-2 ring-nuvem">
+                    {totalNotificacoes > 9 ? '9+' : totalNotificacoes}
+                  </span>
+                )}
+              </button>
+              {avisosAbertos && (
+                <div className="animate-escala-in absolute right-0 top-[calc(100%+0.5rem)] w-[min(20rem,calc(100vw-2rem))] origin-top-right overflow-hidden rounded-2xl border border-tinta/10 bg-white shadow-xl">
+                  <div className="border-b border-slate-100 px-4 py-3">
+                    <p className="font-display font-semibold text-tinta">Pendências</p>
+                    <p className="text-xs text-slate-500">
+                      {pendencias.length ? 'O que está esperando por você' : 'Tudo em dia por aqui.'}
+                    </p>
+                  </div>
+                  {pendencias.length === 0 ? (
+                    <div className="flex flex-col items-center gap-2 px-4 py-8 text-center">
+                      <span className="flex h-11 w-11 items-center justify-center rounded-full bg-esmeralda-light text-esmeralda-dark">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="h-5 w-5">
+                          <path d="M5 12.5l4.5 4.5L19 7.5" strokeLinecap="round" strokeLinejoin="round" />
+                        </svg>
+                      </span>
+                      <p className="text-sm text-slate-500">Nenhuma pendência.</p>
+                    </div>
+                  ) : (
+                    <ul className="p-1.5">
+                      {pendencias.map(([id, n]) => (
+                        <li key={id}>
+                          <button
+                            onClick={() => selecionarAba(id)}
+                            className="group flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left transition hover:bg-slate-50"
+                          >
+                            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-red-50 text-red-600">
+                              <span className="h-[18px] w-[18px]">{iconesPorAba[id]}</span>
+                            </span>
+                            <span className="min-w-0 flex-1">
+                              <span className="block text-sm font-medium text-tinta">{textoPendencia(id, n)}</span>
+                              <span className="block text-xs text-slate-400">{rotuloDe(id)}</span>
+                            </span>
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="h-4 w-4 text-slate-300 transition group-hover:translate-x-0.5 group-hover:text-tinta">
+                              <path d="M9 6l6 6-6 6" strokeLinecap="round" strokeLinejoin="round" />
+                            </svg>
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              )}
             </div>
           </div>
-          <div className="flex items-center gap-3">
-            <p className="hidden truncate text-sm text-slate-300 sm:block">{perfil?.nome_completo}</p>
-            <button
-              onClick={sair}
-              className="rounded-md border border-white/20 px-3 py-1.5 text-sm font-medium text-white transition hover:bg-white/10"
-            >
-              Sair
-            </button>
+        </header>
+
+        {/* Conteúdo principal */}
+        <main className="px-4 pt-8 pb-[calc(2.5rem+env(safe-area-inset-bottom))] sm:px-6 lg:px-8">
+          <div className="mx-auto max-w-screen-2xl">
+            <ErrorBoundary key={abaAtiva} fallback={<FallbackErroTela />}>
+              <div className="entrada-pagina">
+                {abaAtiva === 'painel' && <PainelAdminPage aoNavegar={selecionarAba} />}
+                {abaAtiva === 'escala' && <VisaoAdminPage />}
+                {abaAtiva === 'equipes' && <EquipesPage />}
+                {abaAtiva === 'turnos' && <TurnosPage />}
+                {abaAtiva === 'colaboradores' && <ColaboradoresPage />}
+                {abaAtiva === 'trocas' && <SolicitacoesTrocaAdminPage />}
+                {abaAtiva === 'mapa' && <MapaCoberturaPage />}
+                {abaAtiva === 'assiduidade' && <AssiduidadePage />}
+                {abaAtiva === 'faltas' && <FaltasPage />}
+                {abaAtiva === 'comissionamento' && <ComissionamentoPage infoprodutosPendentes={infoprodutosPendentes} />}
+                {abaAtiva === 'multas' && <MultasAdminPage />}
+                {abaAtiva === 'qualidade' && <QualidadePage />}
+                {abaAtiva === 'historico' && <HistoricoAdminPage />}
+                {abaAtiva === 'acesso' && <GestaoAcessoPage />}
+                {abaAtiva === 'configuracoes' && <ConfiguracoesPage />}
+              </div>
+            </ErrorBoundary>
           </div>
-        </div>
-      </header>
+        </main>
+      </div>
 
-      {/* Conteúdo principal */}
-      <main className="px-4 pt-8 pb-[calc(2rem+env(safe-area-inset-bottom))] sm:px-6 lg:px-8">
-        <div className="mx-auto max-w-screen-2xl">
-          <ErrorBoundary key={abaAtiva} fallback={<FallbackErroTela />}>
-            {abaAtiva === 'painel' && <PainelAdminPage aoNavegar={setAbaAtiva} />}
-            {abaAtiva === 'escala' && <VisaoAdminPage />}
-            {abaAtiva === 'equipes' && <EquipesPage />}
-            {abaAtiva === 'turnos' && <TurnosPage />}
-            {abaAtiva === 'colaboradores' && <ColaboradoresPage />}
-            {abaAtiva === 'trocas' && <SolicitacoesTrocaAdminPage />}
-            {abaAtiva === 'mapa' && <MapaCoberturaPage />}
-            {abaAtiva === 'assiduidade' && <AssiduidadePage />}
-            {abaAtiva === 'faltas' && <FaltasPage />}
-            {abaAtiva === 'comissionamento' && <ComissionamentoPage infoprodutosPendentes={infoprodutosPendentes} />}
-            {abaAtiva === 'multas' && <MultasAdminPage />}
-            {abaAtiva === 'qualidade' && <QualidadePage />}
-            {abaAtiva === 'historico' && <HistoricoAdminPage />}
-            {abaAtiva === 'acesso' && <GestaoAcessoPage />}
-            {abaAtiva === 'configuracoes' && <ConfiguracoesPage />}
-          </ErrorBoundary>
-        </div>
-      </main>
-
-      {/* Menu (gaveta) — abre por cima do conteúdo */}
+      {/* Menu (gaveta) no celular e tablet */}
       <div
-        className={`fixed inset-0 z-30 bg-black/40 transition-opacity ${
+        className={`fixed inset-0 z-50 bg-tinta/50 backdrop-blur-[2px] transition-opacity duration-300 lg:hidden ${
           menuAberto ? 'opacity-100' : 'pointer-events-none opacity-0'
         }`}
         onClick={() => setMenuAberto(false)}
@@ -295,63 +575,30 @@ export function AdminApp() {
           role="dialog"
           aria-modal="true"
           aria-label="Menu"
-          className={`flex h-full w-64 max-w-[80%] flex-col bg-tinta topo-seguro pb-[env(safe-area-inset-bottom)] shadow-xl transition-transform ${
+          className={`fundo-navegacao flex h-full w-[280px] max-w-[85%] flex-col topo-seguro pb-[env(safe-area-inset-bottom)] shadow-2xl transition-transform duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] ${
             menuAberto ? 'translate-x-0' : '-translate-x-full'
           }`}
           onClick={(e) => e.stopPropagation()}
         >
-          <div className="flex items-center justify-between border-b border-white/10 px-5 py-4">
-            <div>
-              <p className="font-mono text-xs font-medium uppercase tracking-widest text-esmeralda">
-                Jornada 360
-              </p>
-              <p className="mt-0.5 font-display font-semibold text-white">Administração</p>
-            </div>
+          <div className="flex h-16 shrink-0 items-center justify-between px-[18px]">
+            <MarcaJornada subtitulo="Administração" />
             <button
               onClick={() => setMenuAberto(false)}
               tabIndex={menuAberto ? 0 : -1}
-              className="rounded-md p-1 text-xl leading-none text-white/70 hover:bg-white/10 hover:text-white"
+              className="flex h-8 w-8 items-center justify-center rounded-lg text-xl leading-none text-slate-400 transition hover:bg-white/10 hover:text-white"
               aria-label="Fechar menu"
             >
               ×
             </button>
           </div>
-          <nav className="flex-1 space-y-1 overflow-y-auto px-3 py-4">
-            {abas.map((aba) => {
-              const ativo = abaAtiva === aba.id;
-              return (
-                <button
-                  key={aba.id}
-                  onClick={() => selecionarAba(aba.id)}
-                  tabIndex={menuAberto ? 0 : -1}
-                  className={`flex w-full items-center gap-3 rounded-md px-3 py-2.5 text-left text-sm font-medium transition ${
-                    ativo ? 'bg-esmeralda text-white' : 'text-slate-300 hover:bg-white/10 hover:text-white'
-                  }`}
-                >
-                  <span className="h-5 w-5 shrink-0">{iconesPorAba[aba.id]}</span>
-                  {aba.rotulo}
-                  <NotificacaoBadge contagem={ativo ? 0 : (contagemPorAba[aba.id] ?? 0)} />
-                </button>
-              );
-            })}
+          <nav className="flex-1 overflow-y-auto px-3 pb-4 pt-2">
+            <ListaNavegacao grupos={grupos} ativo={abaAtiva} aoSelecionar={selecionarAba} focavel={menuAberto} />
           </nav>
-          <div className="border-t border-white/10 px-3 py-4">
-            <div className="rounded-md px-3 py-2">
-              <p className="text-xs text-slate-400">Logado como</p>
-              <p className="truncate text-sm font-medium text-white">{perfil?.nome_completo}</p>
-            </div>
-            <ControleNotificacoes />
-            <button
-              onClick={sair}
-              tabIndex={menuAberto ? 0 : -1}
-              className="mt-1 flex w-full items-center gap-3 rounded-md px-3 py-2.5 text-left text-sm font-medium text-slate-300 transition hover:bg-white/10 hover:text-white"
-            >
-              <span className="h-5 w-5 shrink-0">{iconeSair}</span>
-              Sair
-            </button>
-          </div>
+          {rodapeNavegacao(menuAberto, false)}
         </div>
       </div>
+
+      <PaletaComandos aberta={paletaAberta} aoFechar={() => setPaletaAberta(false)} comandos={comandos} />
     </div>
   );
 }

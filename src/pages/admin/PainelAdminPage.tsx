@@ -2,6 +2,14 @@ import { usePainelAdmin } from '../../features/schedules/usePainelAdmin';
 import { Skeleton } from '../../components/Skeleton';
 import { InstalarAppCard } from '../../components/InstalarAppCard';
 import { AtivarNotificacoesCard } from '../../components/AtivarNotificacoesCard';
+import { useAuth } from '../../features/auth/AuthContext';
+
+function saudacao(hora: number) {
+  if (hora < 5) return 'Boa noite';
+  if (hora < 12) return 'Bom dia';
+  if (hora < 18) return 'Boa tarde';
+  return 'Boa noite';
+}
 
 function formatarData(data: string) {
   const [ano, mes, dia] = data.split('-');
@@ -27,7 +35,8 @@ interface PainelAdminPageProps {
 }
 
 export function PainelAdminPage({ aoNavegar }: PainelAdminPageProps) {
-  
+  const { perfil } = useAuth();
+  const primeiroNome = perfil?.nome_completo?.split(' ')[0] ?? '';
   const { dados, carregando, erro } = usePainelAdmin();
 
     if (carregando) {
@@ -67,9 +76,14 @@ export function PainelAdminPage({ aoNavegar }: PainelAdminPageProps) {
       <AtivarNotificacoesCard textoExtra="Saiba na hora quando houver troca para aprovar, venda de infoproduto para conferir ou presença a confirmar." />
 
       <p className="font-mono text-xs font-medium uppercase tracking-widest text-ceruleo">
-        Painel
+        {new Date().toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long' })}
       </p>
-      <h1 className="mt-1 font-display text-2xl font-semibold text-tinta">Visão geral</h1>
+      <h1 className="mt-1 font-display text-2xl font-semibold text-tinta sm:text-3xl">
+        {saudacao(new Date().getHours())}
+        {primeiroNome ? `, ${primeiroNome}` : ''}
+        <span className="text-esmeralda">.</span>
+      </h1>
+      <p className="mt-1 text-sm text-slate-500">Aqui está a visão geral da operação.</p>
 
       {/* Card do período atual */}
       <div className="mt-6 rounded-lg border border-slate-200 bg-white p-6">

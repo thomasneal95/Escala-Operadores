@@ -1,12 +1,13 @@
-@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap');
 
 @import "tailwindcss";
 
 @theme {
-  /* Paleta */
+  /* Paleta da marca */
   --color-tinta: #101F38;
   --color-tinta-light: #1C3355;
-  --color-nuvem: #F2F6F7;
+  --color-tinta-950: #0A1426;
+  --color-nuvem: #F3F6F8;
   --color-ceruleo: #2F9BD6;
   --color-ceruleo-light: #E3F2FB;
   --color-esmeralda: #1AA36B;
@@ -19,11 +20,205 @@
   --font-display: "Space Grotesk", ui-sans-serif, system-ui, sans-serif;
   --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
   --font-mono: "IBM Plex Mono", ui-monospace, monospace;
+
+  /* Cantos um pouco mais generosos em todo o site */
+  --radius-sm: 0.3rem;
+  --radius-md: 0.55rem;
+  --radius-lg: 0.85rem;
+  --radius-xl: 1.1rem;
+  --radius-2xl: 1.5rem;
+
+  /* Sombras em camadas, tingidas com a tinta da marca (nunca preto puro) */
+  --shadow-sm: 0 1px 2px rgb(16 31 56 / 0.05), 0 1px 1px rgb(16 31 56 / 0.03);
+  --shadow: 0 1px 2px rgb(16 31 56 / 0.05), 0 4px 12px -2px rgb(16 31 56 / 0.06);
+  --shadow-md: 0 2px 4px rgb(16 31 56 / 0.04), 0 10px 24px -6px rgb(16 31 56 / 0.1);
+  --shadow-lg: 0 4px 8px rgb(16 31 56 / 0.04), 0 20px 40px -10px rgb(16 31 56 / 0.16);
+  --shadow-xl: 0 8px 16px rgb(16 31 56 / 0.06), 0 32px 64px -16px rgb(16 31 56 / 0.24);
+  --shadow-2xl: 0 12px 24px rgb(16 31 56 / 0.08), 0 48px 96px -24px rgb(16 31 56 / 0.32);
+
+  --ease-suave: cubic-bezier(0.22, 1, 0.36, 1);
+
+  --animate-shimmer: shimmer 1.6s linear infinite;
 }
 
-body {
-  font-family: var(--font-sans);
+/* ---------------------------------------------------------------------------
+   Base
+   ------------------------------------------------------------------------ */
+
+@layer base {
+  html {
+    -webkit-tap-highlight-color: transparent;
+    scroll-behavior: smooth;
+  }
+
+  body {
+    font-family: var(--font-sans);
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+    color: var(--color-tinta);
+    background: var(--color-nuvem);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+  }
+
+  ::selection {
+    background: rgb(26 163 107 / 0.22);
+  }
+
+  /* Campos: transição suave e foco com halo na cor da marca */
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]),
+  select,
+  textarea {
+    transition:
+      border-color 0.18s ease,
+      box-shadow 0.18s ease,
+      background-color 0.18s ease;
+  }
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]):focus,
+  select:focus,
+  textarea:focus {
+    outline: none;
+    border-color: var(--color-esmeralda);
+    box-shadow: 0 0 0 4px rgb(26 163 107 / 0.14);
+  }
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]):hover:not(:focus):not(:disabled),
+  select:hover:not(:focus):not(:disabled),
+  textarea:hover:not(:focus):not(:disabled) {
+    border-color: var(--color-slate-400);
+  }
+
+  input[type="checkbox"],
+  input[type="radio"] {
+    accent-color: var(--color-esmeralda);
+  }
+
+  button,
+  [role="button"],
+  a {
+    transition-timing-function: var(--ease-suave);
+  }
+
+  /* Leve "afundar" ao clicar em qualquer botão */
+  button:not(:disabled):active {
+    transform: translateY(0.5px) scale(0.985);
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--color-esmeralda);
+    outline-offset: 2px;
+  }
+
+  /* Tabelas: cabeçalho discreto e linhas que respondem ao cursor */
+  table {
+    font-variant-numeric: tabular-nums;
+  }
+  tbody tr {
+    transition: background-color 0.15s ease;
+  }
+  tbody tr:hover {
+    background-color: rgb(243 246 248 / 0.7);
+  }
+
+  h1,
+  h2,
+  h3 {
+    text-wrap: balance;
+  }
 }
+
+/* ---------------------------------------------------------------------------
+   Refinamentos globais das peças que se repetem em todas as telas.
+   Ficam fora de @layer para valerem sobre os utilitários onde precisam.
+   ------------------------------------------------------------------------ */
+
+h1.font-display {
+  letter-spacing: -0.025em;
+}
+h2.font-display,
+h3.font-display {
+  letter-spacing: -0.015em;
+}
+
+/* Cartões brancos com borda: profundidade sutil em vez de só a linha */
+.bg-white:is(.rounded-lg, .rounded-xl, .rounded-2xl):is(.border-slate-200, .border-slate-200\/80):not([class*="shadow"]) {
+  box-shadow: var(--shadow-sm);
+  border-color: rgb(16 31 56 / 0.08);
+}
+
+/* Cartões clicáveis: sobem um pouco ao passar o mouse */
+button.bg-white:is(.rounded-lg, .rounded-xl):is(.border-slate-200),
+a.bg-white:is(.rounded-lg, .rounded-xl):is(.border-slate-200) {
+  transition:
+    transform 0.25s var(--ease-suave),
+    box-shadow 0.25s var(--ease-suave),
+    border-color 0.25s ease;
+}
+@media (hover: hover) {
+  button.bg-white:is(.rounded-lg, .rounded-xl):is(.border-slate-200):hover:not(:disabled),
+  a.bg-white:is(.rounded-lg, .rounded-xl):is(.border-slate-200):hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-md);
+  }
+}
+
+/* Botões principais: brilho sutil por cima da cor (o hover continua
+   trocando a cor de fundo por baixo) */
+button:is(.bg-esmeralda, .bg-tinta, .bg-profundo, .bg-ceruleo, .bg-red-600, .bg-amber-500):not(:disabled) {
+  background-image: linear-gradient(180deg, rgb(255 255 255 / 0.12), rgb(255 255 255 / 0) 60%);
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.14),
+    0 1px 2px rgb(16 31 56 / 0.12);
+}
+button.bg-esmeralda:not(:disabled):hover {
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.14),
+    0 6px 18px -6px rgb(26 163 107 / 0.55);
+}
+
+/* Fundo de modal: desfoca o que está atrás */
+.fixed.inset-0:is(.bg-black\/40, .bg-black\/50, .bg-black\/60, .bg-tinta\/40, .bg-tinta\/50, .bg-tinta\/60) {
+  -webkit-backdrop-filter: blur(3px);
+  backdrop-filter: blur(3px);
+}
+
+/* Barra de rolagem fina e discreta */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgb(16 31 56 / 0.18) transparent;
+}
+
+/* ---------------------------------------------------------------------------
+   Fundo do app: névoa suave nas cores da marca
+   ------------------------------------------------------------------------ */
+
+.fundo-app {
+  background-color: var(--color-nuvem);
+  background-image:
+    radial-gradient(60rem 30rem at 100% -10%, rgb(47 155 214 / 0.07), transparent 60%),
+    radial-gradient(50rem 28rem at -10% 0%, rgb(26 163 107 / 0.06), transparent 60%);
+  background-attachment: fixed;
+}
+
+/* Painel escuro da navegação: tinta com um brilho de aurora no topo */
+.fundo-navegacao {
+  background-color: var(--color-tinta);
+  background-image:
+    radial-gradient(22rem 16rem at 0% 0%, rgb(26 163 107 / 0.22), transparent 70%),
+    radial-gradient(18rem 18rem at 100% 100%, rgb(47 155 214 / 0.12), transparent 70%),
+    linear-gradient(180deg, var(--color-tinta) 0%, var(--color-tinta-950) 100%);
+}
+
+/* Vidro claro (barra superior) */
+.vidro {
+  background-color: rgb(243 246 248 / 0.72);
+  -webkit-backdrop-filter: saturate(1.6) blur(14px);
+  backdrop-filter: saturate(1.6) blur(14px);
+}
+
+/* ---------------------------------------------------------------------------
+   Movimento
+   ------------------------------------------------------------------------ */
+
 @keyframes fade-in-up {
   from {
     opacity: 0;
@@ -35,8 +230,134 @@ body {
   }
 }
 
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes escala-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes shimmer {
+  from {
+    background-position: 200% 0;
+  }
+  to {
+    background-position: -200% 0;
+  }
+}
+
+@keyframes aurora-a {
+  0%,
+  100% {
+    transform: translate3d(-8%, -6%, 0) scale(1);
+  }
+  50% {
+    transform: translate3d(6%, 8%, 0) scale(1.15);
+  }
+}
+
+@keyframes aurora-b {
+  0%,
+  100% {
+    transform: translate3d(10%, 6%, 0) scale(1.1);
+  }
+  50% {
+    transform: translate3d(-6%, -8%, 0) scale(0.95);
+  }
+}
+
+@keyframes orbita {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes pulso-anel {
+  0% {
+    box-shadow: 0 0 0 0 rgb(239 68 68 / 0.55);
+  }
+  70% {
+    box-shadow: 0 0 0 7px rgb(239 68 68 / 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgb(239 68 68 / 0);
+  }
+}
+
 .animate-fade-in-up {
-  animation: fade-in-up 0.5s ease-out;
+  animation: fade-in-up 0.5s var(--ease-suave);
+}
+
+.animate-escala-in {
+  animation: escala-in 0.28s var(--ease-suave);
+}
+
+.animate-fade-in {
+  animation: fade-in 0.2s ease-out;
+}
+
+.animate-orbita {
+  animation: orbita 1.1s linear infinite;
+}
+
+.pulso-notificacao {
+  animation: pulso-anel 2s ease-out infinite;
+}
+
+/* Entrada da tela: os blocos da página aparecem em cascata. Só opacidade e
+   deslocamento curto, sem fill-mode "forwards" — ao terminar não sobra
+   transform (que atrapalharia modais com position: fixed). */
+.entrada-pagina > * > *:not(.fixed) {
+  animation: fade-in-up 0.5s var(--ease-suave) backwards;
+}
+.entrada-pagina > * > *:nth-child(2) {
+  animation-delay: 40ms;
+}
+.entrada-pagina > * > *:nth-child(3) {
+  animation-delay: 80ms;
+}
+.entrada-pagina > * > *:nth-child(4) {
+  animation-delay: 120ms;
+}
+.entrada-pagina > * > *:nth-child(5) {
+  animation-delay: 160ms;
+}
+.entrada-pagina > * > *:nth-child(6) {
+  animation-delay: 200ms;
+}
+.entrada-pagina > * > *:nth-child(n + 7) {
+  animation-delay: 240ms;
+}
+
+/* Esqueleto de carregamento com brilho correndo */
+.esqueleto {
+  background: linear-gradient(90deg, rgb(16 31 56 / 0.06) 25%, rgb(16 31 56 / 0.11) 37%, rgb(16 31 56 / 0.06) 63%);
+  background-size: 400% 100%;
+  animation: var(--animate-shimmer);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }
 
 /* App instalado (PWA): o conteúdo vai até o topo da tela, por baixo da

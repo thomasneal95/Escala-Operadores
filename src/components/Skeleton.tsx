@@ -5,7 +5,7 @@ interface SkeletonProps {
 // Peça básica: um retângulo cinza pulsando. Combine várias para montar
 // o "esqueleto" de qualquer tela (ex.: uma linha de texto, um card, etc.)
 export function Skeleton({ className = '' }: SkeletonProps) {
-  return <div className={`animate-pulse rounded-md bg-slate-200 ${className}`} />;
+  return <div className={`esqueleto rounded-md ${className}`} />;
 }
 
 // Esqueleto de um card genérico (título + duas linhas), usado em telas

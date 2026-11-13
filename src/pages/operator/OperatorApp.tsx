@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react';
-import type { ReactElement } from 'react';
+import { useCallback, useEffect, useState } from 'react';
+import type { ReactElement, ReactNode } from 'react';
 import { useAuth } from '../../features/auth/AuthContext';
 import { AreaColaboradorPage } from './AreaColaboradorPage';
 import { ColegasEquipePage } from './ColegasEquipePage';
@@ -15,10 +15,13 @@ import { useSouExterno } from '../../features/ganhos/useSouExterno';
 import { TourOperador } from '../../components/TourOperador';
 import { ErrorBoundary } from '../../components/ErrorBoundary';
 import { FallbackErroTela } from '../../components/FallbackErroTela';
-import { NotificacaoBadge } from '../../components/NotificacaoBadge';
 import { useNotificacoesOperador } from '../../features/notificacoes/useNotificacoesOperador';
 import { ControleNotificacoes } from '../../components/AtivarNotificacoesCard';
 import { abaDaUrl } from '../../lib/abaDaUrl';
+import { Avatar, ListaNavegacao, MarcaJornada } from '../../components/layout/BarraLateral';
+import type { GrupoNavegacao } from '../../components/layout/BarraLateral';
+import { PaletaComandos, teclaAtalho, useAtalhoPaleta } from '../../components/layout/PaletaComandos';
+import type { ComandoPaleta } from '../../components/layout/PaletaComandos';
 
 type Aba = 'minha-area' | 'equipe' | 'trocas' | 'ganhos' | 'desempenho' | 'qualidade' | 'infoprodutos' | 'multas' | 'historico';
 
@@ -41,9 +44,34 @@ const abasExterno: { id: Aba; rotulo: string }[] = [
   { id: 'infoprodutos', rotulo: 'Infoprodutos' },
 ];
 
-const iconeMenu = (
+// Agrupamento da barra lateral.
+const gruposDeAbas: { titulo: string; abas: Aba[] }[] = [
+  { titulo: 'Meu dia a dia', abas: ['minha-area', 'equipe', 'trocas'] },
+  { titulo: 'Meus resultados', abas: ['ganhos', 'desempenho', 'qualidade', 'infoprodutos'] },
+  { titulo: 'Registros', abas: ['multas', 'historico'] },
+];
+
+// Abas que ficam direto na barra de baixo do celular (o resto vai em "Mais").
+const abasDaBarraInferior: Aba[] = ['minha-area', 'trocas', 'qualidade', 'ganhos'];
+
+const rotuloCurto: Partial<Record<Aba, string>> = {
+  'minha-area': 'Início',
+  ganhos: 'Ganhos',
+};
+
+const iconeMais = (
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8}>
-    <path d="M4 6h16M4 12h16M4 18h16" strokeLinecap="round" />
+    <rect x="4" y="4" width="6.5" height="6.5" rx="1.6" />
+    <rect x="13.5" y="4" width="6.5" height="6.5" rx="1.6" />
+    <rect x="4" y="13.5" width="6.5" height="6.5" rx="1.6" />
+    <rect x="13.5" y="13.5" width="6.5" height="6.5" rx="1.6" />
+  </svg>
+);
+
+const iconeBusca = (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8}>
+    <circle cx="11" cy="11" r="6.5" />
+    <path d="m16 16 4.5 4.5" strokeLinecap="round" />
   </svg>
 );
 
@@ -125,7 +153,8 @@ export function OperatorApp() {
       'minha-area'
     )
   );
-  const [menuAberto, setMenuAberto] = useState(false);
+  const [maisAberto, setMaisAberto] = useState(false);
+  const [paletaAberta, setPaletaAberta] = useState(false);
   const { externo, carregando: carregandoAcesso } = useSouExterno();
   const abasVisiveis = carregandoAcesso ? [] : externo ? abasExterno : abas;
 
@@ -162,88 +191,128 @@ export function OperatorApp() {
     const atual = escopo[abaAtiva];
     if (atual) marcarVisto(atual);
   }, [abaAtiva, marcarVisto]);
-  // Não conta a aba em que a pessoa já está — ela já está vendo o que
-  // precisa ver ali, o ponto no menu é só pra avisar de OUTRA aba.
-  const totalNotificacoes = Object.entries(contagemPorAba)
-    .filter(([id]) => id !== abaAtiva && abasVisiveis.some((a) => a.id === id))
-    .reduce((soma, [, valor]) => soma + (valor ?? 0), 0);
 
-  function selecionarAba(aba: Aba) {
+  // Esc fecha a gaveta "Mais".
+  useEffect(() => {
+    if (!maisAberto) return;
+    const aoTeclar = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setMaisAberto(false);
+    };
+    window.addEventListener('keydown', aoTeclar);
+    return () => window.removeEventListener('keydown', aoTeclar);
+  }, [maisAberto]);
+
+  const selecionarAba = useCallback((aba: Aba) => {
     setAbaAtiva(aba);
-    setMenuAberto(false);
-  }
+    setMaisAberto(false);
+    window.scrollTo({ top: 0 });
+  }, []);
+
+  const abrirPaleta = useCallback(() => setPaletaAberta(true), []);
+  useAtalhoPaleta(abrirPaleta);
+
+  const rotuloDe = (id: Aba) => abasVisiveis.find((a) => a.id === id)?.rotulo ?? '';
+  const visivel = (id: Aba) => abasVisiveis.some((a) => a.id === id);
+  const contagemVisivel = (id: Aba) => (id === abaAtiva ? 0 : (contagemPorAba[id] ?? 0));
+
+  const grupos: GrupoNavegacao<Aba>[] = externo
+    ? [
+        {
+          itens: abasExterno.map((a) => ({
+            id: a.id,
+            rotulo: a.rotulo,
+            icone: iconesPorAba[a.id],
+            contagem: contagemPorAba[a.id],
+          })),
+        },
+      ]
+    : gruposDeAbas.map((g) => ({
+        titulo: g.titulo,
+        itens: g.abas.filter(visivel).map((id) => ({
+          id,
+          rotulo: rotuloDe(id),
+          icone: iconesPorAba[id],
+          contagem: contagemPorAba[id],
+        })),
+      }));
+
+  // Barra de baixo do celular: até 4 abas + "Mais" com o restante.
+  const abasInferiores = externo ? abasExterno.map((a) => a.id) : abasDaBarraInferior.filter(visivel);
+  const abasNoMais = abasVisiveis.filter((a) => !abasInferiores.includes(a.id));
+  const maisTemAviso = abasNoMais.some((a) => contagemVisivel(a.id) > 0);
+  const maisSelecionado = abasNoMais.some((a) => a.id === abaAtiva);
+
+  const primeiroNome = perfil?.nome_completo?.split(' ')[0] ?? '';
+
+  const comandos: ComandoPaleta[] = [
+    ...abasVisiveis.map((a) => ({
+      id: a.id,
+      rotulo: a.rotulo,
+      grupo: gruposDeAbas.find((g) => g.abas.includes(a.id))?.titulo ?? 'Telas',
+      icone: iconesPorAba[a.id],
+      contagem: contagemVisivel(a.id),
+      sinonimos: a.id === 'minha-area' ? 'inicio escala rodizio' : undefined,
+      executar: () => selecionarAba(a.id),
+    })),
+    { id: 'sair', rotulo: 'Sair da conta', grupo: 'Conta', icone: iconeSair, executar: sair },
+  ];
 
   return (
-    <div className="min-h-screen bg-nuvem">
+    <div className="fundo-app min-h-screen">
       {!carregandoAcesso && !externo && <TourOperador />}
 
-      {/* Cabeçalho — só aparece no celular (desktop usa a barra lateral) */}
-      <header className="bg-tinta topo-seguro sm:hidden">
-        <div className="flex items-center justify-between px-6 py-4">
-          <div className="flex items-center gap-3">
-            <button
-              onClick={() => setMenuAberto(true)}
-              className="relative rounded-md p-1.5 text-white hover:bg-white/10"
-              aria-label="Abrir menu"
-            >
-              <span className="block h-6 w-6">{iconeMenu}</span>
-              {totalNotificacoes > 0 && (
-                <span className="absolute right-1 top-1 h-2 w-2 rounded-full bg-red-500" />
-              )}
-            </button>
-            <div>
-              <p className="text-sm text-slate-400">Olá,</p>
-              <p className="font-display font-medium text-white">{perfil?.nome_completo}</p>
+      {/* Cabeçalho — só no celular (desktop usa a barra lateral) */}
+      <header className="vidro sticky top-0 z-30 border-b border-tinta/[0.06] topo-seguro sm:hidden">
+        <div className="flex items-center justify-between gap-3 px-5 py-3">
+          <div className="flex min-w-0 items-center gap-3">
+            <Avatar nome={perfil?.nome_completo} />
+            <div className="min-w-0">
+              <p className="text-xs text-slate-500">Olá,</p>
+              <p className="truncate font-display font-semibold tracking-tight text-tinta">{primeiroNome}</p>
             </div>
           </div>
           <button
             onClick={sair}
-            className="rounded-md border border-white/20 px-3 py-1.5 text-sm font-medium text-white transition hover:bg-white/10"
+            className="flex items-center gap-1.5 rounded-xl border border-tinta/10 bg-white/70 px-3 py-2 text-sm font-medium text-slate-600 shadow-sm transition hover:bg-white hover:text-tinta"
           >
+            <span className="h-4 w-4">{iconeSair}</span>
             Sair
           </button>
         </div>
       </header>
 
-      {/* Barra lateral fixa — só aparece em telas maiores */}
-      <aside className="fixed inset-y-0 left-0 z-10 hidden w-64 flex-col bg-tinta sm:flex">
-        <div className="border-b border-white/10 px-6 py-6">
-          <p className="font-mono text-xs font-medium uppercase tracking-widest text-esmeralda">
-            Jornada 360
-          </p>
-          <p className="mt-1 font-display text-lg font-semibold text-white">Olá, {perfil?.nome_completo?.split(' ')[0]}</p>
+      {/* Barra lateral fixa — telas maiores */}
+      <aside className="fundo-navegacao fixed inset-y-0 left-0 z-20 hidden w-64 flex-col border-r border-white/[0.06] sm:flex">
+        <div className="px-5 pb-4 pt-5">
+          <MarcaJornada subtitulo={externo ? 'Comissionamento' : 'Portal do operador'} />
+          <div className="mt-5 flex items-center gap-3 rounded-2xl bg-white/[0.04] p-3 ring-1 ring-white/[0.06]">
+            <Avatar nome={perfil?.nome_completo} />
+            <div className="min-w-0">
+              <p className="text-xs text-slate-400">Olá,</p>
+              <p className="truncate font-display font-semibold text-white">{primeiroNome}</p>
+            </div>
+          </div>
+          <button
+            onClick={abrirPaleta}
+            className="mt-3 flex w-full items-center gap-2 rounded-xl border border-white/[0.08] bg-white/[0.03] px-3 py-2 text-sm text-slate-400 transition hover:border-white/15 hover:bg-white/[0.06] hover:text-white"
+          >
+            <span className="h-4 w-4 shrink-0">{iconeBusca}</span>
+            <span className="flex-1 text-left">Buscar...</span>
+            <kbd className="rounded-md border border-white/10 px-1.5 py-0.5 font-mono text-[10px] text-slate-500">
+              {teclaAtalho} K
+            </kbd>
+          </button>
         </div>
 
-        <nav className="flex-1 space-y-1 overflow-y-auto px-3 py-4">
-          {abasVisiveis.map((aba) => {
-            const ativo = abaAtiva === aba.id;
-            return (
-              <button
-                key={aba.id}
-                onClick={() => selecionarAba(aba.id)}
-                className={`flex w-full items-center gap-3 rounded-md px-3 py-2.5 text-left text-sm font-medium transition ${
-                  ativo
-                    ? 'bg-esmeralda text-white'
-                    : 'text-slate-300 hover:bg-white/10 hover:text-white'
-                }`}
-              >
-                <span className="h-5 w-5 shrink-0">{iconesPorAba[aba.id]}</span>
-                {aba.rotulo}
-                <NotificacaoBadge contagem={ativo ? 0 : (contagemPorAba[aba.id] ?? 0)} />
-              </button>
-            );
-          })}
+        <nav className="flex-1 overflow-y-auto px-3 pb-4">
+          {!carregandoAcesso && <ListaNavegacao grupos={grupos} ativo={abaAtiva} aoSelecionar={selecionarAba} />}
         </nav>
 
-        <div className="border-t border-white/10 px-3 py-4">
-          <div className="rounded-md px-3 py-2">
-            <p className="text-xs text-slate-400">Logado como</p>
-            <p className="truncate text-sm font-medium text-white">{perfil?.nome_completo}</p>
-          </div>
+        <div className="border-t border-white/[0.07] px-3 py-3">
           <ControleNotificacoes />
           <button
             onClick={sair}
-            className="mt-1 flex w-full items-center gap-3 rounded-md px-3 py-2.5 text-left text-sm font-medium text-slate-300 transition hover:bg-white/10 hover:text-white"
+            className="mt-1 flex w-full items-center gap-3 rounded-xl px-4 py-2.5 text-left text-sm font-medium text-slate-400 transition-colors hover:bg-white/[0.06] hover:text-white"
           >
             <span className="h-5 w-5 shrink-0">{iconeSair}</span>
             Sair
@@ -252,78 +321,148 @@ export function OperatorApp() {
       </aside>
 
       {/* Conteúdo principal */}
-      <main className="px-6 pt-10 pb-[calc(2.5rem+env(safe-area-inset-bottom))] sm:ml-64">
+      <main className="px-5 pt-6 pb-[calc(7.5rem+env(safe-area-inset-bottom))] sm:ml-64 sm:px-8 sm:pt-10 sm:pb-12">
         <div className={`mx-auto ${externo ? 'max-w-5xl' : 'max-w-2xl'}`}>
           <ErrorBoundary key={abaAtiva} fallback={<FallbackErroTela />}>
-            {carregandoAcesso ? null : externo ? (
-              <>
-                {abaAtiva === 'ganhos' && <MeuComissionamentoExternoPage />}
-                {abaAtiva === 'infoprodutos' && <InfoprodutosOperadorPage />}
-              </>
-            ) : (
-              <>
-                {abaAtiva === 'minha-area' && <AreaColaboradorPage />}
-                {abaAtiva === 'equipe' && <ColegasEquipePage />}
-                {abaAtiva === 'trocas' && <SolicitacoesTrocaPage />}
-                {abaAtiva === 'ganhos' && <MeusGanhosPage />}
-                {abaAtiva === 'desempenho' && <DesempenhoPage />}
-                {abaAtiva === 'qualidade' && <MinhaQualidadePage />}
-                {abaAtiva === 'infoprodutos' && <InfoprodutosOperadorPage />}
-                {abaAtiva === 'multas' && <MultasPage />}
-                {abaAtiva === 'historico' && <HistoricoEscalasPage />}
-              </>
-            )}
+            <div className="entrada-pagina">
+              {carregandoAcesso ? null : externo ? (
+                <>
+                  {abaAtiva === 'ganhos' && <MeuComissionamentoExternoPage />}
+                  {abaAtiva === 'infoprodutos' && <InfoprodutosOperadorPage />}
+                </>
+              ) : (
+                <>
+                  {abaAtiva === 'minha-area' && <AreaColaboradorPage />}
+                  {abaAtiva === 'equipe' && <ColegasEquipePage />}
+                  {abaAtiva === 'trocas' && <SolicitacoesTrocaPage />}
+                  {abaAtiva === 'ganhos' && <MeusGanhosPage />}
+                  {abaAtiva === 'desempenho' && <DesempenhoPage />}
+                  {abaAtiva === 'qualidade' && <MinhaQualidadePage />}
+                  {abaAtiva === 'infoprodutos' && <InfoprodutosOperadorPage />}
+                  {abaAtiva === 'multas' && <MultasPage />}
+                  {abaAtiva === 'historico' && <HistoricoEscalasPage />}
+                </>
+              )}
+            </div>
           </ErrorBoundary>
         </div>
       </main>
 
-      {/* Menu lateral (drawer) — só no celular */}
+      {/* Barra de abas inferior — celular */}
+      {!carregandoAcesso && (
+        <nav
+          className="fixed inset-x-3 bottom-[calc(0.75rem+env(safe-area-inset-bottom))] z-30 sm:hidden"
+          aria-label="Navegação"
+        >
+          <div className="fundo-navegacao flex items-stretch justify-around gap-1 rounded-[1.4rem] p-1.5 shadow-[0_18px_40px_-12px_rgba(10,20,38,0.55)] ring-1 ring-white/10">
+            {abasInferiores.map((id) => (
+              <BotaoBarraInferior
+                key={id}
+                ativo={abaAtiva === id}
+                rotulo={rotuloCurto[id] ?? rotuloDe(id)}
+                icone={iconesPorAba[id]}
+                aviso={contagemVisivel(id) > 0}
+                aoClicar={() => selecionarAba(id)}
+              />
+            ))}
+            {abasNoMais.length > 0 && (
+              <BotaoBarraInferior
+                ativo={maisSelecionado || maisAberto}
+                rotulo="Mais"
+                icone={iconeMais}
+                aviso={maisTemAviso}
+                aoClicar={() => setMaisAberto(true)}
+              />
+            )}
+          </div>
+        </nav>
+      )}
+
+      {/* "Mais" — folha que sobe do rodapé, no celular */}
       <div
-        className={`fixed inset-0 z-30 bg-black/40 transition-opacity sm:hidden ${
-          menuAberto ? 'opacity-100' : 'pointer-events-none opacity-0'
+        className={`fixed inset-0 z-40 bg-tinta/50 backdrop-blur-[2px] transition-opacity duration-300 sm:hidden ${
+          maisAberto ? 'opacity-100' : 'pointer-events-none opacity-0'
         }`}
-        onClick={() => setMenuAberto(false)}
+        onClick={() => setMaisAberto(false)}
+        aria-hidden={!maisAberto}
       >
         <div
-          className={`h-full w-64 max-w-[80%] overflow-y-auto bg-tinta topo-seguro pb-[env(safe-area-inset-bottom)] shadow-xl transition-transform ${
-            menuAberto ? 'translate-x-0' : '-translate-x-full'
+          role="dialog"
+          aria-modal="true"
+          aria-label="Mais opções"
+          className={`fundo-navegacao absolute inset-x-0 bottom-0 rounded-t-[1.75rem] px-4 pt-3 pb-[calc(1.25rem+env(safe-area-inset-bottom))] shadow-2xl transition-transform duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] ${
+            maisAberto ? 'translate-y-0' : 'translate-y-full'
           }`}
           onClick={(e) => e.stopPropagation()}
         >
-          <div className="flex items-center justify-between px-5 py-4">
-            <p className="font-display font-medium text-white">Menu</p>
-            <button
-              onClick={() => setMenuAberto(false)}
-              className="rounded-md p-1 text-white/70 hover:bg-white/10 hover:text-white"
-              aria-label="Fechar menu"
-            >
-              ×
-            </button>
+          <div className="mx-auto mb-4 h-1 w-10 rounded-full bg-white/20" />
+          <div className="grid grid-cols-3 gap-2">
+            {abasNoMais.map((a) => {
+              const ativo = abaAtiva === a.id;
+              const aviso = contagemVisivel(a.id);
+              return (
+                <button
+                  key={a.id}
+                  onClick={() => selecionarAba(a.id)}
+                  tabIndex={maisAberto ? 0 : -1}
+                  className={`relative flex flex-col items-center gap-2 rounded-2xl px-2 py-4 text-xs font-medium transition ${
+                    ativo
+                      ? 'bg-gradient-to-br from-esmeralda to-esmeralda-dark text-white shadow-[0_10px_24px_-10px_rgba(26,163,107,0.9)]'
+                      : 'bg-white/[0.05] text-slate-300 ring-1 ring-white/[0.06] active:bg-white/10'
+                  }`}
+                >
+                  <span className="h-6 w-6">{iconesPorAba[a.id]}</span>
+                  {a.rotulo}
+                  {aviso > 0 && (
+                    <span className="absolute right-2 top-2 flex h-5 min-w-5 items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold text-white">
+                      {aviso > 9 ? '9+' : aviso}
+                    </span>
+                  )}
+                </button>
+              );
+            })}
           </div>
-          <nav className="mt-2 flex flex-col gap-1 px-2">
-            {abasVisiveis.map((aba) => (
-              <button
-                key={aba.id}
-                onClick={() => selecionarAba(aba.id)}
-                className={`flex items-center gap-3 rounded-md px-3 py-3 text-left text-sm font-medium transition ${
-                  abaAtiva === aba.id
-                    ? 'bg-esmeralda text-white'
-                    : 'text-slate-300 hover:bg-white/10'
-                }`}
-              >
-                <span className="h-5 w-5 shrink-0">{iconesPorAba[aba.id]}</span>
-                {aba.rotulo}
-                <NotificacaoBadge
-                  contagem={abaAtiva === aba.id ? 0 : (contagemPorAba[aba.id] ?? 0)}
-                />
-              </button>
-            ))}
-          </nav>
-          <div className="mt-4 border-t border-white/10 px-3 py-3">
+          <div className="mt-3 border-t border-white/[0.07] pt-2">
             <ControleNotificacoes />
           </div>
         </div>
       </div>
+
+      <PaletaComandos aberta={paletaAberta} aoFechar={() => setPaletaAberta(false)} comandos={comandos} />
     </div>
+  );
+}
+
+function BotaoBarraInferior({
+  ativo,
+  rotulo,
+  icone,
+  aviso,
+  aoClicar,
+}: {
+  ativo: boolean;
+  rotulo: string;
+  icone: ReactNode;
+  aviso: boolean;
+  aoClicar: () => void;
+}) {
+  return (
+    <button
+      onClick={aoClicar}
+      aria-current={ativo ? 'page' : undefined}
+      className={`relative flex min-w-0 flex-1 flex-col items-center gap-1 rounded-[1rem] px-1 pb-1.5 pt-2 text-[10.5px] font-medium transition-all duration-300 ${
+        ativo
+          ? 'bg-gradient-to-b from-esmeralda to-esmeralda-dark text-white shadow-[0_8px_20px_-8px_rgba(26,163,107,0.9),inset_0_1px_0_rgba(255,255,255,0.2)]'
+          : 'text-slate-400 active:text-white'
+      }`}
+    >
+      <span className={`relative h-[22px] w-[22px] transition-transform duration-300 ${ativo ? '-translate-y-px scale-105' : ''}`}>
+        {icone}
+        {aviso && (
+          <span className="pulso-notificacao absolute -right-1 -top-0.5 h-2 w-2 rounded-full bg-red-500 ring-2 ring-tinta" />
+        )}
+      </span>
+      <span className="max-w-full truncate">{rotulo}</span>
+    </button>
   );
 }
