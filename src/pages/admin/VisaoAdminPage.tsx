@@ -60,6 +60,7 @@ export function VisaoAdminPage() {
     carregando,
     erro,
     confirmarEscala,
+    confirmarAlteracoes,
     resetarEscala,
     atualizandoStatus,
     recarregar,
@@ -281,6 +282,16 @@ export function VisaoAdminPage() {
     }
   }
 
+  async function handleConfirmarAlteracoes() {
+    const resultado = await confirmarAlteracoes();
+    if (resultado.erro) {
+      toast(resultado.erro, 'erro');
+      return;
+    }
+    setEdicaoHabilitada(false);
+    toast('Alterações confirmadas. A escala está publicada com as mudanças.', 'sucesso');
+  }
+
     async function handleHabilitarEdicao() {
     const confirmou = await confirmar(
       'Esta escala já foi confirmada e os colaboradores já podem ter visto seus turnos. ' +
@@ -453,6 +464,17 @@ export function VisaoAdminPage() {
               </button>
             )}
 
+            {edicaoHabilitada && (periodo.status === 'confirmado' || periodo.status === 'encerrado') && (
+              <button
+                onClick={handleConfirmarAlteracoes}
+                disabled={atualizandoStatus || lacunas.length > 0}
+                title={lacunas.length > 0 ? 'Há turnos sem ninguém de alguma equipe' : undefined}
+                className="w-full rounded-md bg-esmeralda px-4 py-2.5 text-sm font-medium text-white hover:bg-esmeralda-dark disabled:opacity-60 sm:w-auto"
+              >
+                {atualizandoStatus ? 'Confirmando...' : 'Confirmar alterações'}
+              </button>
+            )}
+
             {escalaEstaTrancada && (
               <button
                 onClick={handleHabilitarEdicao}
@@ -519,7 +541,7 @@ export function VisaoAdminPage() {
                   </li>
                 ))}
               </ul>
-              {emOrganizacao(periodo.status) && (
+              {(emOrganizacao(periodo.status) || edicaoHabilitada) && (
                 <p className="mt-1">A escala só pode ser confirmada depois que todos forem cobertos.</p>
               )}
             </div>

@@ -182,6 +182,30 @@ export function useVisaoAdmin() {
     return { erro: null };
   }
 
+  // Fecha a edição de uma escala que já estava confirmada: confere a
+  // cobertura e registra a nova confirmação (o status continua confirmado).
+  async function confirmarAlteracoes() {
+    if (!periodo || !session?.user) return { erro: 'Nenhum período carregado.' };
+
+    setAtualizandoStatus(true);
+    const erroCobertura = await verificarCobertura([periodo]);
+    if (erroCobertura) {
+      setAtualizandoStatus(false);
+      return { erro: erroCobertura };
+    }
+
+    const { error } = await supabase
+      .from('periodos_operacao')
+      .update({ confirmed_at: new Date().toISOString(), confirmed_by: session.user.id })
+      .eq('id', periodo.id);
+    setAtualizandoStatus(false);
+
+    if (error) {
+      return { erro: 'Não foi possível confirmar as alterações.' };
+    }
+    return { erro: null };
+  }
+
   // Confirma de uma vez todos os fins de semana "em organização" informados
   // (ex.: todos os do mês gerado).
   async function confirmarVarios(ids: string[]) {
@@ -257,6 +281,7 @@ export function useVisaoAdmin() {
     erro,
     recarregar: carregar,
     confirmarEscala,
+    confirmarAlteracoes,
     resetarEscala,
     atualizandoStatus,
   };
