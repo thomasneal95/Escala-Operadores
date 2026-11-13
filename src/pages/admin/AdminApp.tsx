@@ -15,6 +15,7 @@ import { AssiduidadePage } from './AssiduidadePage';
 import { FaltasPage } from './FaltasPage';
 import { ComissionamentoPage } from './ComissionamentoPage';
 import { MultasAdminPage } from './MultasAdminPage';
+import { QualidadePage } from './QualidadePage';
 import { ErrorBoundary } from '../../components/ErrorBoundary';
 import { FallbackErroTela } from '../../components/FallbackErroTela';
 import { NotificacaoBadge } from '../../components/NotificacaoBadge';
@@ -34,6 +35,7 @@ type Aba =
   | 'faltas'
   | 'comissionamento'
   | 'multas'
+  | 'qualidade'
   | 'configuracoes'
   | 'historico'
   | 'acesso';
@@ -50,6 +52,7 @@ const abas: { id: Aba; rotulo: string }[] = [
   { id: 'faltas', rotulo: 'Faltas' },
   { id: 'comissionamento', rotulo: 'Comissionamento' },
   { id: 'multas', rotulo: 'Multas' },
+  { id: 'qualidade', rotulo: 'Qualidade' },
   { id: 'historico', rotulo: 'Histórico' },
   { id: 'acesso', rotulo: 'Acesso' },
   { id: 'configuracoes', rotulo: 'Configurações' },
@@ -137,6 +140,13 @@ const iconesPorAba: Record<Aba, ReactElement> = {
         strokeLinecap="round"
         strokeLinejoin="round"
       />
+    </svg>
+  ),
+  qualidade: (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8}>
+      <rect x="5" y="3.5" width="14" height="17" rx="1.5" />
+      <path d="M9 3.5V5h6V3.5" strokeLinejoin="round" />
+      <path d="M9 12l2 2 4-4.5" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
   ),
   historico: (
@@ -265,6 +275,7 @@ export function AdminApp() {
             {abaAtiva === 'faltas' && <FaltasPage />}
             {abaAtiva === 'comissionamento' && <ComissionamentoPage infoprodutosPendentes={infoprodutosPendentes} />}
             {abaAtiva === 'multas' && <MultasAdminPage />}
+            {abaAtiva === 'qualidade' && <QualidadePage />}
             {abaAtiva === 'historico' && <HistoricoAdminPage />}
             {abaAtiva === 'acesso' && <GestaoAcessoPage />}
             {abaAtiva === 'configuracoes' && <ConfiguracoesPage />}
