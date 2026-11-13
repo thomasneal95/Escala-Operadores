@@ -48,7 +48,7 @@ export function SolicitacoesTrocaPage() {
   useEffect(() => {
     recarregarMinhasEscalas();
   }, [solicitacoes, recarregarMinhasEscalas]);
-  // Troca por bloco de trabalho: todos os turnos do dia juntos.
+  // Troca por turno (Manhã ou Noite), um de cada vez.
   const meusBlocos = agruparEmBlocos(minhasEscalas);
 
   const [minhaEscalaId, setMinhaEscalaId] = useState('');
@@ -85,6 +85,20 @@ export function SolicitacoesTrocaPage() {
   const blocosDoColegaNaMinhaFolga = agruparEmBlocos(
     escalasDoColega.filter((e) => !minhasDatas.has(e.data))
   );
+  // Na troca, também vale um turno do colega no dia do turno que estou
+  // entregando (ex.: minha Manhã pela Noite dele), desde que não seja o
+  // mesmo horário.
+  const minhaEscalaParaTroca = minhasEscalas.find((e) => e.id === minhaEscalaId) ?? null;
+  const blocosDoColegaParaTroca = agruparEmBlocos(
+    escalasDoColega.filter((e) => {
+      const outrosMeusNoDia = minhasEscalas.filter((m) => m.data === e.data && m.id !== minhaEscalaId);
+      return (
+        outrosMeusNoDia.length === 0 &&
+        !(minhaEscalaParaTroca?.data === e.data &&
+          minhaEscalaParaTroca.turno_nome_snapshot === e.turno_nome_snapshot)
+      );
+    })
+  );
 
   async function handleCriarSolicitacao() {
     setErroForm(null);
@@ -95,7 +109,7 @@ export function SolicitacoesTrocaPage() {
       // Estou de folga: peço para trabalhar no dia do colega.
       const diaDoColega = escalasDoColega.find((e) => e.id === escalaDoColegaId);
       if (!colegaId || !diaDoColega) {
-        setErroForm('Selecione o colega e o dia dele que você quer assumir.');
+        setErroForm('Selecione o colega e o turno dele que você quer assumir.');
         return;
       }
       resultado = await criarSolicitacao(diaDoColega.periodo_id, null, colegaId, {
@@ -179,7 +193,7 @@ export function SolicitacoesTrocaPage() {
                     checked={tipo === 'troca'}
                     onChange={() => setTipo('troca')}
                   />
-                  Trocar dias com o colega
+                  Trocar turnos com o colega
                 </label>
                 <label className="flex items-center gap-2">
                   <input
@@ -188,7 +202,7 @@ export function SolicitacoesTrocaPage() {
                     checked={tipo === 'cobertura'}
                     onChange={() => setTipo('cobertura')}
                   />
-                  O colega só cobre o meu dia (sem devolver)
+                  O colega só cobre o meu turno (sem devolver)
                 </label>
                 <label className="flex items-center gap-2">
                   <input
@@ -200,14 +214,14 @@ export function SolicitacoesTrocaPage() {
                       setEscalaDoColegaId('');
                     }}
                   />
-                  Estou de folga e quero trabalhar no dia de um colega
+                  Estou de folga e quero trabalhar no turno de um colega
                 </label>
               </div>
             </div>
 
             {tipo !== 'assumir' && (
               <div>
-                <label className="block text-sm font-medium text-slate-700">Seu dia de trabalho</label>
+                <label className="block text-sm font-medium text-slate-700">Seu turno</label>
                 {meusBlocos.length === 0 ? (
                   <p className="mt-1 text-sm text-slate-500">
                     Você não está escalado nos próximos fins de semana confirmados.
@@ -215,7 +229,10 @@ export function SolicitacoesTrocaPage() {
                 ) : (
                   <select
                     value={minhaEscalaId}
-                    onChange={(e) => setMinhaEscalaId(e.target.value)}
+                    onChange={(e) => {
+                      setMinhaEscalaId(e.target.value);
+                      if (tipo === 'troca') setEscalaDoColegaId('');
+                    }}
                     className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-tinta focus:border-esmeralda focus:outline-none focus:ring-1 focus:ring-esmeralda"
                   >
                     <option value="">Selecione</option>
@@ -259,7 +276,7 @@ export function SolicitacoesTrocaPage() {
             {tipo === 'assumir' && colegaId && (
               <div className="sm:col-span-2">
                 <label className="block text-sm font-medium text-slate-700">
-                  Dia do colega que você quer assumir (na sua folga)
+                  Turno do colega que você quer assumir (na sua folga)
                 </label>
                 <select
                   value={escalaDoColegaId}
@@ -284,7 +301,7 @@ export function SolicitacoesTrocaPage() {
             {tipo === 'troca' && colegaId && (
               <div className="sm:col-span-2">
                 <label className="block text-sm font-medium text-slate-700">
-                  Dia do colega que você quer pegar (na sua folga)
+                  Turno do colega que você quer pegar
                 </label>
                 <select
                   value={escalaDoColegaId}
@@ -292,15 +309,15 @@ export function SolicitacoesTrocaPage() {
                   className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-tinta focus:border-esmeralda focus:outline-none focus:ring-1 focus:ring-esmeralda"
                 >
                   <option value="">Deixar o colega escolher</option>
-                  {blocosDoColegaNaMinhaFolga.map((b) => (
+                  {blocosDoColegaParaTroca.map((b) => (
                     <option key={b.id} value={b.id}>
                       {rotuloBloco(b)}
                     </option>
                   ))}
                 </select>
-                {blocosDoColegaNaMinhaFolga.length === 0 && (
+                {blocosDoColegaParaTroca.length === 0 && (
                   <p className="mt-1 text-xs text-slate-400">
-                    Esse colega não trabalha em nenhum dos seus dias de folga confirmados.
+                    Esse colega não tem turno que você possa pegar nos dias confirmados.
                   </p>
                 )}
               </div>
@@ -317,7 +334,7 @@ export function SolicitacoesTrocaPage() {
                   : tipo === 'cobertura'
                     ? 'Pedir cobertura'
                     : tipo === 'assumir'
-                      ? 'Pedir para assumir o dia'
+                      ? 'Pedir para assumir o turno'
                       : 'Solicitar troca'}
               </button>
             </div>
@@ -354,10 +371,10 @@ export function SolicitacoesTrocaPage() {
                     <p className="text-sm text-slate-600">
                       <span className="font-medium text-tinta">{s.outraPessoaNome}</span>{' '}
                       {s.tipo === 'cobertura'
-                        ? 'pediu que você cubra um dia de trabalho (sem devolver).'
+                        ? 'pediu que você cubra um turno (sem devolver).'
                         : s.tipo === 'assumir'
-                          ? 'está de folga e quer trabalhar no seu dia (você fica de folga).'
-                          : 'quer trocar um dia de trabalho com você.'}
+                          ? 'está de folga e quer trabalhar no seu turno (você fica de folga).'
+                          : 'quer trocar um turno com você.'}
                     </p>
                     <span
                       className={`rounded-full px-2 py-0.5 text-xs font-medium ${corStatus[s.status]}`}
@@ -369,7 +386,7 @@ export function SolicitacoesTrocaPage() {
                   <div className="mt-2 grid grid-cols-1 gap-2 text-xs text-slate-500 sm:grid-cols-2">
                     <div>
                       <p className="font-medium uppercase tracking-wide text-slate-400">
-                        Dia de {s.outraPessoaNome}
+                        Turno de {s.outraPessoaNome}
                       </p>
                       {s.tipo === 'assumir' ? (
                         <p className="mt-0.5 italic">Nenhum — está de folga</p>
@@ -383,7 +400,7 @@ export function SolicitacoesTrocaPage() {
                     </div>
                     <div>
                       <p className="font-medium uppercase tracking-wide text-slate-400">
-                        Seu dia (a oferecer)
+                        Seu turno (a oferecer)
                       </p>
                       {s.tipo === 'cobertura' ? (
                         <p className="mt-0.5 italic">Nenhum — você só cobre</p>
@@ -404,7 +421,7 @@ export function SolicitacoesTrocaPage() {
                             onChange={(e) => setEscalaParaOferecer(e.target.value)}
                             className="rounded-md border border-slate-300 px-2 py-1.5 text-sm"
                           >
-                            <option value="">Qual dia seu você oferece?</option>
+                            <option value="">Qual turno seu você oferece?</option>
                             {meusBlocos.map((b) => (
                               <option key={b.id} value={b.id}>
                                 {rotuloBloco(b)}
@@ -479,7 +496,7 @@ export function SolicitacoesTrocaPage() {
                 <div className="mt-2 grid grid-cols-1 gap-2 text-xs text-slate-500 sm:grid-cols-2">
                   <div>
                     <p className="font-medium uppercase tracking-wide text-slate-400">
-                      Seu dia oferecido
+                      Seu turno oferecido
                     </p>
                     {s.tipo === 'assumir' ? (
                       <p className="mt-0.5 italic">Nenhum — você está de folga</p>
@@ -491,7 +508,7 @@ export function SolicitacoesTrocaPage() {
                   </div>
                   <div>
                     <p className="font-medium uppercase tracking-wide text-slate-400">
-                      Dia de {s.outraPessoaNome}
+                      Turno de {s.outraPessoaNome}
                     </p>
                     {s.tipo === 'cobertura' ? (
                       <p className="mt-0.5 italic">Nenhum — o colega só cobre</p>

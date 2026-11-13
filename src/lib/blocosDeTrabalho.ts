@@ -1,5 +1,7 @@
-// Bloco de trabalho: todos os turnos de uma pessoa numa data (ex.: Manhã +
-// Tarde). As trocas de turno são feitas por bloco, não turno a turno.
+// Bloco de trabalho: o que entra numa troca de turno. Desde 13/11/2026 é um
+// turno só (Manhã 08–17 ou Noite 17–02) — antes era o dia inteiro da pessoa
+// (ex.: Manhã + Tarde). Quem trabalha os dois turnos no dia troca cada um
+// separadamente.
 
 export interface EscalaDoBloco {
   id: string;
@@ -35,28 +37,19 @@ function montarBloco(escalas: EscalaDoBloco[]): BlocoDeTrabalho {
   };
 }
 
-// Agrupa os turnos de UMA pessoa em blocos, um por data, em ordem de data.
+// Os turnos de UMA pessoa como blocos (um por turno), em ordem de data e hora.
 export function agruparEmBlocos(escalas: EscalaDoBloco[]): BlocoDeTrabalho[] {
-  const porData = new Map<string, EscalaDoBloco[]>();
-  for (const e of escalas) {
-    porData.set(e.data, [...(porData.get(e.data) ?? []), e]);
-  }
-  return [...porData.values()]
-    .map(montarBloco)
-    .sort((a, b) => a.data.localeCompare(b.data));
+  return escalas
+    .map((e) => montarBloco([e]))
+    .sort((a, b) => a.data.localeCompare(b.data) || a.inicio.localeCompare(b.inicio));
 }
 
-// Bloco a que pertence uma linha de escala, procurando as outras linhas da
-// mesma pessoa na mesma data em `todas`.
+// Bloco da linha de escala referenciada numa solicitação (só o turno dela).
 export function blocoDaEscala(
   referencia: EscalaDoBloco | null,
-  todas: EscalaDoBloco[]
+  _todas: EscalaDoBloco[]
 ): BlocoDeTrabalho | null {
-  if (!referencia) return null;
-  const doBloco = todas.filter(
-    (e) => e.colaborador_id === referencia.colaborador_id && e.data === referencia.data
-  );
-  return montarBloco(doBloco.length > 0 ? doBloco : [referencia]);
+  return referencia ? montarBloco([referencia]) : null;
 }
 
 export function rotuloBloco(bloco: BlocoDeTrabalho) {
