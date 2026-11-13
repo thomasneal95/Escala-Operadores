@@ -125,9 +125,12 @@ export async function lerRelatorioQualidade(arquivo: File): Promise<RelatorioLid
       const exemplo = cExemplo >= 0 ? texto(l[cExemplo]) : null;
       const gravidade = cGravidade >= 0 ? paraGravidade(l[cGravidade]) : null;
       if (!tipo && !categoria && !descricao && !exemplo) return;
-      if (!tipo || !categoria || !descricao) {
-        const falta = [!tipo && 'Tipo', !categoria && 'Categoria', !descricao && 'Descrição'].filter(Boolean).join(', ');
-        avisos.push(`Tópico ${i + 1}: falta ${falta}. Complete abaixo ou ele não será salvo.`);
+      if (!categoria || !descricao) {
+        const falta = [!categoria && 'Categoria', !descricao && 'Descrição'].filter(Boolean).join(' e ');
+        avisos.push(`Tópico ${i + 1}: falta ${falta}. Complete abaixo ou remova o tópico para poder salvar.`);
+      }
+      if (!tipo) {
+        avisos.push(`Tópico ${i + 1}: falta o Tipo — entrou como Ponto de melhoria. Confira abaixo.`);
       }
       topicos.push({
         tipo: tipo ?? 'melhoria',
