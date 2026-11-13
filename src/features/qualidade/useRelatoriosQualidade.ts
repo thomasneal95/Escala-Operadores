@@ -36,6 +36,7 @@ export interface OperadorQualidade {
   id: string;
   nome: string;
   ativo: boolean;
+  equipe: string | null;
 }
 
 export interface NovoRelatorio {
@@ -74,7 +75,7 @@ export function useRelatoriosQualidade() {
         )
         .order('data_avaliacao', { ascending: false })
         .order('enviado_em', { ascending: false }),
-      supabase.from('colaboradores').select('id, ativo, perfis(nome_completo, papel)'),
+      supabase.from('colaboradores').select('id, ativo, perfis(nome_completo, papel), equipes(nome)'),
     ]);
 
     if (relatoriosRes.error || colaboradoresRes.error) {
@@ -103,6 +104,7 @@ export function useRelatoriosQualidade() {
           id: c.id,
           nome: (c.perfis as unknown as { nome_completo: string } | null)?.nome_completo ?? '(sem nome)',
           ativo: c.ativo,
+          equipe: (c.equipes as unknown as { nome: string } | null)?.nome ?? null,
         }))
         .sort((a, b) => a.nome.localeCompare(b.nome))
     );

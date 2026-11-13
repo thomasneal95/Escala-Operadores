@@ -7,6 +7,7 @@ import {
 } from '../../features/qualidade/useRelatoriosQualidade';
 import { lerRelatorioQualidade, type Gravidade, type TipoTopico } from '../../lib/lerRelatorioQualidade';
 import { useConfirm, useToast } from '../../components/FeedbackProvider';
+import { PainelQualidade } from './qualidade/PainelQualidade';
 
 const MODELO_URL = '/modelos/modelo-relatorio-qualidade.xlsx';
 
@@ -89,6 +90,7 @@ export function QualidadePage() {
   const [filtroOperador, setFiltroOperador] = useState('');
   const [filtroMes, setFiltroMes] = useState('');
   const [aberto, setAberto] = useState<string | null>(null);
+  const [aba, setAba] = useState<'painel' | 'relatorios'>('painel');
 
   const [arrastando, setArrastando] = useState(false);
 
@@ -233,8 +235,49 @@ export function QualidadePage() {
   return (
     <div>
       <p className="font-mono text-xs font-medium uppercase tracking-widest text-ceruleo">Qualidade</p>
-      <h1 className="mt-1 font-display text-2xl font-semibold text-tinta">Relatórios de qualidade do atendimento</h1>
-      <p className="mt-2 text-sm text-slate-500">
+      <div className="mt-1 flex flex-wrap items-end justify-between gap-3">
+        <h1 className="font-display text-2xl font-semibold text-tinta">Qualidade do atendimento</h1>
+        <div className="inline-flex rounded-lg border border-slate-200 bg-white p-0.5 text-sm" role="tablist">
+          {(
+            [
+              ['painel', 'Painel'],
+              ['relatorios', `Relatórios${relatorios.length ? ` (${relatorios.length})` : ''}`],
+            ] as const
+          ).map(([id, rotulo]) => (
+            <button
+              key={id}
+              role="tab"
+              aria-selected={aba === id}
+              onClick={() => setAba(id)}
+              className={`rounded-md px-4 py-1.5 font-medium transition ${
+                aba === id ? 'bg-tinta text-white shadow-sm' : 'text-slate-600 hover:text-tinta'
+              }`}
+            >
+              {rotulo}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {erro && <p className="mt-4 rounded-md bg-red-50 px-4 py-3 text-sm text-red-700">{erro}</p>}
+
+      {aba === 'painel' ? (
+        carregando ? (
+          <p className="mt-6 text-sm text-slate-400">Carregando...</p>
+        ) : (
+          <PainelQualidade
+            relatorios={relatorios}
+            operadores={operadores}
+            onVerRelatorios={(chave) => {
+              setFiltroOperador(chave);
+              setFiltroMes('');
+              setAba('relatorios');
+            }}
+          />
+        )
+      ) : (
+      <>
+      <p className="mt-4 text-sm text-slate-500">
         Envie o relatório preenchido no modelo em Excel. O site separa os pontos positivos e os pontos de
         melhoria em tópicos para você conferir antes de salvar, e guarda o arquivo original.
       </p>
@@ -292,8 +335,6 @@ export function QualidadePage() {
       >
         Baixar modelo em branco
       </a>
-
-      {erro && <p className="mt-4 rounded-md bg-red-50 px-4 py-3 text-sm text-red-700">{erro}</p>}
 
       {rascunho && (
         <ConferenciaRelatorio
@@ -362,6 +403,8 @@ export function QualidadePage() {
             />
           ))}
         </ul>
+      )}
+      </>
       )}
     </div>
   );
