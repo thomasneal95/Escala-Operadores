@@ -8,6 +8,7 @@ import { SolicitacoesTrocaPage } from './SolicitacoesTrocaPage';
 import { MultasPage } from './MultasPage';
 import { MeusGanhosPage } from './MeusGanhosPage';
 import { DesempenhoPage } from './DesempenhoPage';
+import { MinhaQualidadePage } from './MinhaQualidadePage';
 import { InfoprodutosOperadorPage } from './InfoprodutosOperadorPage';
 import { MeuComissionamentoExternoPage } from './MeuComissionamentoExternoPage';
 import { useSouExterno } from '../../features/ganhos/useSouExterno';
@@ -19,7 +20,7 @@ import { useNotificacoesOperador } from '../../features/notificacoes/useNotifica
 import { ControleNotificacoes } from '../../components/AtivarNotificacoesCard';
 import { abaDaUrl } from '../../lib/abaDaUrl';
 
-type Aba = 'minha-area' | 'equipe' | 'trocas' | 'ganhos' | 'desempenho' | 'infoprodutos' | 'multas' | 'historico';
+type Aba = 'minha-area' | 'equipe' | 'trocas' | 'ganhos' | 'desempenho' | 'qualidade' | 'infoprodutos' | 'multas' | 'historico';
 
 const abas: { id: Aba; rotulo: string }[] = [
   { id: 'minha-area', rotulo: 'Minha área' },
@@ -27,6 +28,7 @@ const abas: { id: Aba; rotulo: string }[] = [
   { id: 'trocas', rotulo: 'Trocas' },
   { id: 'ganhos', rotulo: 'Meus ganhos' },
   { id: 'desempenho', rotulo: 'Desempenho' },
+  { id: 'qualidade', rotulo: 'Qualidade' },
   { id: 'infoprodutos', rotulo: 'Infoprodutos' },
   { id: 'multas', rotulo: 'Multas' },
   { id: 'historico', rotulo: 'Histórico' },
@@ -75,6 +77,11 @@ const iconesPorAba: Record<Aba, ReactElement> = {
   desempenho: (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8}>
       <path d="M4 20V10M10 20V4M16 20v-7M22 20H2" strokeLinecap="round" />
+    </svg>
+  ),
+  qualidade: (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8}>
+      <path d="M12 3.5l2.6 5.3 5.8.8-4.2 4.1 1 5.8L12 16.8l-5.2 2.7 1-5.8-4.2-4.1 5.8-.8L12 3.5Z" strokeLinejoin="round" />
     </svg>
   ),
   infoprodutos: (
@@ -260,6 +267,7 @@ export function OperatorApp() {
                 {abaAtiva === 'trocas' && <SolicitacoesTrocaPage />}
                 {abaAtiva === 'ganhos' && <MeusGanhosPage />}
                 {abaAtiva === 'desempenho' && <DesempenhoPage />}
+                {abaAtiva === 'qualidade' && <MinhaQualidadePage />}
                 {abaAtiva === 'infoprodutos' && <InfoprodutosOperadorPage />}
                 {abaAtiva === 'multas' && <MultasPage />}
                 {abaAtiva === 'historico' && <HistoricoEscalasPage />}
