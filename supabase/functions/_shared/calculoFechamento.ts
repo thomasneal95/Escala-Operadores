@@ -112,6 +112,8 @@ export interface LinhaFechamento {
   desligado_em: string | null;
   salario_total: number;
   ftds: number;
+  // Quantos dos FTDs são redepósitos (já incluídos em ftds; só para exibir).
+  redepositos: number;
   total_a_pagar: number;
 }
 
@@ -151,6 +153,8 @@ export interface ResultadoFechamento {
   mes: string;
   ultimaData: string | null;
   totalFtds: number;
+  // Quantos dos FTDs são redepósitos (já incluídos em totalFtds).
+  totalRedepositos: number;
   linhas: LinhaFechamento[];
   paineis: PaineisFechamento;
   avisos: {
@@ -201,6 +205,17 @@ function primeiroDiaUtil(mes: string) {
   let d = mes;
   while (ehFimDeSemana(d)) d = somarDias(d, 1);
   return d;
+}
+
+// Redepósitos ("Redepósito (envio concluído)" na exportação do CRM) contam
+// como FTD; são separados só para exibir a quantidade.
+export function ehRedeposito(etapa: string) {
+  return etapa
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .trim()
+    .toLowerCase()
+    .startsWith('redeposito');
 }
 
 export function diaReal(venda: Pick<Venda, 'data' | 'hora'>, horaVirada: number) {
@@ -447,18 +462,29 @@ export function calcularFechamento(entrada: EntradaFechamento): ResultadoFechame
   }
 
   // Monta as linhas.
+  // Redepósitos por linha do fechamento (mesma chave das linhas).
+  const redepositosPorChave = new Map<string, number>();
+  for (const v of validas) {
+    if (!ehRedeposito(v.etapa)) continue;
+    const nome = normalizarNome(v.operador);
+    const c = colaboradorPorNome.get(nome);
+    const chave = c ? c.id : externoPorNome.has(nome) ? `externo:${nome}` : null;
+    if (chave) redepositosPorChave.set(chave, (redepositosPorChave.get(chave) ?? 0) + 1);
+  }
+
   const linhas: LinhaFechamento[] = [];
   const taxa = 1 + config.taxa_total_a_pagar;
 
   const desligadoEm = new Map(colaboradores.map((c) => [c.id, c.desativado_em]));
 
   function linha(
-    semInfo: Omit<LinhaFechamento, 'total_a_pagar' | 'comissao_infoprodutos' | 'ja_pago' | 'desligado_em'>
+    semInfo: Omit<LinhaFechamento, 'total_a_pagar' | 'comissao_infoprodutos' | 'ja_pago' | 'desligado_em' | 'redepositos'>
   ): LinhaFechamento {
     const comissaoInfo = infoPorChave.get(semInfo.chave) ?? 0;
     const jaPago = semInfo.colaborador_id ? entrada.acertosPagos?.get(semInfo.colaborador_id) ?? 0 : 0;
     const base = {
       ...semInfo,
+      redepositos: redepositosPorChave.get(semInfo.chave) ?? 0,
       comissao_infoprodutos: comissaoInfo,
       ja_pago: jaPago,
       desligado_em: semInfo.colaborador_id ? desligadoEm.get(semInfo.colaborador_id) ?? null : null,
@@ -708,6 +734,7 @@ export function calcularFechamento(entrada: EntradaFechamento): ResultadoFechame
     mes,
     ultimaData,
     totalFtds: validas.length,
+    totalRedepositos: validas.filter((v) => ehRedeposito(v.etapa)).length,
     linhas,
     paineis,
     avisos: {

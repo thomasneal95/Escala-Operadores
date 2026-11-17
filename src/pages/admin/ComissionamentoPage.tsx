@@ -397,7 +397,15 @@ export function ComissionamentoPage({ infoprodutosPendentes = 0 }: { infoproduto
       {dados && (
         <>
           <div className="mt-6 grid grid-cols-2 gap-4 lg:grid-cols-4">
-            <Cartao titulo="FTDs no mês" valor={String(dados.totalFtds)} />
+            <Cartao
+              titulo="FTDs no mês"
+              valor={String(dados.totalFtds)}
+              detalhe={
+                dados.totalRedepositos !== undefined
+                  ? `${dados.totalRedepositos} redepósito${dados.totalRedepositos === 1 ? '' : 's'} incluído${dados.totalRedepositos === 1 ? '' : 's'}`
+                  : undefined
+              }
+            />
             <Cartao titulo="Pessoas" valor={String(linhas.length)} />
             <Cartao titulo="Folha (salários)" valor={formatarMoeda(total('salario_total'))} />
             <Cartao titulo="Total a pagar" valor={formatarMoeda(total('total_a_pagar'))} destaque />
@@ -650,7 +658,14 @@ function TabelaPorPessoa({
                       </p>
                       <p className="text-xs text-slate-400">{l.equipe ? `Equipe ${l.equipe}` : 'Sem equipe'}</p>
                     </td>
-                    <td className={`${direita} text-slate-600`}>{l.ftds || '—'}</td>
+                    <td className={`${direita} text-slate-600`}>
+                      {l.ftds || '—'}
+                      {!!l.redepositos && (
+                        <span className="block text-[11px] text-slate-400">
+                          {l.redepositos} redep.
+                        </span>
+                      )}
+                    </td>
                     <td className={direita}>{comissoes(l) ? formatarMoeda(comissoes(l)) : '—'}</td>
                     <td className={direita}>{l.auxilio ? formatarMoeda(l.auxilio) : '—'}</td>
                     <td className={direita} onClick={(e) => e.stopPropagation()}>
@@ -714,7 +729,14 @@ function TabelaPorPessoa({
           <tfoot className="border-t border-slate-200 bg-slate-50 font-semibold text-tinta">
             <tr>
               <td className="px-3 py-2">Total</td>
-              <td className={direita}>{soma((l) => l.ftds)}</td>
+              <td className={direita}>
+                {soma((l) => l.ftds)}
+                {soma((l) => l.redepositos ?? 0) > 0 && (
+                  <span className="block text-[11px] font-normal text-slate-400">
+                    {soma((l) => l.redepositos ?? 0)} redep.
+                  </span>
+                )}
+              </td>
               <td className={direita}>{formatarMoeda(soma(comissoes))}</td>
               <td className={direita}>{formatarMoeda(soma((l) => l.auxilio))}</td>
               <td className={direita}>{formatarMoeda(soma((l) => l.adiantamento))}</td>
@@ -817,7 +839,17 @@ function ResumoPorEquipe({ linhas }: { linhas: LinhaFechamento[] }) {
   );
 }
 
-function Cartao({ titulo, valor, destaque }: { titulo: string; valor: string; destaque?: boolean }) {
+function Cartao({
+  titulo,
+  valor,
+  destaque,
+  detalhe,
+}: {
+  titulo: string;
+  valor: string;
+  destaque?: boolean;
+  detalhe?: string;
+}) {
   return (
     <div
       className={`rounded-lg border p-4 ${
@@ -832,6 +864,7 @@ function Cartao({ titulo, valor, destaque }: { titulo: string; valor: string; de
         {titulo}
       </p>
       <p className="mt-1 font-display text-2xl font-semibold text-tinta">{valor}</p>
+      {detalhe && <p className="mt-0.5 text-xs text-slate-500">{detalhe}</p>}
     </div>
   );
 }
