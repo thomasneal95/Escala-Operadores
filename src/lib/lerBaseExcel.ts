@@ -101,13 +101,34 @@ function acharColunas(cabecalho: unknown[], amostra: unknown[][]): Colunas | nul
   };
 }
 
+// Abre o arquivo. Em CSV, as células ficam como texto (raw): sem isso a
+// biblioteca converte "12/11/2026" no padrão americano (mês/dia) e a venda de
+// 12 de novembro vira 11 de dezembro. Como texto, paraData lê dia/mês/ano.
+// Em .xlsx/.xls a opção não muda nada (as datas já vêm como número do Excel).
+async function abrirPasta(arquivo: File) {
+  return read(await arquivo.arrayBuffer(), { type: 'array', dense: true, raw: true });
+}
+
+// Recusa datas no futuro: é o sinal de dia e mês trocados (ou de arquivo
+// errado). Como a importação substitui os meses do arquivo, gravar uma data
+// errada apagaria as vendas de outro mês.
+function conferirDatasFuturas(datas: string[]) {
+  const agora = new Date();
+  const hoje = `${agora.getFullYear()}-${doisDigitos(agora.getMonth() + 1)}-${doisDigitos(agora.getDate())}`;
+  const futuras = datas.filter((d) => d > hoje).sort();
+  if (futuras.length === 0) return;
+  const exemplo = futuras[0].split('-').reverse().join('/');
+  throw new Error(
+    `O arquivo tem ${futuras.length} linha(s) com data no futuro (ex.: ${exemplo}). Confira se as datas estão no formato dia/mês/ano. Nada foi importado.`
+  );
+}
+
 function linhasDaAba(aba: WorkSheet) {
   return utils.sheet_to_json<unknown[]>(aba, { header: 1, defval: null, raw: true });
 }
 
 export async function lerBaseExcel(arquivo: File): Promise<{ linhas: LinhaBase[]; aba: string; ignoradas: number }> {
-  const conteudo = await arquivo.arrayBuffer();
-  const pasta = read(conteudo, { type: 'array', dense: true });
+  const pasta = await abrirPasta(arquivo);
 
   const semEspacos = (n: string) => normalizar(n).replace(/[\s_]+/g, '');
   // Ordem de preferência: "Base", depois "Base Tratada", depois as demais.
@@ -144,6 +165,7 @@ export async function lerBaseExcel(arquivo: File): Promise<{ linhas: LinhaBase[]
         hora,
       });
     }
+    conferirDatasFuturas(linhas.map((l) => l.data));
     return { linhas, aba: nomeAba, ignoradas };
   }
 
@@ -170,7 +192,7 @@ export interface LinhaHistoricoExcel {
 }
 
 export async function lerHistoricoExcel(arquivo: File): Promise<LinhaHistoricoExcel[]> {
-  const pasta = read(await arquivo.arrayBuffer(), { type: 'array', dense: true });
+  const pasta = await abrirPasta(arquivo);
   const nomeAba = pasta.SheetNames.find((n) => normalizar(n) === 'historico');
   if (!nomeAba) throw new Error('O arquivo não tem a aba "Historico".');
 
@@ -219,7 +241,7 @@ export interface LinhaInfoprodutoExcel {
 }
 
 export async function lerInfoprodutosExcel(arquivo: File): Promise<LinhaInfoprodutoExcel[]> {
-  const pasta = read(await arquivo.arrayBuffer(), { type: 'array', dense: true });
+  const pasta = await abrirPasta(arquivo);
   const nomeAba = pasta.SheetNames.find((n) => normalizar(n) === 'vendas infoprodutos');
   if (!nomeAba) throw new Error('O arquivo não tem a aba "Vendas Infoprodutos".');
 
